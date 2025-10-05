@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isManager() {
+      return isAuthenticated() && 
+             request.auth.token.role == "manager";
+    }
+    
+    function isGuide() {
+      return isAuthenticated() && 
+             request.auth.token.role == "guide";
+    }
+    
+    function isOwner(guideId) {
+      return isAuthenticated() && 
+             request.auth.token.guideId == guideId;
+    }
+    
+    // Guides collection
+    match /guides/{guideId} {
+      allow read: if isManager() || isOwner(guideId);
+      allow create: if isManager();
+      allow update: if isManager() && 
+                       request.resource.data.email == resource.data.email &&
+                       request.resource.data.dni == resource.data.dni;
+      allow delete: if false;
+    }
+    
+    // Shifts collection (placeholder for M3/M4)
+    match /shifts/{shiftId} {
+      allow read: if isAuthenticated();
+      allow create: if isManager();
+      allow update: if isManager() || isGuide();
+      allow delete: if false;
+    }
+    
+    // Notifications collection (placeholder)
+    match /notifications/{notificationId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+  }
+}

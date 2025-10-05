@@ -1,0 +1,27 @@
+# Firebase
+.firebase/
+*-debug.log
+firebase-debug.log
+firestore-debug.log
+
+# Emulator data
+emulator-data/
+
+# Node
+node_modules/
+.env*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.key
+*.pem
+*service-account*.json
+.secrets/
