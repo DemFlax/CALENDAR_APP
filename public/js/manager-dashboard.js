@@ -221,6 +221,11 @@ function initCalendar() {
   const monthFilter = document.getElementById('month-filter');
   const estadoFilter = document.getElementById('estado-filter');
   
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  monthFilter.value = `${year}-${month}`;
+  
   monthFilter.addEventListener('change', loadCalendar);
   estadoFilter.addEventListener('change', loadCalendar);
   
@@ -228,11 +233,17 @@ function initCalendar() {
 }
 
 function loadCalendar() {
-  const monthFilter = document.getElementById('month-filter').value;
+  const monthInput = document.getElementById('month-filter');
   const estadoFilter = document.getElementById('estado-filter').value;
   
-  if (!monthFilter) return;
+  if (!monthInput.value) {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    monthInput.value = `${year}-${month}`;
+  }
   
+  const monthFilter = monthInput.value;
   const [year, month] = monthFilter.split('-');
   const startDate = `${year}-${month}-01`;
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -269,62 +280,114 @@ function loadCalendar() {
 }
 
 function renderCalendar(shiftsByDate, guides, estadoFilter) {
-  const calendarBody = document.getElementById('calendar-body');
-  calendarBody.innerHTML = '';
+  const calendarGrid = document.getElementById('calendar-grid');
+  calendarGrid.innerHTML = '';
   
   const dates = Object.keys(shiftsByDate).sort();
   
   if (dates.length === 0) {
-    calendarBody.innerHTML = '<tr><td colspan="100%" class="text-center text-gray-500 py-4">No hay turnos en este periodo</td></tr>';
+    calendarGrid.innerHTML = '<p class="text-center text-gray-500 py-4">No hay turnos en este periodo</p>';
     return;
   }
   
+  if (guides.length === 0) {
+    calendarGrid.innerHTML = '<p class="text-center text-gray-500 py-4">No hay guías registrados. Crea un guía primero.</p>';
+    return;
+  }
+  
+  const table = document.createElement('table');
+  table.className = 'w-full border-collapse text-sm';
+  
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  headerRow.className = 'bg-gray-100';
+  headerRow.innerHTML = '<th class="border px-2 py-2 font-semibold">Fecha</th>';
+  guides.forEach(guide => {
+    headerRow.innerHTML += `<th class="border px-2 py-1 font-semibold" colspan="2">${guide.nombre}</th>`;
+  });
+  thead.appendChild(headerRow);
+  
+  const subHeaderRow = document.createElement('tr');
+  subHeaderRow.className = 'bg-gray-50';
+  subHeaderRow.innerHTML = '<th class="border px-2 py-1"></th>';
+  guides.forEach(() => {
+    subHeaderRow.innerHTML += '<th class="border px-2 py-1 text-xs font-semibold">MAÑANA</th><th class="border px-2 py-1 text-xs font-semibold">TARDE</th>';
+  });
+  thead.appendChild(subHeaderRow);
+  table.appendChild(thead);
+  
+  const tbody = document.createElement('tbody');
   dates.forEach(fecha => {
     const shifts = shiftsByDate[fecha];
-    
     const dateObj = new Date(fecha + 'T12:00:00');
     const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'short' });
     const day = dateObj.getDate();
     const monthName = dateObj.toLocaleDateString('es-ES', { month: 'short' });
     
     const row = document.createElement('tr');
-    row.innerHTML = `<td class="border px-4 py-2 font-semibold">${dayName}, ${day} ${monthName}</td>`;
+    row.innerHTML = `<td class="border px-2 py-2 font-semibold">${dayName}, ${day} ${monthName}</td>`;
     
-    shifts.forEach(shift => {
-      const cell = document.createElement('td');
-      cell.className = 'border px-2 py-2';
+    guides.forEach(guide => {
+      // MAÑANA
+      const morningShift = shifts.find(s => s.slot === 'MAÑANA');
+      const morningCell = document.createElement('td');
+      morningCell.className = 'border px-2 py-1';
       
-      let bgColor = 'bg-green-100';
-      let textColor = 'text-green-800';
-      let label = 'LIBRE';
-      
-      if (shift.estado === 'ASIGNADO') {
-        bgColor = 'bg-blue-100';
-        textColor = 'text-blue-800';
-        const guide = guides.find(g => g.id === shift.guiaId);
-        label = guide ? guide.nombre : 'Asignado';
-      } else if (shift.estado === 'NO_DISPONIBLE') {
-        bgColor = 'bg-gray-100';
-        textColor = 'text-gray-800';
-        label = 'Bloqueado';
-      }
-      
-      if (estadoFilter !== 'todos' && shift.estado !== estadoFilter) {
-        cell.innerHTML = '-';
+      if (morningShift?.estado === 'ASIGNADO' && morningShift.guiaId === guide.id) {
+        const select = document.createElement('select');
+        select.className = 'w-full text-xs border rounded px-1 py-1 bg-green-600 text-white font-semibold';
+        select.innerHTML = '<option value="ASIGNADO">ASIGNADO M</option><option value="LIBERAR">LIBERAR</option>';
+        morningCell.appendChild(select);
+      } else if (morningShift?.estado === 'NO_DISPONIBLE' && morningShift.guiaId === guide.id) {
+        morningCell.innerHTML = '<div class="bg-red-500 text-white px-2 py-1 rounded text-xs text-center font-semibold">NO DISPONIBLE</div>';
+      } else if (morningShift?.estado === 'LIBRE') {
+        const select = document.createElement('select');
+        select.className = 'w-full text-xs border rounded px-1 py-1 bg-green-100 text-green-800';
+        select.innerHTML = '<option value="">LIBRE</option><option value="ASIGNAR_M">ASIGNAR M</option>';
+        morningCell.appendChild(select);
       } else {
-        cell.innerHTML = `
-          <div class="${bgColor} ${textColor} px-2 py-1 rounded text-sm">
-            <div class="font-semibold">${shift.slot}</div>
-            <div class="text-xs">${label}</div>
-          </div>
-        `;
+        morningCell.innerHTML = '-';
       }
+      row.appendChild(morningCell);
       
-      row.appendChild(cell);
+      // TARDE
+      const tardeCell = document.createElement('td');
+      tardeCell.className = 'border px-2 py-1';
+      
+      const afternoonShifts = shifts.filter(s => ['T1', 'T2', 'T3'].includes(s.slot));
+      const myAfternoon = afternoonShifts.find(s => 
+        (s.estado === 'ASIGNADO' || s.estado === 'NO_DISPONIBLE') && s.guiaId === guide.id
+      );
+      
+      if (myAfternoon?.estado === 'ASIGNADO') {
+        const select = document.createElement('select');
+        select.className = 'w-full text-xs border rounded px-1 py-1 bg-green-600 text-white font-semibold';
+        select.innerHTML = `<option value="${myAfternoon.slot}">${myAfternoon.slot}</option><option value="LIBERAR">LIBERAR</option>`;
+        tardeCell.appendChild(select);
+      } else if (myAfternoon?.estado === 'NO_DISPONIBLE') {
+        tardeCell.innerHTML = '<div class="bg-red-500 text-white px-2 py-1 rounded text-xs text-center font-semibold">NO DISPONIBLE</div>';
+      } else {
+        const freeShifts = afternoonShifts.filter(s => s.estado === 'LIBRE');
+        if (freeShifts.length > 0) {
+          const select = document.createElement('select');
+          select.className = 'w-full text-xs border rounded px-1 py-1 bg-green-100 text-green-800';
+          select.innerHTML = '<option value="">LIBRE</option>';
+          freeShifts.forEach(s => {
+            select.innerHTML += `<option value="${s.id}_${s.slot}">${s.slot}</option>`;
+          });
+          tardeCell.appendChild(select);
+        } else {
+          tardeCell.innerHTML = '-';
+        }
+      }
+      row.appendChild(tardeCell);
     });
     
-    calendarBody.appendChild(row);
+    tbody.appendChild(row);
   });
+  
+  table.appendChild(tbody);
+  calendarGrid.appendChild(table);
 }
 
 // ========== UTILITY FUNCTIONS ==========
