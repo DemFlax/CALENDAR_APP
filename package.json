@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "emulators": "firebase emulators:start",
+    "deploy": "firebase deploy"
   },
   "dependencies": {
     "firebase": "^10.7.1"

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manager Dashboard - Calendario Tours</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+  <!-- Header -->
+  <header class="bg-blue-600 text-white p-4">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 class="text-2xl font-bold">Calendario Tours - Manager</h1>
+      <button id="logout-btn" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded">
+        Cerrar Sesión
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container mx-auto p-6">
+    <!-- Guides Section -->
+    <section class="mb-8">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold">Guías</h2>
+        <button onclick="showCreateGuideModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+          + Crear Guía
+        </button>
+      </div>
+      
+      <div id="guides-list" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <!-- Guide cards will be inserted here -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Guide Modal -->
+  <div id="guide-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      <h3 id="modal-title" class="text-xl font-semibold mb-4">Crear Guía</h3>
+      
+      <form id="guide-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Nombre *</label>
+          <input type="text" id="nombre" required class="w-full border rounded px-3 py-2">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Email *</label>
+          <input type="email" id="email" required class="w-full border rounded px-3 py-2">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Teléfono</label>
+          <input type="tel" id="telefono" class="w-full border rounded px-3 py-2">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Dirección</label>
+          <input type="text" id="direccion" class="w-full border rounded px-3 py-2">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">DNI *</label>
+          <input type="text" id="dni" required maxlength="9" class="w-full border rounded px-3 py-2" placeholder="12345678A">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Cuenta Bancaria</label>
+          <input type="text" id="cuenta_bancaria" class="w-full border rounded px-3 py-2" placeholder="ES91...">
+        </div>
+
+        <div class="flex gap-2">
+          <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex-1">
+            Crear Guía
+          </button>
+          <button type="button" onclick="closeGuideModal()" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="hidden fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg">
+    <p id="toast-message"></p>
+  </div>
+
+  <script type="module" src="/js/manager-dashboard.js"></script>
+</body>
+</html>

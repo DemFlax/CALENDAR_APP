@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Calendario Tours</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  <div class="bg-white p-8 rounded-lg shadow-md w-96">
+    <h1 class="text-2xl font-bold mb-6 text-center">Calendario Tours</h1>
+    
+    <form id="login-form" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Email</label>
+        <input type="email" id="email" required class="w-full border rounded px-3 py-2">
+      </div>
+      
+      <div>
+        <label class="block text-sm font-medium mb-1">Contraseña</label>
+        <input type="password" id="password" required class="w-full border rounded px-3 py-2">
+      </div>
+      
+      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded">
+        Iniciar Sesión
+      </button>
+    </form>
+    
+    <div id="error" class="hidden mt-4 p-3 bg-red-100 text-red-700 rounded text-sm"></div>
+  </div>
+
+  <script type="module">
+    import { auth } from './js/firebase-config.js';
+    import { signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const errorDiv = document.getElementById('error');
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Iniciando...';
+      errorDiv.classList.add('hidden');
+      
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const token = await userCredential.user.getIdTokenResult();
+        
+        // Redirigir según rol
+        if (token.claims.role === 'manager') {
+          window.location.href = '/manager.html';
+        } else if (token.claims.role === 'guide') {
+          window.location.href = '/guide.html';
+        } else {
+          throw new Error('Rol no configurado');
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        errorDiv.textContent = error.code === 'auth/invalid-credential' 
+          ? 'Credenciales incorrectas' 
+          : 'Error al iniciar sesión';
+        errorDiv.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Iniciar Sesión';
+      }
+    });
+  </script>
+</body>
+</html>
