@@ -15,18 +15,19 @@ import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/
 
 let currentUser = null;
 let guidesUnsubscribe = null;
+let shiftsUnsubscribe = null;
 
-// Initialize
 onAuthStateChanged(auth, (user) => {
   if (user) {
     currentUser = user;
     loadGuides();
+    initCalendar();
   } else {
     window.location.href = '/login.html';
   }
 });
 
-// Load guides
+// ========== GUIDES FUNCTIONALITY ==========
 function loadGuides() {
   const guidesQuery = query(
     collection(db, 'guides'),
@@ -52,8 +53,6 @@ function loadGuides() {
   });
 }
 
-// Create guide card
-// Create guide card
 function createGuideCard(id, guide) {
   const card = document.createElement('div');
   card.className = 'bg-white p-4 rounded-lg shadow';
@@ -82,7 +81,6 @@ function createGuideCard(id, guide) {
   return card;
 }
 
-// Show create guide modal
 window.showCreateGuideModal = () => {
   document.getElementById('guide-modal').classList.remove('hidden');
   document.getElementById('modal-title').textContent = 'Crear Guía';
@@ -90,15 +88,12 @@ window.showCreateGuideModal = () => {
   document.getElementById('guide-form').dataset.mode = 'create';
   delete document.getElementById('guide-form').dataset.guideId;
   
-  // Enable email and dni for creation
   document.getElementById('email').disabled = false;
   document.getElementById('dni').disabled = false;
   
-  // Update button text
   document.querySelector('#guide-form button[type="submit"]').textContent = 'Crear Guía';
 };
 
-// Edit guide
 window.editGuide = async (guideId) => {
   try {
     const guideDoc = await getDoc(doc(db, 'guides', guideId));
@@ -109,7 +104,6 @@ window.editGuide = async (guideId) => {
 
     const guide = guideDoc.data();
     
-    // Fill form
     document.getElementById('nombre').value = guide.nombre;
     document.getElementById('email').value = guide.email;
     document.getElementById('telefono').value = guide.telefono || '';
@@ -117,13 +111,11 @@ window.editGuide = async (guideId) => {
     document.getElementById('dni').value = guide.dni;
     document.getElementById('cuenta_bancaria').value = guide.cuenta_bancaria || '';
 
-    // Disable non-editable fields
     document.getElementById('email').disabled = true;
     document.getElementById('dni').disabled = true;
     document.getElementById('email').classList.add('bg-gray-100');
     document.getElementById('dni').classList.add('bg-gray-100');
 
-    // Show modal
     document.getElementById('modal-title').textContent = 'Editar Guía';
     document.getElementById('guide-form').dataset.mode = 'edit';
     document.getElementById('guide-form').dataset.guideId = guideId;
@@ -135,7 +127,6 @@ window.editGuide = async (guideId) => {
   }
 };
 
-// Close modal
 window.closeGuideModal = () => {
   document.getElementById('guide-modal').classList.add('hidden');
   document.getElementById('guide-form').reset();
@@ -145,7 +136,6 @@ window.closeGuideModal = () => {
   document.getElementById('dni').classList.remove('bg-gray-100');
 };
 
-// Submit form
 document.getElementById('guide-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
@@ -169,19 +159,16 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
       const email = document.getElementById('email').value.trim().toLowerCase();
       const dni = document.getElementById('dni').value.trim().toUpperCase();
       
-      // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         throw new Error('Formato de email inválido');
       }
 
-      // Validate DNI format (8 digits + letter)
       const dniRegex = /^\d{8}[A-Z]$/;
       if (!dniRegex.test(dni)) {
         throw new Error('Formato DNI inválido (8 dígitos + letra)');
       }
 
-      // Check email uniqueness
       const existingGuide = await getDocs(
         query(collection(db, 'guides'), where('email', '==', email))
       );
@@ -200,7 +187,6 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
       
     } else if (mode === 'edit') {
       const guideId = e.target.dataset.guideId;
-
       await updateDoc(doc(db, 'guides', guideId), formData);
       showToast('Guía actualizado correctamente', 'success');
     }
@@ -215,7 +201,6 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
   }
 });
 
-// Delete guide (soft delete)
 window.deleteGuide = async (guideId) => {
   if (!confirm('¿Eliminar este guía? Se marcará como inactivo.')) return;
 
@@ -231,7 +216,118 @@ window.deleteGuide = async (guideId) => {
   }
 };
 
-// Toast notification
+// ========== CALENDAR FUNCTIONALITY ==========
+function initCalendar() {
+  const monthFilter = document.getElementById('month-filter');
+  const estadoFilter = document.getElementById('estado-filter');
+  
+  monthFilter.addEventListener('change', loadCalendar);
+  estadoFilter.addEventListener('change', loadCalendar);
+  
+  loadCalendar();
+}
+
+function loadCalendar() {
+  const monthFilter = document.getElementById('month-filter').value;
+  const estadoFilter = document.getElementById('estado-filter').value;
+  
+  if (!monthFilter) return;
+  
+  const [year, month] = monthFilter.split('-');
+  const startDate = `${year}-${month}-01`;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const endDate = `${year}-${month}-${String(daysInMonth).padStart(2, '0')}`;
+  
+  let shiftsQuery = query(
+    collection(db, 'shifts'),
+    where('fecha', '>=', startDate),
+    where('fecha', '<=', endDate)
+  );
+  
+  if (shiftsUnsubscribe) shiftsUnsubscribe();
+  
+  shiftsUnsubscribe = onSnapshot(shiftsQuery, async (snapshot) => {
+    const guidesSnapshot = await getDocs(
+      query(collection(db, 'guides'), where('estado', '==', 'activo'))
+    );
+    
+    const guides = [];
+    guidesSnapshot.forEach(doc => guides.push({ id: doc.id, ...doc.data() }));
+    
+    const shiftsByDate = {};
+    
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (!shiftsByDate[data.fecha]) {
+        shiftsByDate[data.fecha] = [];
+      }
+      shiftsByDate[data.fecha].push({ id: doc.id, ...data });
+    });
+    
+    renderCalendar(shiftsByDate, guides, estadoFilter);
+  });
+}
+
+function renderCalendar(shiftsByDate, guides, estadoFilter) {
+  const calendarBody = document.getElementById('calendar-body');
+  calendarBody.innerHTML = '';
+  
+  const dates = Object.keys(shiftsByDate).sort();
+  
+  if (dates.length === 0) {
+    calendarBody.innerHTML = '<tr><td colspan="100%" class="text-center text-gray-500 py-4">No hay turnos en este periodo</td></tr>';
+    return;
+  }
+  
+  dates.forEach(fecha => {
+    const shifts = shiftsByDate[fecha];
+    
+    const dateObj = new Date(fecha + 'T12:00:00');
+    const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'short' });
+    const day = dateObj.getDate();
+    const monthName = dateObj.toLocaleDateString('es-ES', { month: 'short' });
+    
+    const row = document.createElement('tr');
+    row.innerHTML = `<td class="border px-4 py-2 font-semibold">${dayName}, ${day} ${monthName}</td>`;
+    
+    shifts.forEach(shift => {
+      const cell = document.createElement('td');
+      cell.className = 'border px-2 py-2';
+      
+      let bgColor = 'bg-green-100';
+      let textColor = 'text-green-800';
+      let label = 'LIBRE';
+      
+      if (shift.estado === 'ASIGNADO') {
+        bgColor = 'bg-blue-100';
+        textColor = 'text-blue-800';
+        const guide = guides.find(g => g.id === shift.guiaId);
+        label = guide ? guide.nombre : 'Asignado';
+      } else if (shift.estado === 'NO_DISPONIBLE') {
+        bgColor = 'bg-gray-100';
+        textColor = 'text-gray-800';
+        label = 'Bloqueado';
+      }
+      
+      if (estadoFilter !== 'todos' && shift.estado !== estadoFilter) {
+        cell.innerHTML = '-';
+      } else {
+        cell.innerHTML = `
+          <div class="${bgColor} ${textColor} px-2 py-1 rounded text-sm">
+            <div class="font-semibold">${shift.slot}</div>
+            <div class="text-xs">${label}</div>
+          </div>
+        `;
+      }
+      
+      row.appendChild(cell);
+    });
+    
+    calendarBody.appendChild(row);
+  });
+}
+
+// ========== UTILITY FUNCTIONS ==========
 function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
   const toastMessage = document.getElementById('toast-message');
@@ -249,7 +345,6 @@ function showToast(message, type = 'info') {
   }, 3000);
 }
 
-// Logout
 document.getElementById('logout-btn').addEventListener('click', async () => {
   try {
     await signOut(auth);
@@ -259,7 +354,7 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
   }
 });
 
-// Cleanup on unmount
 window.addEventListener('beforeunload', () => {
   if (guidesUnsubscribe) guidesUnsubscribe();
+  if (shiftsUnsubscribe) shiftsUnsubscribe();
 });

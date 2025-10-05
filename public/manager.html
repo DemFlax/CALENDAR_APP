@@ -32,6 +32,33 @@
         <!-- Guide cards will be inserted here -->
       </div>
     </section>
+
+    <!-- Calendario Section -->
+    <section class="mt-8">
+      <h2 class="text-xl font-semibold mb-4">Calendario de Turnos</h2>
+      
+      <!-- Filtros -->
+      <div class="bg-white p-4 rounded-lg shadow mb-4 flex gap-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Mes</label>
+          <input type="month" id="month-filter" class="border rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Estado</label>
+          <select id="estado-filter" class="border rounded px-3 py-2">
+            <option value="">Todos</option>
+            <option value="LIBRE">Libre</option>
+            <option value="ASIGNADO">Asignado</option>
+            <option value="NO_DISPONIBLE">No disponible</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Calendario Grid -->
+      <div id="calendar-grid" class="bg-white p-4 rounded-lg shadow">
+        <!-- Se llenará dinámicamente -->
+      </div>
+    </section>
   </main>
 
   <!-- Guide Modal -->
@@ -87,6 +114,6 @@
     <p id="toast-message"></p>
   </div>
 
-  <script type="module" src="/js/manager-dashboard.js"></script>
+  <script type="module" src="/js/manager-dashboard.js?v=2"></script>
 </body>
 </html>
