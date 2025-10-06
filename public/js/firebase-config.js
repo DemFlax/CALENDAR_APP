@@ -1,19 +1,16 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-import { getAuth, connectAuthEmulator } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-import { getFirestore, connectFirestoreEmulator } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { getAuth } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 const firebaseConfig = {
-  apiKey: "demo-api-key",
-  authDomain: "localhost",
+  apiKey: "AIzaSyCIhKPt4VbiUwvEhDH027UHvWX5AVVE17U",
+  authDomain: "calendar-app-tours.firebaseapp.com",
   projectId: "calendar-app-tours",
-  storageBucket: "calendar-app-tours.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
+  storageBucket: "calendar-app-tours.firebasestorage.app",
+  messagingSenderId: "498221526899",
+  appId: "1:498221526899:web:1fa32c1d4b6cd6e37b5f06"
 };
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-
-connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
-connectFirestoreEmulator(db, '127.0.0.1', 8081);
