@@ -2,7 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Función helper: verificar rol
+    // ============================================
+    // HELPERS
+    // ============================================
+    
     function isManager() {
       return request.auth != null && request.auth.token.role == 'manager';
     }
@@ -15,38 +18,72 @@ service cloud.firestore {
       return request.auth.token.guideId;
     }
     
-    // Colección guides
+    // Valida que campos críticos no cambien
+    function immutableFields() {
+      return request.resource.data.fecha == resource.data.fecha
+          && request.resource.data.slot == resource.data.slot
+          && request.resource.data.createdAt == resource.data.createdAt;
+    }
+    
+    // ============================================
+    // COLECCIÓN: guides
+    // ============================================
+    
     match /guides/{guideId} {
-      // Manager: lectura/escritura total
       allow read, write: if isManager();
-      
-      // Guía: solo lectura de su propio documento
       allow read: if isGuide() && getGuideId() == guideId;
     }
     
-    // Colección shifts
+    // ============================================
+    // COLECCIÓN: shifts
+    // ============================================
+    
     match /shifts/{shiftId} {
-      // Manager: lectura/escritura total
-      allow read, write: if isManager();
+      // LECTURA: todos los autenticados
+      allow read: if request.auth != null;
       
-      // Guía: puede leer todos los turnos (para ver calendario)
-      allow read: if isGuide();
+      // CREACIÓN: solo Cloud Functions (Admin SDK bypassa rules)
+      // Frontend NO puede crear turnos
+      allow create: if false;
       
-      // Guía: puede bloquear turnos LIBRES (LIBRE → NO_DISPONIBLE)
-      allow update: if isGuide() 
-                    && resource.data.estado == 'LIBRE'
-                    && request.resource.data.estado == 'NO_DISPONIBLE'
-                    && request.resource.data.guiaId == getGuideId();
+      // ACTUALIZACIÓN: validaciones por rol y transición
+      allow update: if 
+        // MANAGER: solo LIBRE ↔ ASIGNADO
+        (isManager() && immutableFields() && (
+          // LIBRE → ASIGNADO
+          (resource.data.estado == 'LIBRE' 
+           && request.resource.data.estado == 'ASIGNADO'
+           && request.resource.data.guiaId is string
+           && request.resource.data.guiaId.size() > 0)
+          ||
+          // ASIGNADO → LIBRE
+          (resource.data.estado == 'ASIGNADO' 
+           && request.resource.data.estado == 'LIBRE'
+           && request.resource.data.guiaId == null)
+        ))
+        ||
+        // GUÍA: solo LIBRE ↔ NO_DISPONIBLE (de su propio guideId)
+        (isGuide() && immutableFields() && (
+          // LIBRE → NO_DISPONIBLE
+          (resource.data.estado == 'LIBRE'
+           && request.resource.data.estado == 'NO_DISPONIBLE'
+           && request.resource.data.guiaId == getGuideId())
+          ||
+          // NO_DISPONIBLE → LIBRE (solo SUS turnos bloqueados)
+          (resource.data.estado == 'NO_DISPONIBLE'
+           && resource.data.guiaId == getGuideId()
+           && request.resource.data.estado == 'LIBRE'
+           && request.resource.data.guiaId == null)
+        ));
       
-      // Guía: puede desbloquear SUS turnos bloqueados (NO_DISPONIBLE → LIBRE)
-      allow update: if isGuide()
-                    && resource.data.estado == 'NO_DISPONIBLE'
-                    && resource.data.guiaId == getGuideId()
-                    && request.resource.data.estado == 'LIBRE'
-                    && request.resource.data.guiaId == null;
+      // ELIMINACIÓN: prohibida (auditoría)
+      allow delete: if false;
     }
     
-    // Colección notifications (solo lectura manager)
+    // ============================================
+    // COLECCIÓN: notifications
+    // ============================================
+    
     match /notifications/{notificationId} {
       allow read, write: if isManager();
     }
