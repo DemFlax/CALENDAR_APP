@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 
-process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8085';
+process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8081';
 
 admin.initializeApp({ projectId: 'calendar-app-tours' });
 const db = admin.firestore();

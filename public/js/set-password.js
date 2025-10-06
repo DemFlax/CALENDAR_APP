@@ -1,22 +1,9 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+import { auth } from './firebase-config.js';
 import { 
-  getAuth, 
   confirmPasswordReset, 
   verifyPasswordResetCode,
   signInWithEmailAndPassword 
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyDlghbPGme-ZoneNXx8kK2aUrsEu22wDMo",
-  authDomain: "calendar-app-tours.firebaseapp.com",
-  projectId: "calendar-app-tours",
-  storageBucket: "calendar-app-tours.firebasestorage.app",
-  messagingSenderId: "692264221494",
-  appId: "1:692264221494:web:a25d3e96f1fe49cd5e847c"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
 
 const urlParams = new URLSearchParams(window.location.search);
 const oobCode = urlParams.get('oobCode');
@@ -106,22 +93,8 @@ form.addEventListener('submit', async (e) => {
   errorDiv.classList.add('hidden');
 
   try {
-    if (oobCode) {
-      await confirmPasswordReset(auth, oobCode, password);
-    } else {
-      const response = await fetch(`http://localhost:5001/calendar-app-tours/us-central1/devSetPassword`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: emailInput.value,
-          password: password
-        })
-      });
-      if (!response.ok) throw new Error('Error al establecer contraseña');
-    }
-
+    await confirmPasswordReset(auth, oobCode, password);
     await signInWithEmailAndPassword(auth, emailInput.value, password);
-    await new Promise(resolve => setTimeout(resolve, 1000));
 
     const idTokenResult = await auth.currentUser.getIdTokenResult(true);
     const role = idTokenResult.claims.role;

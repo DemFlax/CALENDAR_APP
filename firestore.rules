@@ -2,47 +2,53 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
+    // Función helper: verificar rol
     function isManager() {
-      return isAuthenticated() && 
-             request.auth.token.role == "manager";
+      return request.auth != null && request.auth.token.role == 'manager';
     }
     
     function isGuide() {
-      return isAuthenticated() && 
-             request.auth.token.role == "guide";
+      return request.auth != null && request.auth.token.role == 'guide';
     }
     
-    function isOwner(guideId) {
-      return isAuthenticated() && 
-             request.auth.token.guideId == guideId;
+    function getGuideId() {
+      return request.auth.token.guideId;
     }
     
-    // Guides collection
+    // Colección guides
     match /guides/{guideId} {
-      allow read: if isManager() || isOwner(guideId);
-      allow create: if isManager();
-      allow update: if isManager() && 
-                       request.resource.data.email == resource.data.email &&
-                       request.resource.data.dni == resource.data.dni;
-      allow delete: if false;
+      // Manager: lectura/escritura total
+      allow read, write: if isManager();
+      
+      // Guía: solo lectura de su propio documento
+      allow read: if isGuide() && getGuideId() == guideId;
     }
     
-    // Shifts collection (placeholder for M3/M4)
+    // Colección shifts
     match /shifts/{shiftId} {
-      allow read: if isAuthenticated();
-      allow create: if isManager();
-      allow update: if isManager() || isGuide();
-      allow delete: if false;
+      // Manager: lectura/escritura total
+      allow read, write: if isManager();
+      
+      // Guía: puede leer todos los turnos (para ver calendario)
+      allow read: if isGuide();
+      
+      // Guía: puede bloquear turnos LIBRES (LIBRE → NO_DISPONIBLE)
+      allow update: if isGuide() 
+                    && resource.data.estado == 'LIBRE'
+                    && request.resource.data.estado == 'NO_DISPONIBLE'
+                    && request.resource.data.guiaId == getGuideId();
+      
+      // Guía: puede desbloquear SUS turnos bloqueados (NO_DISPONIBLE → LIBRE)
+      allow update: if isGuide()
+                    && resource.data.estado == 'NO_DISPONIBLE'
+                    && resource.data.guiaId == getGuideId()
+                    && request.resource.data.estado == 'LIBRE'
+                    && request.resource.data.guiaId == null;
     }
     
-    // Notifications collection (placeholder)
+    // Colección notifications (solo lectura manager)
     match /notifications/{notificationId} {
-      allow read: if isManager();
-      allow write: if false;
+      allow read, write: if isManager();
     }
   }
 }

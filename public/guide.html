@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Guía - Tours Madrid</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+  <nav class="bg-blue-600 text-white p-4 shadow-md">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 class="text-xl font-bold">Calendario Tours - Guía</h1>
+      <div class="flex items-center gap-4">
+        <span id="guide-name" class="text-sm"></span>
+        <button id="logout-btn" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded">
+          Cerrar Sesión
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container mx-auto p-6 max-w-7xl">
+    <!-- Próximas Asignaciones -->
+    <section class="mb-8">
+      <h2 class="text-2xl font-bold mb-4">Mis Próximas Asignaciones</h2>
+      <div id="next-assignments" class="bg-white rounded-lg shadow p-6">
+        <p class="text-gray-500">Cargando...</p>
+      </div>
+    </section>
+
+    <!-- Calendario -->
+    <section>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-2xl font-bold">Calendario de Turnos</h2>
+        <div class="flex gap-4">
+          <input 
+            type="month" 
+            id="month-filter" 
+            class="border rounded px-3 py-2"
+          >
+          <select id="estado-filter" class="border rounded px-3 py-2">
+            <option value="todos">Todos</option>
+            <option value="LIBRE">Solo Libres</option>
+            <option value="ASIGNADO">Mis Asignados</option>
+            <option value="NO_DISPONIBLE">Mis Bloqueados</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="calendar-grid" class="bg-white rounded-lg shadow p-6 overflow-x-auto">
+        <p class="text-gray-500">Cargando calendario...</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="hidden fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white">
+    <p id="toast-message"></p>
+  </div>
+
+  <script type="module" src="/js/guide-dashboard.js"></script>
+</body>
+</html>

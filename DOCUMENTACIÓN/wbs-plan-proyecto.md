@@ -122,15 +122,15 @@
 ### 6. DASHBOARD GUÍA (14h)
 
 **6.1 Vista Calendario Personal (8h)**
-- 6.1.1 Calendario filtrado por guiaId - 3h
-- 6.1.2 Solo mostrar turnos relevantes (ASIGNADO/LIBRE/mis NO_DISPONIBLE) - 2h
-- 6.1.3 Real-time listeners con filtro - 2h
-- 6.1.4 Testing listeners - 1h
+- 6.1.1 guide.html base + autenticación - 3h
+- 6.1.2 Tabla Fecha|MAÑANA|TARDE básica - 2h
+- 6.1.3 2 Real-time listeners (guiaId + LIBRE) - 2h
+- 6.1.4 Selector mes (-2 a +2 meses) - 1h
 
 **6.2 Bloquear/Desbloquear Turnos (4h)**
-- 6.2.1 UI bloquear turno (LIBRE→NO_DISPONIBLE) - 2h
-- 6.2.2 UI desbloquear turno (NO_DISPONIBLE→LIBRE) - 1h
-- 6.2.3 Validación client-side + Rules - 1h
+- 6.2.1 Botones BLOQUEAR/LIBERAR por estado - 2h
+- 6.2.2 Transaction atómica TARDE (T1+T2+T3) - 1h
+- 6.2.3 Debounce 2s + toast agrupado - 1h
 
 **6.3 Próximas Asignaciones (2h)**
 - 6.3.1 Widget lista próximas asignaciones - 1.5h
@@ -249,15 +249,17 @@
 
 ---
 
-### Sprint 2: Core Turnos (2 semanas - 40h)
-**Objetivo:** Asignación con validación Calendar
+### Sprint 2: Core Turnos + Dashboard Guía Básico (2 semanas - 47h)
+**Objetivo:** Asignación con validación Calendar + Guía puede bloquear turnos
 
 | Tarea | Horas |
 |-------|-------|
 | 4. Gestión Turnos | 24h |
 | 7. Integraciones Apps Script | 10h |
-| Buffer 15% | 6h |
-| **Total Sprint 2** | **40h** |
+| 6.1 guide.html base (6.1.1 a 6.1.3) | 7h |
+| 6.2 Bloquear/Desbloquear | 4h |
+| Buffer 5% | 2h |
+| **Total Sprint 2** | **47h** |
 
 **Entregables:**
 - ✅ Seed inicial automático
@@ -265,24 +267,26 @@
 - ✅ Validación Calendar API operativa
 - ✅ Asignar/liberar turnos con emails
 - ✅ Apps Script endpoints funcionando
+- ✅ **guide.html funcional con bloqueo/liberación**
 
 ---
 
-### Sprint 3: Dashboards (2 semanas - 40h)
-**Objetivo:** UI Manager + Guía completas
+### Sprint 3: Completar Dashboards (2 semanas - 33h)
+**Objetivo:** UI Manager + Guía completadas
 
 | Tarea | Horas |
 |-------|-------|
 | 5. Dashboard Manager | 18h |
-| 6. Dashboard Guía | 14h |
+| 6.1.4 Selector mes avanzado | 1h |
+| 6.3 Próximas Asignaciones | 2h |
 | 8. Frontend Core | 6h (parcial) |
-| Buffer 5% | 2h |
-| **Total Sprint 3** | **40h** |
+| Buffer 15% | 6h |
+| **Total Sprint 3** | **33h** |
 
 **Entregables:**
 - ✅ Calendario Manager funcional
 - ✅ Asignación UI completa
-- ✅ Calendario Guía con bloqueos
+- ✅ Calendario Guía completo con widgets
 - ✅ Real-time sync <5s
 
 ---
@@ -314,15 +318,16 @@ Semana 1-2 (Sprint 1: Fundación)
 ├── Auth & Roles                   ░░░░██████
 └── CRUD Guías                     ░░░░░░████████
 
-Semana 3-4 (Sprint 2: Core Turnos)
+Semana 3-4 (Sprint 2: Core + Guía Básico)
 ├── Modelo Turnos + Seed           ████░░░░░░
 ├── Validación Calendar            ░░░░████░░
 ├── Asignar/Liberar + Emails       ░░░░░░██████
-└── Apps Script endpoints          ██████████
+├── Apps Script endpoints          ██████████
+└── guide.html + bloqueo           ░░░░░░░░████
 
-Semana 5-6 (Sprint 3: Dashboards)
+Semana 5-6 (Sprint 3: Dashboards Completos)
 ├── Dashboard Manager              ██████████░░
-├── Dashboard Guía                 ░░░░██████░░
+├── Completar Dashboard Guía       ████░░░░░░
 └── Frontend Core                  ░░░░░░░░████
 
 Semana 7-8 (Sprint 4: Testing + Deploy)
@@ -358,7 +363,9 @@ Auth Setup (2.1) ← BLOCKER para todo
         Asignar/Liberar (4.3)
             ↓
             ├→ Dashboard Manager (5)
-            └→ Dashboard Guía (6)
+            └→ guide.html base (6.1.1-6.1.3)
+                    ↓
+                Bloquear/Desbloquear (6.2)
                     ↓
                 Testing (9)
                     ↓
@@ -368,7 +375,7 @@ Auth Setup (2.1) ← BLOCKER para todo
 ### Tareas Paralelas (pueden ejecutarse simultáneamente)
 
 - Apps Script endpoints (7) || Cloud Functions (3.1, 4.3)
-- Dashboard Manager (5) || Dashboard Guía (6)
+- Dashboard Manager (5) || Completar Dashboard Guía (6.3, 6.1.4)
 - Frontend Core (8) || Dashboards (5, 6)
 - Unit tests (9.1) durante desarrollo
 
@@ -400,6 +407,7 @@ Auth Setup (2.1) ← BLOCKER para todo
 | Real-time sync lento | Baja | Medio | Optimizar listeners, índices |
 | Email quota exceeded | Baja | Bajo | Monitoreo, batch si necesario |
 | Scope creep (features extra) | Alta | Alto | **Freezar scope post-Sprint 2** |
+| Sprint 2 sobrecarga (47h vs 40h) | Media | Medio | Priorizar 6.2, diferir 6.3 si necesario |
 
 ---
 
@@ -450,8 +458,8 @@ Auth Setup (2.1) ← BLOCKER para todo
 | Fecha | Hito | Criterio |
 |-------|------|----------|
 | Semana 2 | ✅ Sprint 1 Complete | Auth + CRUD Guías working |
-| Semana 4 | ✅ Sprint 2 Complete | Asignación con Calendar OK |
-| Semana 6 | ✅ Sprint 3 Complete | Dashboards funcionales |
+| Semana 4 | ✅ Sprint 2 Complete | Asignación + Guía bloqueo OK |
+| Semana 6 | ✅ Sprint 3 Complete | Dashboards completos |
 | Semana 7 | 🚀 Deploy Staging | UAT Manager aprueba |
 | Semana 8 | 🎉 Deploy Producción | Go-live MVP |
 
@@ -486,7 +494,7 @@ Auth Setup (2.1) ← BLOCKER para todo
 
 ---
 
-**Versión:** 1.0  
+**Versión:** 2.0  
+**Última actualización:** 2025-10-06  
 **Aprobado por:** Director Técnico  
-**Fecha inicio:** TBD  
-**Fecha entrega estimada:** TBD + 8 semanas
+**Cambios v2.0:** Sprint 2 incluye guide.html básico + bloqueo/liberación (G1, G2)

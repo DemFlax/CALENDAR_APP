@@ -169,16 +169,29 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
         throw new Error('Formato DNI inválido (8 dígitos + letra)');
       }
 
-      // En create guide, cambiar:
-      const existingGuide = await getDocs(
-        query(collection(db, 'guides'), 
-          where('email', '==', email),
-          where('estado', '==', 'activo')  // AGREGAR ESTE FILTRO
-        )
+      const existingGuideSnapshot = await getDocs(
+        query(collection(db, 'guides'), where('email', '==', email))
       );
       
-      if (!existingGuide.empty) {
-        throw new Error('Email ya registrado');
+      if (!existingGuideSnapshot.empty) {
+        const existingDoc = existingGuideSnapshot.docs[0];
+        const existingData = existingDoc.data();
+        
+        if (existingData.estado === 'inactivo') {
+          await updateDoc(doc(db, 'guides', existingDoc.id), {
+            ...formData,
+            email: email,
+            dni: dni,
+            estado: 'activo'
+          });
+          showToast('Guía reactivado correctamente', 'success');
+          closeGuideModal();
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+          return;
+        } else {
+          throw new Error('Email ya registrado en guía activo');
+        }
       }
 
       formData.email = email;
@@ -339,15 +352,17 @@ function renderCalendar(shiftsByDate, guides, estadoFilter) {
       
       if (morningShift?.estado === 'ASIGNADO' && morningShift.guiaId === guide.id) {
         const select = document.createElement('select');
-        select.className = 'w-full text-xs border rounded px-1 py-1 bg-green-600 text-white font-semibold';
-        select.innerHTML = '<option value="ASIGNADO">ASIGNADO M</option><option value="LIBERAR">LIBERAR</option>';
+        select.className = 'w-full text-xs border rounded px-1 py-1 bg-blue-600 text-white font-semibold';
+        select.innerHTML = '<option value="">ASIGNADO</option><option value="LIBERAR">LIBERAR</option>';
+        select.addEventListener('change', (e) => handleShiftAction(e, morningShift.id, guide.id));
         morningCell.appendChild(select);
       } else if (morningShift?.estado === 'NO_DISPONIBLE' && morningShift.guiaId === guide.id) {
         morningCell.innerHTML = '<div class="bg-red-500 text-white px-2 py-1 rounded text-xs text-center font-semibold">NO DISPONIBLE</div>';
       } else if (morningShift?.estado === 'LIBRE') {
         const select = document.createElement('select');
         select.className = 'w-full text-xs border rounded px-1 py-1 bg-green-100 text-green-800';
-        select.innerHTML = '<option value="">LIBRE</option><option value="ASIGNAR_M">ASIGNAR M</option>';
+        select.innerHTML = '<option value="">LIBRE</option><option value="ASIGNAR">ASIGNAR</option>';
+        select.addEventListener('change', (e) => handleShiftAction(e, morningShift.id, guide.id));
         morningCell.appendChild(select);
       } else {
         morningCell.innerHTML = '-';
@@ -365,8 +380,9 @@ function renderCalendar(shiftsByDate, guides, estadoFilter) {
       
       if (myAfternoon?.estado === 'ASIGNADO') {
         const select = document.createElement('select');
-        select.className = 'w-full text-xs border rounded px-1 py-1 bg-green-600 text-white font-semibold';
-        select.innerHTML = `<option value="${myAfternoon.slot}">${myAfternoon.slot}</option><option value="LIBERAR">LIBERAR</option>`;
+        select.className = 'w-full text-xs border rounded px-1 py-1 bg-blue-600 text-white font-semibold';
+        select.innerHTML = `<option value="">ASIGNADO ${myAfternoon.slot}</option><option value="LIBERAR">LIBERAR</option>`;
+        select.addEventListener('change', (e) => handleShiftAction(e, myAfternoon.id, guide.id));
         tardeCell.appendChild(select);
       } else if (myAfternoon?.estado === 'NO_DISPONIBLE') {
         tardeCell.innerHTML = '<div class="bg-red-500 text-white px-2 py-1 rounded text-xs text-center font-semibold">NO DISPONIBLE</div>';
@@ -377,8 +393,9 @@ function renderCalendar(shiftsByDate, guides, estadoFilter) {
           select.className = 'w-full text-xs border rounded px-1 py-1 bg-green-100 text-green-800';
           select.innerHTML = '<option value="">LIBRE</option>';
           freeShifts.forEach(s => {
-            select.innerHTML += `<option value="${s.id}_${s.slot}">${s.slot}</option>`;
+            select.innerHTML += `<option value="ASIGNAR_${s.id}">${s.slot}</option>`;
           });
+          select.addEventListener('change', (e) => handleShiftAction(e, null, guide.id));
           tardeCell.appendChild(select);
         } else {
           tardeCell.innerHTML = '-';
@@ -392,6 +409,44 @@ function renderCalendar(shiftsByDate, guides, estadoFilter) {
   
   table.appendChild(tbody);
   calendarGrid.appendChild(table);
+}
+
+async function handleShiftAction(event, shiftId, guideId) {
+  const action = event.target.value;
+  
+  if (!action) return;
+  
+  try {
+    if (action === 'LIBERAR') {
+      await updateDoc(doc(db, 'shifts', shiftId), {
+        estado: 'LIBRE',
+        guiaId: null,
+        updatedAt: serverTimestamp()
+      });
+      showToast('Turno liberado correctamente', 'success');
+    } else if (action === 'ASIGNAR') {
+      await updateDoc(doc(db, 'shifts', shiftId), {
+        estado: 'ASIGNADO',
+        guiaId: guideId,
+        updatedAt: serverTimestamp()
+      });
+      showToast('Turno asignado correctamente', 'success');
+    } else if (action.startsWith('ASIGNAR_')) {
+      const targetShiftId = action.replace('ASIGNAR_', '');
+      await updateDoc(doc(db, 'shifts', targetShiftId), {
+        estado: 'ASIGNADO',
+        guiaId: guideId,
+        updatedAt: serverTimestamp()
+      });
+      showToast('Turno asignado correctamente', 'success');
+    }
+    
+    event.target.value = '';
+  } catch (error) {
+    console.error('Error updating shift:', error);
+    showToast('Error: ' + error.message, 'error');
+    event.target.value = '';
+  }
 }
 
 // ========== UTILITY FUNCTIONS ==========
