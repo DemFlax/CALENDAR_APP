@@ -169,8 +169,12 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
         throw new Error('Formato DNI inválido (8 dígitos + letra)');
       }
 
+      // En create guide, cambiar:
       const existingGuide = await getDocs(
-        query(collection(db, 'guides'), where('email', '==', email))
+        query(collection(db, 'guides'), 
+          where('email', '==', email),
+          where('estado', '==', 'activo')  // AGREGAR ESTE FILTRO
+        )
       );
       
       if (!existingGuide.empty) {

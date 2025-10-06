@@ -11,10 +11,27 @@ exports.onCreateGuide = onDocumentCreated('guides/{guideId}', async (event) => {
   const guideId = event.params.guideId;
   
   try {
-    const userRecord = await getAuth().createUser({
-      email: guide.email,
-      emailVerified: false
-    });
+    let userRecord;
+    
+    // Intentar crear usuario
+    try {
+      userRecord = await getAuth().createUser({
+        email: guide.email,
+        emailVerified: false
+      });
+    } catch (error) {
+      // Si el email ya existe, eliminar usuario viejo y crear nuevo
+      if (error.code === 'auth/email-already-exists') {
+        const existingUser = await getAuth().getUserByEmail(guide.email);
+        await getAuth().deleteUser(existingUser.uid);
+        userRecord = await getAuth().createUser({
+          email: guide.email,
+          emailVerified: false
+        });
+      } else {
+        throw error;
+      }
+    }
     
     await getAuth().setCustomUserClaims(userRecord.uid, {
       role: 'guide',
@@ -52,6 +69,7 @@ exports.setManagerClaims = onRequest(async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 exports.seedInitialShifts = onRequest(async (req, res) => {
   try {
     const shiftsSnapshot = await getFirestore().collection('shifts').limit(1).get();
@@ -65,23 +83,24 @@ exports.seedInitialShifts = onRequest(async (req, res) => {
     const today = new Date();
     let count = 0;
     
-    // Crear 3 meses
     for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
-      const date = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
-      const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+      const targetDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
       
       for (let day = 1; day <= daysInMonth; day++) {
-        const fecha = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const fecha = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         
         slots.forEach(slot => {
-          const docRef = getFirestore().collection('shifts').doc(`${fecha}_${slot}`);
-          batch.set(docRef, {
-            fecha,
-            slot,
+          const docId = `${fecha}_${slot}`;
+          const shiftRef = getFirestore().collection('shifts').doc(docId);
+          batch.set(shiftRef, {
+            fecha: fecha,
+            slot: slot,
             estado: 'LIBRE',
             guiaId: null,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp()
+            createdAt: FieldValue.serverTimestamp()
           });
           count++;
         });
@@ -90,6 +109,16 @@ exports.seedInitialShifts = onRequest(async (req, res) => {
     
     await batch.commit();
     res.json({ success: true, shiftsCreated: count });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+exports.devSetPassword = onRequest(async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await getAuth().getUserByEmail(email);
+    await getAuth().updateUser(user.uid, { password });
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

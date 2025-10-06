@@ -30,7 +30,6 @@ const errorDiv = document.getElementById('error');
 const submitBtn = document.getElementById('submitBtn');
 const loadingDiv = document.getElementById('loading');
 
-// Validación en tiempo real
 const requirements = {
   length: { regex: /.{8,}/, element: document.getElementById('req-length') },
   uppercase: { regex: /[A-Z]/, element: document.getElementById('req-uppercase') },
@@ -63,8 +62,13 @@ confirmPasswordInput.addEventListener('input', () => {
   }
 });
 
-// Verificar código y cargar email
 async function verifyCode() {
+  const emailParam = urlParams.get('email');
+  if (emailParam) {
+    emailInput.value = emailParam;
+    return;
+  }
+  
   if (!oobCode || mode !== 'resetPassword') {
     showError('Link inválido o expirado. Contacta con el manager.');
     return;
@@ -79,14 +83,12 @@ async function verifyCode() {
   }
 }
 
-// Submit form
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   
   const password = passwordInput.value;
   const confirmPassword = confirmPasswordInput.value;
 
-  // Validar requisitos
   const allValid = Object.values(requirements).every(req => req.regex.test(password));
   if (!allValid) {
     showError('La contraseña no cumple todos los requisitos');
@@ -104,16 +106,23 @@ form.addEventListener('submit', async (e) => {
   errorDiv.classList.add('hidden');
 
   try {
-    // Confirmar cambio de contraseña
-    await confirmPasswordReset(auth, oobCode, password);
+    if (oobCode) {
+      await confirmPasswordReset(auth, oobCode, password);
+    } else {
+      const response = await fetch(`http://localhost:5001/calendar-app-tours/us-central1/devSetPassword`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailInput.value,
+          password: password
+        })
+      });
+      if (!response.ok) throw new Error('Error al establecer contraseña');
+    }
 
-    // Auto-login
     await signInWithEmailAndPassword(auth, emailInput.value, password);
-
-    // Esperar a que se apliquen custom claims
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Redirigir según rol
     const idTokenResult = await auth.currentUser.getIdTokenResult(true);
     const role = idTokenResult.claims.role;
 
@@ -139,5 +148,4 @@ function showError(message) {
   errorDiv.classList.remove('hidden');
 }
 
-// Inicializar
 verifyCode();
