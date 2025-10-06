@@ -123,8 +123,8 @@ exports.devSetPassword = onRequest(async (req, res) => {
   }
 });
 
-// ============================================
-// AUTOMATIZACIÓN - GENERACIÓN MENSUAL
-// ============================================
 const { generateMonthlyShifts } = require('./src/generateMonthlyShifts');
 exports.generateMonthlyShifts = generateMonthlyShifts;
+
+const { onUpdateShift } = require('./src/onUpdateShift');
+exports.onUpdateShift = onUpdateShift;

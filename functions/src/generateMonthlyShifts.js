@@ -1,14 +1,9 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 const SLOTS = ['MAÑANA', 'T1', 'T2', 'T3'];
 
-/**
- * Genera mes +2 si no existe
- * Schedule: días 1-3 de cada mes a las 02:00 Europe/Madrid
- * Idempotencia: verifica antes de crear
- */
 exports.generateMonthlyShifts = onSchedule({
   schedule: '0 2 1-3 * *',
   timeZone: 'Europe/Madrid',
@@ -24,10 +19,9 @@ exports.generateMonthlyShifts = onSchedule({
   const startTime = Date.now();
   
   try {
-    const db = admin.firestore();
+    const db = getFirestore();
     const today = new Date();
     
-    // Calcular mes +2
     const targetDate = new Date(today);
     targetDate.setMonth(today.getMonth() + 2);
     const targetYear = targetDate.getFullYear();
@@ -44,7 +38,6 @@ exports.generateMonthlyShifts = onSchedule({
       dateRange: `${monthStart} to ${monthEnd}`
     });
     
-    // Verificar idempotencia
     const existingShifts = await db.collection('shifts')
       .where('fecha', '>=', monthStart)
       .where('fecha', '<=', monthEnd)
@@ -59,7 +52,6 @@ exports.generateMonthlyShifts = onSchedule({
       return { success: true, action: 'skipped', month: monthKey };
     }
     
-    // Generar turnos
     const batch = db.batch();
     let shiftsCreated = 0;
     
@@ -75,8 +67,8 @@ exports.generateMonthlyShifts = onSchedule({
           slot: slot,
           estado: 'LIBRE',
           guiaId: null,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
         });
         
         shiftsCreated++;
@@ -109,6 +101,6 @@ exports.generateMonthlyShifts = onSchedule({
       executionTimeMs: Date.now() - startTime
     });
     
-    throw error; // Cloud Scheduler retry
+    throw error;
   }
 });
