@@ -1,5 +1,5 @@
 import { auth, db } from './firebase-config.js';
-import { validateTour } from './calendar-api.js';
+import { validateTour, addGuideToCalendarEvent, removeGuideFromCalendarEvent } from './calendar-api.js';
 import { 
   collection, 
   addDoc, 
@@ -171,15 +171,28 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
         throw new Error('Formato DNI inválido (8 dígitos + letra)');
       }
 
-      const existingGuide = await getDocs(
-        query(collection(db, 'guides'), 
-          where('email', '==', email),
-          where('estado', '==', 'activo')
-        )
+      const existingGuides = await getDocs(
+        query(collection(db, 'guides'), where('email', '==', email))
       );
       
-      if (!existingGuide.empty) {
-        throw new Error('Email ya registrado');
+      if (!existingGuides.empty) {
+        const existingDoc = existingGuides.docs[0];
+        const existingData = existingDoc.data();
+        
+        if (existingData.estado === 'activo') {
+          throw new Error('Email ya registrado con un guía activo');
+        }
+        
+        if (existingData.estado === 'inactivo') {
+          await updateDoc(doc(db, 'guides', existingDoc.id), {
+            ...formData,
+            estado: 'activo',
+            updatedAt: serverTimestamp()
+          });
+          showToast('Guía reactivado correctamente', 'success');
+          closeGuideModal();
+          return;
+        }
       }
 
       formData.email = email;
@@ -404,16 +417,34 @@ async function handleShiftAction(event, shiftId, guideId) {
   
   if (!action) return;
   
-  const originalValue = event.target.value;
   event.target.disabled = true;
   
   try {
     if (action === 'LIBERAR') {
+      const shiftDoc = await getDoc(doc(db, 'shifts', shiftId));
+      const shiftData = shiftDoc.data();
+      
+      if (shiftData.guiaId) {
+        try {
+          const tourExists = await validateTour(shiftData.fecha, shiftData.slot);
+          
+          if (tourExists.exists) {
+            const guideDoc = await getDoc(doc(db, 'guides', shiftData.guiaId));
+            const guideEmail = guideDoc.data().email;
+            
+            await removeGuideFromCalendarEvent(tourExists.eventId, guideEmail);
+          }
+        } catch (calendarError) {
+          console.error('Error removing from calendar:', calendarError);
+        }
+      }
+      
       await updateDoc(doc(db, 'shifts', shiftId), {
         estado: 'LIBRE',
         guiaId: null,
         updatedAt: serverTimestamp()
       });
+      
       showToast('Turno liberado correctamente', 'success');
       
     } else if (action === 'ASIGNAR' || action.startsWith('ASIGNAR_')) {
@@ -421,24 +452,34 @@ async function handleShiftAction(event, shiftId, guideId) {
       const shiftDoc = await getDoc(doc(db, 'shifts', targetShiftId));
       const shiftData = shiftDoc.data();
       
-      // Validar Calendar API
       showToast('Validando tour en calendario...', 'info');
       const tourExists = await validateTour(shiftData.fecha, shiftData.slot);
       
-      if (!tourExists) {
+      if (!tourExists.exists) {
         showToast('ERROR: NO EXISTE TOUR EN ESE HORARIO', 'error');
         event.target.value = '';
         event.target.disabled = false;
         return;
       }
       
-      // Asignar
       await updateDoc(doc(db, 'shifts', targetShiftId), {
         estado: 'ASIGNADO',
         guiaId: guideId,
         updatedAt: serverTimestamp()
       });
-      showToast('Turno asignado correctamente', 'success');
+      
+      try {
+        const guideDoc = await getDoc(doc(db, 'guides', guideId));
+        const guideEmail = guideDoc.data().email;
+        
+        showToast('Añadiendo guía al evento Calendar...', 'info');
+        await addGuideToCalendarEvent(tourExists.eventId, guideEmail);
+        
+        showToast('Turno asignado e invitación enviada', 'success');
+      } catch (calendarError) {
+        console.error('Error calendar invitation:', calendarError);
+        showToast('Turno asignado (error invitación Calendar)', 'warning');
+      }
     }
     
     event.target.value = '';
@@ -460,7 +501,8 @@ function showToast(message, type = 'info') {
   toastMessage.textContent = message;
   toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg ${
     type === 'success' ? 'bg-green-500' : 
-    type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+    type === 'error' ? 'bg-red-500' : 
+    type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
   } text-white`;
   
   toast.classList.remove('hidden');
