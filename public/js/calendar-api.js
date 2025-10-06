@@ -1,19 +1,17 @@
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzYYRttG8chwjAy1NeoFRvSRSI5PlmdhuDLorD5E1lE63qwP2mixVmPzynu4ZVu9VvJdQ/exec';
-const API_KEY = 'dev-secret-key-2025';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzSSOFCmzJDk9dkabOGdoJS4Stp318VjHC-ShH-Yng5YkUfu6K9n4OT0UCPuAJAEsbPFw/exec';
+const API_KEY = 'calendar-api-key-2025-secure';
 
 export async function validateTour(fecha, slot) {
   try {
-    const url = `${APPS_SCRIPT_URL}?apiKey=${API_KEY}&fecha=${fecha}&slot=${slot}`;
-    const response = await fetch(url, {
-      method: 'GET'
-    });
+    const url = `${APPS_SCRIPT_URL}?fecha=${fecha}&slot=${slot}&apiKey=${API_KEY}`;
     
-    if (!response.ok) throw new Error('Calendar API error');
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Network error');
     
     const data = await response.json();
-    return data.exists;
+    return data;
   } catch (error) {
     console.error('Error validating tour:', error);
-    return false;
+    throw error;
   }
 }
