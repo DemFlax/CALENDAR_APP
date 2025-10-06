@@ -1,4 +1,5 @@
 import { auth, db } from './firebase-config.js';
+import { validateTour } from './calendar-api.js';
 import { 
   collection, 
   addDoc, 
@@ -64,6 +65,7 @@ function createGuideCard(id, guide) {
         <p class="text-gray-500 text-sm">DNI: ${guide.dni}</p>
         <p class="text-gray-500 text-sm">Tel: ${guide.telefono || 'Sin teléfono'}</p>
       </div>
+
       <div class="flex flex-col gap-2">
         <button 
           onclick="window.editGuide('${id}')" 
@@ -169,29 +171,15 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
         throw new Error('Formato DNI inválido (8 dígitos + letra)');
       }
 
-      const existingGuideSnapshot = await getDocs(
-        query(collection(db, 'guides'), where('email', '==', email))
+      const existingGuide = await getDocs(
+        query(collection(db, 'guides'), 
+          where('email', '==', email),
+          where('estado', '==', 'activo')
+        )
       );
       
-      if (!existingGuideSnapshot.empty) {
-        const existingDoc = existingGuideSnapshot.docs[0];
-        const existingData = existingDoc.data();
-        
-        if (existingData.estado === 'inactivo') {
-          await updateDoc(doc(db, 'guides', existingDoc.id), {
-            ...formData,
-            email: email,
-            dni: dni,
-            estado: 'activo'
-          });
-          showToast('Guía reactivado correctamente', 'success');
-          closeGuideModal();
-          submitBtn.disabled = false;
-          submitBtn.textContent = originalText;
-          return;
-        } else {
-          throw new Error('Email ya registrado en guía activo');
-        }
+      if (!existingGuide.empty) {
+        throw new Error('Email ya registrado');
       }
 
       formData.email = email;
@@ -374,32 +362,32 @@ function renderCalendar(shiftsByDate, guides, estadoFilter) {
       tardeCell.className = 'border px-2 py-1';
       
       const afternoonShifts = shifts.filter(s => ['T1', 'T2', 'T3'].includes(s.slot));
-      const myAfternoon = afternoonShifts.find(s => 
-        (s.estado === 'ASIGNADO' || s.estado === 'NO_DISPONIBLE') && s.guiaId === guide.id
-      );
+      const assignedToGuide = afternoonShifts.filter(s => s.estado === 'ASIGNADO' && s.guiaId === guide.id);
+      const blockedByGuide = afternoonShifts.filter(s => s.estado === 'NO_DISPONIBLE' && s.guiaId === guide.id);
+      const freeShifts = afternoonShifts.filter(s => s.estado === 'LIBRE');
       
-      if (myAfternoon?.estado === 'ASIGNADO') {
+      if (assignedToGuide.length > 0) {
         const select = document.createElement('select');
         select.className = 'w-full text-xs border rounded px-1 py-1 bg-blue-600 text-white font-semibold';
-        select.innerHTML = `<option value="">ASIGNADO ${myAfternoon.slot}</option><option value="LIBERAR">LIBERAR</option>`;
-        select.addEventListener('change', (e) => handleShiftAction(e, myAfternoon.id, guide.id));
+        const slotNames = assignedToGuide.map(s => s.slot).join('+');
+        select.innerHTML = `<option value="">ASIGNADO ${slotNames}</option><option value="LIBERAR">LIBERAR</option>`;
+        select.addEventListener('change', (e) => handleShiftAction(e, assignedToGuide[0].id, guide.id));
         tardeCell.appendChild(select);
-      } else if (myAfternoon?.estado === 'NO_DISPONIBLE') {
+      } else if (blockedByGuide.length > 0) {
         tardeCell.innerHTML = '<div class="bg-red-500 text-white px-2 py-1 rounded text-xs text-center font-semibold">NO DISPONIBLE</div>';
+      } else if (freeShifts.length > 0) {
+        const select = document.createElement('select');
+        select.className = 'w-full text-xs border rounded px-1 py-1 bg-green-100 text-green-800';
+        select.innerHTML = '<option value="">LIBRE</option>';
+        
+        freeShifts.forEach(shift => {
+          select.innerHTML += `<option value="ASIGNAR_${shift.id}">ASIGNAR ${shift.slot}</option>`;
+        });
+        
+        select.addEventListener('change', (e) => handleShiftAction(e, freeShifts[0].id, guide.id));
+        tardeCell.appendChild(select);
       } else {
-        const freeShifts = afternoonShifts.filter(s => s.estado === 'LIBRE');
-        if (freeShifts.length > 0) {
-          const select = document.createElement('select');
-          select.className = 'w-full text-xs border rounded px-1 py-1 bg-green-100 text-green-800';
-          select.innerHTML = '<option value="">LIBRE</option>';
-          freeShifts.forEach(s => {
-            select.innerHTML += `<option value="ASIGNAR_${s.id}">${s.slot}</option>`;
-          });
-          select.addEventListener('change', (e) => handleShiftAction(e, null, guide.id));
-          tardeCell.appendChild(select);
-        } else {
-          tardeCell.innerHTML = '-';
-        }
+        tardeCell.innerHTML = '-';
       }
       row.appendChild(tardeCell);
     });
@@ -416,6 +404,9 @@ async function handleShiftAction(event, shiftId, guideId) {
   
   if (!action) return;
   
+  const originalValue = event.target.value;
+  event.target.disabled = true;
+  
   try {
     if (action === 'LIBERAR') {
       await updateDoc(doc(db, 'shifts', shiftId), {
@@ -424,15 +415,24 @@ async function handleShiftAction(event, shiftId, guideId) {
         updatedAt: serverTimestamp()
       });
       showToast('Turno liberado correctamente', 'success');
-    } else if (action === 'ASIGNAR') {
-      await updateDoc(doc(db, 'shifts', shiftId), {
-        estado: 'ASIGNADO',
-        guiaId: guideId,
-        updatedAt: serverTimestamp()
-      });
-      showToast('Turno asignado correctamente', 'success');
-    } else if (action.startsWith('ASIGNAR_')) {
-      const targetShiftId = action.replace('ASIGNAR_', '');
+      
+    } else if (action === 'ASIGNAR' || action.startsWith('ASIGNAR_')) {
+      const targetShiftId = action === 'ASIGNAR' ? shiftId : action.replace('ASIGNAR_', '');
+      const shiftDoc = await getDoc(doc(db, 'shifts', targetShiftId));
+      const shiftData = shiftDoc.data();
+      
+      // Validar Calendar API
+      showToast('Validando tour en calendario...', 'info');
+      const tourExists = await validateTour(shiftData.fecha, shiftData.slot);
+      
+      if (!tourExists) {
+        showToast('ERROR: NO EXISTE TOUR EN ESE HORARIO', 'error');
+        event.target.value = '';
+        event.target.disabled = false;
+        return;
+      }
+      
+      // Asignar
       await updateDoc(doc(db, 'shifts', targetShiftId), {
         estado: 'ASIGNADO',
         guiaId: guideId,
@@ -442,10 +442,13 @@ async function handleShiftAction(event, shiftId, guideId) {
     }
     
     event.target.value = '';
+    event.target.disabled = false;
+    
   } catch (error) {
     console.error('Error updating shift:', error);
     showToast('Error: ' + error.message, 'error');
     event.target.value = '';
+    event.target.disabled = false;
   }
 }
 
