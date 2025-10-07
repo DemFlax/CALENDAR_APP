@@ -3,7 +3,7 @@ import { getAuth } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth
 import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCIhKPt4VbiUwvEhDH027UHvWX5AVVE17U",
+  apiKey: "AIzaSyA2K1hWVovDGcVart7XFEbTqJuQRErPRTI",
   authDomain: "calendar-app-tours.firebaseapp.com",
   projectId: "calendar-app-tours",
   storageBucket: "calendar-app-tours.firebasestorage.app",

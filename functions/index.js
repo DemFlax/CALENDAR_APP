@@ -3,8 +3,18 @@ const {onRequest} = require('firebase-functions/v2/https');
 const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
+const {logger} = require('firebase-functions');
+const nodemailer = require('nodemailer');
 
 initializeApp();
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD
+  }
+});
 
 exports.onCreateGuide = onDocumentCreated('guides/{guideId}', async (event) => {
   const guide = event.data.data();
@@ -18,8 +28,10 @@ exports.onCreateGuide = onDocumentCreated('guides/{guideId}', async (event) => {
         email: guide.email,
         emailVerified: false
       });
+      logger.info('User created', { email: guide.email, uid: userRecord.uid });
     } catch (error) {
       if (error.code === 'auth/email-already-exists') {
+        logger.warn('Email already exists, recreating user', { email: guide.email });
         const existingUser = await getAuth().getUserByEmail(guide.email);
         await getAuth().deleteUser(existingUser.uid);
         userRecord = await getAuth().createUser({
@@ -35,21 +47,63 @@ exports.onCreateGuide = onDocumentCreated('guides/{guideId}', async (event) => {
       role: 'guide',
       guideId: guideId
     });
+    logger.info('Custom claims set', { guideId });
    
-    const link = await getAuth().generatePasswordResetLink(guide.email);
+    const actionCodeSettings = {
+      url: `${process.env.APP_URL}/set-password.html`,
+      handleCodeInApp: false
+    };
+   
+    const link = await getAuth().generatePasswordResetLink(
+      guide.email,
+      actionCodeSettings
+    );
+    
+    logger.info('Password reset link generated', { email: guide.email });
+   
+    const mailOptions = {
+      from: `Spain Food Sherpas <${process.env.GMAIL_USER}>`,
+      to: guide.email,
+      subject: 'Invitación - Calendario Tours Spain Food Sherpas',
+      html: `
+        <p>Hola:</p>
+        <p>Bienvenido al equipo de Spain Food Sherpas. Haz clic en este enlace para establecer tu contraseña y acceder al sistema de gestión de turnos:</p>
+        <p><a href='${link}'>${link}</a></p>
+        <p>El enlace expira en 7 días. Si no has solicitado esta invitación, ignora este correo electrónico.</p>
+        <p>Gracias,</p>
+        <p>Spain Food Sherpas</p>
+      `
+    };
+   
+    await transporter.sendMail(mailOptions);
+    logger.info('Email sent successfully', { email: guide.email });
    
     await getFirestore().collection('notifications').add({
       guiaId: guideId,
       tipo: 'INVITACION',
       emailTo: guide.email,
       invitationLink: link,
-      status: 'pending',
+      status: 'sent',
       createdAt: FieldValue.serverTimestamp()
     });
+    
+    logger.info('Invitation notification created', { guideId, email: guide.email });
    
-    console.log(`Usuario Auth creado: ${guide.email}`);
   } catch (error) {
-    console.error('Error onCreate guide:', error);
+    logger.error('Error in onCreateGuide', { 
+      error: error.message, 
+      stack: error.stack,
+      guideId 
+    });
+    
+    await getFirestore().collection('notifications').add({
+      guiaId: guideId,
+      tipo: 'INVITACION',
+      emailTo: guide.email,
+      status: 'failed',
+      errorMessage: error.message,
+      createdAt: FieldValue.serverTimestamp()
+    });
   }
 });
 

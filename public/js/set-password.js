@@ -50,14 +50,9 @@ confirmPasswordInput.addEventListener('input', () => {
 });
 
 async function verifyCode() {
-  const emailParam = urlParams.get('email');
-  if (emailParam) {
-    emailInput.value = emailParam;
-    return;
-  }
-  
   if (!oobCode || mode !== 'resetPassword') {
     showError('Link inválido o expirado. Contacta con el manager.');
+    submitBtn.disabled = true;
     return;
   }
 
@@ -67,6 +62,7 @@ async function verifyCode() {
   } catch (error) {
     console.error('Error verificando código:', error);
     showError('Link expirado o inválido. Solicita una nueva invitación.');
+    submitBtn.disabled = true;
   }
 }
 
@@ -87,6 +83,11 @@ form.addEventListener('submit', async (e) => {
     return;
   }
 
+  if (!oobCode) {
+    showError('Código de verificación no encontrado. Usa el link del email.');
+    return;
+  }
+
   submitBtn.disabled = true;
   loadingDiv.classList.remove('hidden');
   form.classList.add('hidden');
@@ -94,6 +95,10 @@ form.addEventListener('submit', async (e) => {
 
   try {
     await confirmPasswordReset(auth, oobCode, password);
+    
+    // Esperar propagación Firebase Auth
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
     await signInWithEmailAndPassword(auth, emailInput.value, password);
 
     const idTokenResult = await auth.currentUser.getIdTokenResult(true);
@@ -109,10 +114,19 @@ form.addEventListener('submit', async (e) => {
 
   } catch (error) {
     console.error('Error estableciendo contraseña:', error);
-    showError('Error al establecer contraseña: ' + error.message);
-    submitBtn.disabled = false;
-    loadingDiv.classList.add('hidden');
-    form.classList.remove('hidden');
+    
+    // Si falla el login pero la contraseña se estableció, redirigir a login
+    if (error.code === 'auth/invalid-action-code') {
+      showError('Contraseña establecida. Redirigiendo al login...');
+      setTimeout(() => {
+        window.location.href = '/login.html';
+      }, 2000);
+    } else {
+      showError('Error: ' + error.message);
+      submitBtn.disabled = false;
+      loadingDiv.classList.add('hidden');
+      form.classList.remove('hidden');
+    }
   }
 });
 
