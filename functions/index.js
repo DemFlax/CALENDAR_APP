@@ -1,5 +1,6 @@
 const {onDocumentCreated} = require('firebase-functions/v2/firestore');
 const {onRequest} = require('firebase-functions/v2/https');
+const {defineSecret, defineString} = require('firebase-functions/params');
 const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
@@ -8,92 +9,96 @@ const nodemailer = require('nodemailer');
 
 initializeApp();
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD
-  }
-});
+const gmailEmail = defineSecret('GMAIL_EMAIL');
+const gmailPassword = defineSecret('GMAIL_APP_PASSWORD');
+const appUrl = defineString('APP_URL', {default: 'https://calendar-app-tours.web.app'});
 
-exports.onCreateGuide = onDocumentCreated('guides/{guideId}', async (event) => {
+exports.onCreateGuide = onDocumentCreated({
+  document: 'guides/{guideId}',
+  secrets: [gmailEmail, gmailPassword]
+}, async (event) => {
   const guide = event.data.data();
   const guideId = event.params.guideId;
  
   try {
-    let userRecord;
-   
-    try {
-      userRecord = await getAuth().createUser({
-        email: guide.email,
-        emailVerified: false
-      });
-      logger.info('User created', { email: guide.email, uid: userRecord.uid });
-    } catch (error) {
-      if (error.code === 'auth/email-already-exists') {
-        logger.warn('Email already exists, recreating user', { email: guide.email });
-        const existingUser = await getAuth().getUserByEmail(guide.email);
-        await getAuth().deleteUser(existingUser.uid);
-        userRecord = await getAuth().createUser({
-          email: guide.email,
-          emailVerified: false
-        });
-      } else {
-        throw error;
-      }
-    }
-   
+    const userRecord = await getAuth().createUser({
+      email: guide.email,
+      emailVerified: false,
+      disabled: false
+    });
+    
+    logger.info('Usuario Auth creado', { uid: userRecord.uid, email: guide.email });
+
     await getAuth().setCustomUserClaims(userRecord.uid, {
       role: 'guide',
       guideId: guideId
     });
-    logger.info('Custom claims set', { guideId });
-   
-    const actionCodeSettings = {
-      url: `${process.env.APP_URL}/set-password.html`,
-      handleCodeInApp: false
-    };
-   
-    const link = await getAuth().generatePasswordResetLink(
-      guide.email,
-      actionCodeSettings
-    );
+
+    await getFirestore().collection('guides').doc(guideId).update({
+      uid: userRecord.uid,
+      updatedAt: FieldValue.serverTimestamp()
+    });
     
-    logger.info('Password reset link generated', { email: guide.email });
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: gmailEmail.value(),
+        pass: gmailPassword.value()
+      }
+    });
+    
+    // Generar link Firebase
+    const firebaseLink = await getAuth().generatePasswordResetLink(guide.email);
+    
+    // Extraer oobCode
+    const urlObj = new URL(firebaseLink);
+    const oobCode = urlObj.searchParams.get('oobCode');
+    
+    // Crear link directo a tu página
+    const directLink = `${appUrl.value()}/set-password.html?mode=resetPassword&oobCode=${oobCode}`;
+    
+    logger.info('Link generado', { email: guide.email, oobCode: oobCode.substring(0, 10) + '...' });
    
     const mailOptions = {
-      from: `Spain Food Sherpas <${process.env.GMAIL_USER}>`,
+      from: `Spain Food Sherpas <${gmailEmail.value()}>`,
       to: guide.email,
       subject: 'Invitación - Calendario Tours Spain Food Sherpas',
       html: `
-        <p>Hola:</p>
-        <p>Bienvenido al equipo de Spain Food Sherpas. Haz clic en este enlace para establecer tu contraseña y acceder al sistema de gestión de turnos:</p>
-        <p><a href='${link}'>${link}</a></p>
-        <p>El enlace expira en 7 días. Si no has solicitado esta invitación, ignora este correo electrónico.</p>
-        <p>Gracias,</p>
-        <p>Spain Food Sherpas</p>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Bienvenido a Spain Food Sherpas</h2>
+          <p>Hola ${guide.nombre || ''},</p>
+          <p>Has sido invitado a unirte al equipo de guías turísticos.</p>
+          <p>Para completar tu registro, establece tu contraseña:</p>
+          <div style="margin: 20px 0;">
+            <a href="${directLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+              Establecer Contraseña
+            </a>
+          </div>
+          <p>O copia y pega este enlace:</p>
+          <p style="word-break: break-all; color: #666; background: #f5f5f5; padding: 10px; border-radius: 4px;">${directLink}</p>
+          <p><small>Este enlace expira en 1 hora.</small></p>
+          <hr style="border: 1px solid #eee; margin: 20px 0;">
+          <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
+        </div>
       `
     };
    
     await transporter.sendMail(mailOptions);
-    logger.info('Email sent successfully', { email: guide.email });
+    logger.info('Email enviado', { email: guide.email });
    
     await getFirestore().collection('notifications').add({
       guiaId: guideId,
       tipo: 'INVITACION',
       emailTo: guide.email,
-      invitationLink: link,
+      invitationLink: directLink,
       status: 'sent',
       createdAt: FieldValue.serverTimestamp()
     });
     
-    logger.info('Invitation notification created', { guideId, email: guide.email });
-   
   } catch (error) {
-    logger.error('Error in onCreateGuide', { 
-      error: error.message, 
-      stack: error.stack,
-      guideId 
+    logger.error('Error onCreateGuide', { 
+      error: error.message,
+      guideId
     });
     
     await getFirestore().collection('notifications').add({
@@ -104,6 +109,35 @@ exports.onCreateGuide = onDocumentCreated('guides/{guideId}', async (event) => {
       errorMessage: error.message,
       createdAt: FieldValue.serverTimestamp()
     });
+  }
+});
+
+exports.assignGuideClaims = onRequest({
+  cors: true
+}, async (req, res) => {
+  try {
+    const { uid, guideId } = req.body;
+
+    if (!uid || !guideId) {
+      res.status(400).json({ error: 'uid y guideId requeridos' });
+      return;
+    }
+
+    await getAuth().setCustomUserClaims(uid, {
+      role: 'guide',
+      guideId: guideId
+    });
+
+    await getFirestore().collection('guides').doc(guideId).update({
+      uid: uid,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    logger.info('Claims assigned', { uid, guideId });
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Error assigning claims', { error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
