@@ -216,3 +216,57 @@ exports.generateMonthlyShifts = generateMonthlyShifts;
 
 const { onUpdateShift } = require('./src/onUpdateShift');
 exports.onUpdateShift = onUpdateShift;
+exports.onCreateGuideGenerateShifts = onDocumentCreated({
+  document: 'guides/{guideId}'
+}, async (event) => {
+  const guide = event.data.data();
+  const guideId = event.params.guideId;
+  
+  if (guide.estado !== 'activo') {
+    logger.info('Guía no activo - no se generan turnos', { guideId });
+    return;
+  }
+  
+  try {
+    const db = getFirestore();
+    const today = new Date();
+    const slots = ['MAÑANA', 'T1', 'T2', 'T3'];
+    let created = 0;
+    
+    // Generar 3 meses de turnos
+    for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
+      const targetDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      
+      const batch = db.batch();
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const fecha = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        for (const slot of slots) {
+          const docId = `${fecha}_${slot}_${guideId}`;
+          const docRef = db.collection('shifts').doc(docId);
+          
+          batch.set(docRef, {
+            fecha,
+            slot,
+            guiaId: guideId,
+            estado: 'LIBRE',
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+          });
+          created++;
+        }
+      }
+      
+      await batch.commit();
+    }
+    
+    logger.info('Turnos generados para nuevo guía', { guideId, count: created });
+    
+  } catch (error) {
+    logger.error('Error generando turnos', { guideId, error: error.message });
+  }
+});

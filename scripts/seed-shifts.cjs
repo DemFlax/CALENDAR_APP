@@ -11,7 +11,6 @@ const SLOTS = ['MAÑANA', 'T1', 'T2', 'T3'];
 
 async function seedShifts() {
   try {
-    // 1. Obtener guías activos
     const guidesSnapshot = await db.collection('guides')
       .where('estado', '==', 'activo')
       .get();
@@ -25,11 +24,27 @@ async function seedShifts() {
     guidesSnapshot.forEach(doc => guides.push({ id: doc.id, ...doc.data() }));
     console.log(`✅ ${guides.length} guías encontrados`);
     
-    // 2. Generar turnos 3 meses
     const today = new Date();
+    const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    const endDate = new Date(today.getFullYear(), today.getMonth() + 3, 0);
+    
+    const startStr = startDate.toISOString().split('T')[0];
+    const endStr = endDate.toISOString().split('T')[0];
+    
+    console.log(`Verificando turnos entre ${startStr} y ${endStr}...`);
+    
+    const existingShifts = await db.collection('shifts')
+      .where('fecha', '>=', startStr)
+      .where('fecha', '<=', endStr)
+      .get();
+    
+    const existingIds = new Set();
+    existingShifts.forEach(doc => existingIds.add(doc.id));
+    
+    console.log(`${existingIds.size} turnos ya existen`);
+    
     const batch = db.batch();
     let created = 0;
-    let skipped = 0;
     
     for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
       const targetDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
@@ -43,11 +58,9 @@ async function seedShifts() {
         for (const guide of guides) {
           for (const slot of SLOTS) {
             const docId = `${fecha}_${slot}_${guide.id}`;
-            const docRef = db.collection('shifts').doc(docId);
             
-            const exists = await docRef.get();
-            
-            if (!exists.exists) {
+            if (!existingIds.has(docId)) {
+              const docRef = db.collection('shifts').doc(docId);
               batch.set(docRef, {
                 fecha,
                 slot,
@@ -57,8 +70,6 @@ async function seedShifts() {
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
               });
               created++;
-            } else {
-              skipped++;
             }
           }
         }
@@ -68,10 +79,8 @@ async function seedShifts() {
     if (created > 0) {
       await batch.commit();
       console.log(`✅ ${created} turnos creados`);
-    }
-    
-    if (skipped > 0) {
-      console.log(`⏭️  ${skipped} turnos ya existían (saltados)`);
+    } else {
+      console.log('⏭️  Todos los turnos ya existían');
     }
     
   } catch (error) {

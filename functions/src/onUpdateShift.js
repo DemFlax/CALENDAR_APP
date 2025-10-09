@@ -102,7 +102,10 @@ async function handleAssignment(shiftRef, shiftData, shiftId) {
       });
       logger.info('Assignment reverted due to error', { shiftId });
     } catch (revertError) {
-      logger.error('Failed to revert assignment', { error: revertError.message });
+      logger.error('Failed to revert assignment', {
+        error: revertError.message,
+        shiftId
+      });
     }
   }
   
@@ -113,33 +116,26 @@ async function handleRelease(beforeData, shiftId) {
   const db = getFirestore();
   
   try {
-    const validation = await validateTourExists(beforeData.fecha, beforeData.slot);
+    logger.info('Handling shift release', {
+      shiftId,
+      guiaId: beforeData.guiaId
+    });
     
-    if (!validation.exists || !validation.eventId) {
-      logger.warn('Event not found for release', {
-        fecha: beforeData.fecha,
-        slot: beforeData.slot
-      });
+    if (!beforeData.guiaId) {
+      logger.warn('No guide assigned to released shift', { shiftId });
       return null;
     }
     
     const guideDoc = await db.collection('guides').doc(beforeData.guiaId).get();
     
     if (!guideDoc.exists) {
-      logger.error('Guide not found', { guideId: beforeData.guiaId });
+      logger.warn('Guide not found for release notification', {
+        guideId: beforeData.guiaId
+      });
       return null;
     }
     
     const guideEmail = guideDoc.data().email;
-    
-    const removed = await removeGuideFromEvent(validation.eventId, guideEmail);
-    
-    if (!removed) {
-      logger.warn('Failed to remove guide from Calendar event', {
-        eventId: validation.eventId,
-        guideEmail
-      });
-    }
     
     await db.collection('notifications').add({
       guiaId: beforeData.guiaId,
@@ -150,11 +146,12 @@ async function handleRelease(beforeData, shiftId) {
       createdAt: FieldValue.serverTimestamp()
     });
     
-    logger.info('Release completed successfully', { shiftId });
+    logger.info('Release handled successfully', { shiftId });
     
   } catch (error) {
     logger.error('Error handling release', {
       error: error.message,
+      stack: error.stack,
       shiftId
     });
   }

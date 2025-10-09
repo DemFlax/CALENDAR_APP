@@ -1,5 +1,6 @@
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxObVxcrVN03Jmiy7svvDS-AbHcPJ_YjbiLCqnrkkxEEDID2j-w8QMRHSGJH8A_ZZ_j8Q/exec';
-const API_KEY = 'tu-api-key-segura-123';
+import { appsScriptConfig } from './firebase-config.js';
+
+const { url: APPS_SCRIPT_URL, apiKey: API_KEY } = appsScriptConfig;
 
 export async function validateTour(fecha, slot) {
   try {

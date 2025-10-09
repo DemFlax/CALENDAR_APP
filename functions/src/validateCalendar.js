@@ -1,12 +1,13 @@
 const fetch = require('node-fetch');
 const { logger } = require('firebase-functions');
+const { defineSecret } = require('firebase-functions/params');
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxObVxcrVN03Jmiy7svvDS-AbHcPJ_YjbiLCqnrkkxEEDID2j-w8QMRHSGJH8A_ZZ_j8Q/exec';
-const API_KEY = 'tu-api-key-segura-123';
+const appsScriptUrl = defineSecret('APPS_SCRIPT_URL');
+const appsScriptKey = defineSecret('APPS_SCRIPT_API_KEY');
 
 async function validateTourExists(fecha, slot) {
   try {
-    const url = `${APPS_SCRIPT_URL}?fecha=${fecha}&slot=${slot}&apiKey=${API_KEY}`;
+    const url = `${appsScriptUrl.value()}?fecha=${fecha}&slot=${slot}&apiKey=${appsScriptKey.value()}`;
     
     logger.info('Validating tour', { fecha, slot });
     
@@ -42,7 +43,7 @@ async function validateTourExists(fecha, slot) {
 
 async function addGuideToEvent(eventId, guideEmail) {
   try {
-    const url = `${APPS_SCRIPT_URL}?endpoint=addGuideToEvent&eventId=${eventId}&guideEmail=${encodeURIComponent(guideEmail)}&apiKey=${API_KEY}`;
+    const url = `${appsScriptUrl.value()}?endpoint=addGuideToEvent&eventId=${eventId}&guideEmail=${encodeURIComponent(guideEmail)}&apiKey=${appsScriptKey.value()}`;
     
     logger.info('Adding guide to event', { eventId, guideEmail });
     
@@ -73,7 +74,7 @@ async function addGuideToEvent(eventId, guideEmail) {
 
 async function removeGuideFromEvent(eventId, guideEmail) {
   try {
-    const url = `${APPS_SCRIPT_URL}?endpoint=removeGuideFromEvent&eventId=${eventId}&guideEmail=${encodeURIComponent(guideEmail)}&apiKey=${API_KEY}`;
+    const url = `${appsScriptUrl.value()}?endpoint=removeGuideFromEvent&eventId=${eventId}&guideEmail=${encodeURIComponent(guideEmail)}&apiKey=${appsScriptKey.value()}`;
     
     logger.info('Removing guide from event', { eventId, guideEmail });
     

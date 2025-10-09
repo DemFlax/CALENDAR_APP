@@ -36,27 +36,26 @@ service cloud.firestore {
       
       allow create: if isManager();
       
-      // Manager asigna: LIBRE → ASIGNADO
+      // Manager: LIBRE → ASIGNADO
       allow update: if isManager() &&
                        resource.data.estado == 'LIBRE' &&
                        request.resource.data.estado == 'ASIGNADO';
       
-      // Manager libera: ASIGNADO → LIBRE
+      // Manager: ASIGNADO → LIBRE
       allow update: if isManager() &&
                        resource.data.estado == 'ASIGNADO' &&
                        request.resource.data.estado == 'LIBRE';
       
-      // Guía bloquea: LIBRE → NO_DISPONIBLE
+      // Guía: LIBRE → NO_DISPONIBLE (bloquear)
       allow update: if isGuide() &&
-                       resource.data.guiaId == request.auth.token.guideId &&
                        resource.data.estado == 'LIBRE' &&
                        request.resource.data.estado == 'NO_DISPONIBLE' &&
                        request.resource.data.guiaId == request.auth.token.guideId;
       
-      // Guía desbloquea: NO_DISPONIBLE → LIBRE
+      // Guía: NO_DISPONIBLE → LIBRE (desbloquear) - guiaId persiste
       allow update: if isGuide() &&
-                       resource.data.guiaId == request.auth.token.guideId &&
                        resource.data.estado == 'NO_DISPONIBLE' &&
+                       resource.data.guiaId == request.auth.token.guideId &&
                        request.resource.data.estado == 'LIBRE' &&
                        request.resource.data.guiaId == request.auth.token.guideId;
     }

@@ -11,6 +11,11 @@ const firebaseConfig = {
   appId: "1:498221526899:web:1fa32c1d4b6cd6e37b5f06"
 };
 
+export const appsScriptConfig = {
+  url: 'https://script.google.com/macros/s/AKfycbxObVxcrVN03Jmiy7svvDS-AbHcPJ_YjbiLCqnrkkxEEDID2j-w8QMRHSGJH8A_ZZ_j8Q/exec',
+  apiKey: 'tu-api-key-segura-123'
+};
+
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
