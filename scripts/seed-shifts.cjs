@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const serviceAccount = require('C:/SHERPAS_CALENDAR/Kyes/serviceAccountKey.json');
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   projectId: 'calendar-app-tours'
@@ -41,11 +42,9 @@ async function seedShifts() {
         
         for (const guide of guides) {
           for (const slot of SLOTS) {
-            // ID SIN guiaId - único por fecha+slot
             const docId = `${fecha}_${slot}_${guide.id}`;
             const docRef = db.collection('shifts').doc(docId);
             
-            // VERIFICAR SI YA EXISTE
             const exists = await docRef.get();
             
             if (!exists.exists) {

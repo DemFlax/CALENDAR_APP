@@ -2,90 +2,68 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // ============================================
-    // HELPERS
-    // ============================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
     
     function isManager() {
-      return request.auth != null && request.auth.token.role == 'manager';
+      return isAuthenticated() && request.auth.token.role == "manager";
     }
     
     function isGuide() {
-      return request.auth != null && request.auth.token.role == 'guide';
+      return isAuthenticated() && request.auth.token.role == "guide";
     }
     
-    function getGuideId() {
-      return request.auth.token.guideId;
+    function isOwnerGuide(guideId) {
+      return isAuthenticated() && request.auth.token.guideId == guideId;
     }
-    
-    // Valida que campos críticos no cambien
-    function immutableFields() {
-      return request.resource.data.fecha == resource.data.fecha
-          && request.resource.data.slot == resource.data.slot
-          && request.resource.data.createdAt == resource.data.createdAt;
-    }
-    
-    // ============================================
-    // COLECCIÓN: guides
-    // ============================================
     
     match /guides/{guideId} {
-      allow read, write: if isManager();
-      allow read: if isGuide() && getGuideId() == guideId;
-    }
-    
-    // ============================================
-    // COLECCIÓN: shifts
-    // ============================================
-    
-    match /shifts/{shiftId} {
-      // LECTURA: todos los autenticados
-      allow read: if request.auth != null;
-      
-      // CREACIÓN: solo Cloud Functions (Admin SDK bypassa rules)
-      // Frontend NO puede crear turnos
-      allow create: if false;
-      
-      // ACTUALIZACIÓN: validaciones por rol y transición
-      allow update: if 
-        // MANAGER: solo LIBRE ↔ ASIGNADO
-        (isManager() && immutableFields() && (
-          // LIBRE → ASIGNADO
-          (resource.data.estado == 'LIBRE' 
-           && request.resource.data.estado == 'ASIGNADO'
-           && request.resource.data.guiaId is string
-           && request.resource.data.guiaId.size() > 0)
-          ||
-          // ASIGNADO → LIBRE
-          (resource.data.estado == 'ASIGNADO' 
-           && request.resource.data.estado == 'LIBRE'
-           && request.resource.data.guiaId == null)
-        ))
-        ||
-        // GUÍA: solo LIBRE ↔ NO_DISPONIBLE (de su propio guideId)
-        (isGuide() && immutableFields() && (
-          // LIBRE → NO_DISPONIBLE
-          (resource.data.estado == 'LIBRE'
-           && request.resource.data.estado == 'NO_DISPONIBLE'
-           && request.resource.data.guiaId == getGuideId())
-          ||
-          // NO_DISPONIBLE → LIBRE (solo SUS turnos bloqueados)
-          (resource.data.estado == 'NO_DISPONIBLE'
-           && resource.data.guiaId == getGuideId()
-           && request.resource.data.estado == 'LIBRE'
-           && request.resource.data.guiaId == null)
-        ));
-      
-      // ELIMINACIÓN: prohibida (auditoría)
+      allow read: if isManager() || isOwnerGuide(guideId);
+      allow create: if isManager();
+      allow update: if isManager() &&
+                       request.resource.data.email == resource.data.email &&
+                       request.resource.data.dni == resource.data.dni;
       allow delete: if false;
     }
     
-    // ============================================
-    // COLECCIÓN: notifications
-    // ============================================
+    match /shifts/{shiftId} {
+      allow read: if isManager();
+      allow read: if isGuide() && (
+        resource.data.guiaId == request.auth.token.guideId ||
+        resource.data.estado == 'LIBRE'
+      );
+      
+      allow create: if isManager();
+      
+      // Manager asigna: LIBRE → ASIGNADO
+      allow update: if isManager() &&
+                       resource.data.estado == 'LIBRE' &&
+                       request.resource.data.estado == 'ASIGNADO';
+      
+      // Manager libera: ASIGNADO → LIBRE
+      allow update: if isManager() &&
+                       resource.data.estado == 'ASIGNADO' &&
+                       request.resource.data.estado == 'LIBRE';
+      
+      // Guía bloquea: LIBRE → NO_DISPONIBLE
+      allow update: if isGuide() &&
+                       resource.data.guiaId == request.auth.token.guideId &&
+                       resource.data.estado == 'LIBRE' &&
+                       request.resource.data.estado == 'NO_DISPONIBLE' &&
+                       request.resource.data.guiaId == request.auth.token.guideId;
+      
+      // Guía desbloquea: NO_DISPONIBLE → LIBRE
+      allow update: if isGuide() &&
+                       resource.data.guiaId == request.auth.token.guideId &&
+                       resource.data.estado == 'NO_DISPONIBLE' &&
+                       request.resource.data.estado == 'LIBRE' &&
+                       request.resource.data.guiaId == request.auth.token.guideId;
+    }
     
     match /notifications/{notificationId} {
-      allow read, write: if isManager();
+      allow read: if isManager();
+      allow write: if false;
     }
   }
 }

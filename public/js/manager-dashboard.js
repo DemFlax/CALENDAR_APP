@@ -347,17 +347,17 @@ function renderCalendar(shiftsByDate, guides, estadoFilter) {
     
     guides.forEach(guide => {
       // MAÑANA
-      const morningShift = shifts.find(s => s.slot === 'MAÑANA');
+      const morningShift = shifts.find(s => s.slot === 'MAÑANA' && s.guiaId === guide.id);
       const morningCell = document.createElement('td');
       morningCell.className = 'border px-2 py-1';
       
-      if (morningShift?.estado === 'ASIGNADO' && morningShift.guiaId === guide.id) {
+      if (morningShift?.estado === 'ASIGNADO') {
         const select = document.createElement('select');
         select.className = 'w-full text-xs border rounded px-1 py-1 bg-blue-600 text-white font-semibold';
         select.innerHTML = '<option value="">ASIGNADO</option><option value="LIBERAR">LIBERAR</option>';
         select.addEventListener('change', (e) => handleShiftAction(e, morningShift.id, guide.id));
         morningCell.appendChild(select);
-      } else if (morningShift?.estado === 'NO_DISPONIBLE' && morningShift.guiaId === guide.id) {
+      } else if (morningShift?.estado === 'NO_DISPONIBLE') {
         morningCell.innerHTML = '<div class="bg-red-500 text-white px-2 py-1 rounded text-xs text-center font-semibold">NO DISPONIBLE</div>';
       } else if (morningShift?.estado === 'LIBRE') {
         const select = document.createElement('select');
@@ -374,9 +374,9 @@ function renderCalendar(shiftsByDate, guides, estadoFilter) {
       const tardeCell = document.createElement('td');
       tardeCell.className = 'border px-2 py-1';
       
-      const afternoonShifts = shifts.filter(s => ['T1', 'T2', 'T3'].includes(s.slot));
-      const assignedToGuide = afternoonShifts.filter(s => s.estado === 'ASIGNADO' && s.guiaId === guide.id);
-      const blockedByGuide = afternoonShifts.filter(s => s.estado === 'NO_DISPONIBLE' && s.guiaId === guide.id);
+      const afternoonShifts = shifts.filter(s => ['T1', 'T2', 'T3'].includes(s.slot) && s.guiaId === guide.id);
+      const assignedToGuide = afternoonShifts.filter(s => s.estado === 'ASIGNADO');
+      const blockedByGuide = afternoonShifts.filter(s => s.estado === 'NO_DISPONIBLE');
       const freeShifts = afternoonShifts.filter(s => s.estado === 'LIBRE');
       
       if (assignedToGuide.length > 0) {
@@ -393,8 +393,12 @@ function renderCalendar(shiftsByDate, guides, estadoFilter) {
         select.className = 'w-full text-xs border rounded px-1 py-1 bg-green-100 text-green-800';
         select.innerHTML = '<option value="">LIBRE</option>';
         
+        const addedSlots = new Set();
         freeShifts.forEach(shift => {
-          select.innerHTML += `<option value="ASIGNAR_${shift.id}">ASIGNAR ${shift.slot}</option>`;
+          if (!addedSlots.has(shift.slot)) {
+            select.innerHTML += `<option value="ASIGNAR_${shift.id}">ASIGNAR ${shift.slot}</option>`;
+            addedSlots.add(shift.slot);
+          }
         });
         
         select.addEventListener('change', (e) => handleShiftAction(e, freeShifts[0].id, guide.id));
@@ -441,7 +445,6 @@ async function handleShiftAction(event, shiftId, guideId) {
       
       await updateDoc(doc(db, 'shifts', shiftId), {
         estado: 'LIBRE',
-        guiaId: null,
         updatedAt: serverTimestamp()
       });
       
@@ -451,6 +454,26 @@ async function handleShiftAction(event, shiftId, guideId) {
       const targetShiftId = action === 'ASIGNAR' ? shiftId : action.replace('ASIGNAR_', '');
       const shiftDoc = await getDoc(doc(db, 'shifts', targetShiftId));
       const shiftData = shiftDoc.data();
+      
+      // VALIDACIÓN ANTI-DUPLICADOS
+      const duplicateQuery = query(
+        collection(db, 'shifts'),
+        where('fecha', '==', shiftData.fecha),
+        where('slot', '==', shiftData.slot),
+        where('estado', '==', 'ASIGNADO')
+      );
+      
+      const duplicateSnapshot = await getDocs(duplicateQuery);
+      
+      if (!duplicateSnapshot.empty) {
+        const existingGuideId = duplicateSnapshot.docs[0].data().guiaId;
+        if (existingGuideId !== guideId) {
+          showToast('ERROR: Turno ya asignado a otro guía. Libéralo primero.', 'error');
+          event.target.value = '';
+          event.target.disabled = false;
+          return;
+        }
+      }
       
       showToast('Validando tour en calendario...', 'info');
       const tourExists = await validateTour(shiftData.fecha, shiftData.slot);
