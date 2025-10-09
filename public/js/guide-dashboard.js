@@ -179,7 +179,7 @@ function renderCalendar(shiftsMap, estadoFilter) {
   }
   
   const table = document.createElement('table');
-  table.className = 'w-full border-collapse';
+  table.className = 'calendar-table w-full border-collapse';
   
   const thead = document.createElement('thead');
   thead.innerHTML = `
@@ -233,7 +233,7 @@ function renderCalendar(shiftsMap, estadoFilter) {
 
 function createShiftButton(shift, type) {
   const button = document.createElement('button');
-  button.className = 'w-full px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-semibold transition-colors';
+  button.className = 'calendar-btn w-full px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-semibold transition-colors';
   
   if (shift.estado === 'ASIGNADO' && shift.guiaId === currentGuideId) {
     button.className += ' bg-blue-600 text-white cursor-not-allowed';
@@ -258,7 +258,7 @@ function createShiftButton(shift, type) {
 
 function createAfternoonButton(afternoonShifts, fecha) {
   const button = document.createElement('button');
-  button.className = 'w-full px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-semibold transition-colors';
+  button.className = 'calendar-btn w-full px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-semibold transition-colors';
   
   const myShifts = afternoonShifts.filter(s => s.guiaId === currentGuideId);
   const hasAssigned = myShifts.some(s => s.estado === 'ASIGNADO');
@@ -372,7 +372,7 @@ function showToast(message, type = 'info') {
   toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg ${
     type === 'success' ? 'bg-green-500' :
     type === 'error' ? 'bg-red-500' : 'bg-blue-500'
-  } text-white text-sm sm:text-base`;
+  } text-white text-sm sm:text-base z-50`;
   
   toast.classList.remove('hidden');
   
