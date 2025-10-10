@@ -25,3 +25,6 @@ Thumbs.db
 *.pem
 *service-account*.json
 .secrets/
+# Firebase Functions Environment Variables
+functions/.env
+functions/.env.*

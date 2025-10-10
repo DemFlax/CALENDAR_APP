@@ -1,14 +1,6 @@
-// =========================================
-// CARGAR VARIABLES DE ENTORNO (.env)
-// =========================================
-require('dotenv').config();
-
-// =========================================
-// IMPORTS
-// =========================================
-const {onDocumentCreated, onDocumentUpdated} = require('firebase-functions/v2/firestore');
+const {onDocumentCreated} = require('firebase-functions/v2/firestore');
 const {onRequest} = require('firebase-functions/v2/https');
-const {defineSecret} = require('firebase-functions/params');
+const {defineSecret, defineString} = require('firebase-functions/params');
 const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
@@ -17,21 +9,10 @@ const nodemailer = require('nodemailer');
 
 initializeApp();
 
-// =========================================
-// SECRETS (Secret Manager - método correcto)
-// =========================================
 const gmailEmail = defineSecret('GMAIL_EMAIL');
 const gmailPassword = defineSecret('GMAIL_APP_PASSWORD');
+const appUrl = defineString('APP_URL', {default: 'https://calendar-app-tours.web.app'});
 
-// =========================================
-// VARIABLES DE ENTORNO (.env)
-// =========================================
-const APP_URL = process.env.APP_URL || 'https://calendar-app-tours.web.app';
-const MANAGER_EMAIL = process.env.MANAGER_EMAIL || 'madrid@spainfoodsherpas.com';
-
-// =========================================
-// FUNCIÓN: onCreateGuide (sin cambios)
-// =========================================
 exports.onCreateGuide = onDocumentCreated({
   document: 'guides/{guideId}',
   secrets: [gmailEmail, gmailPassword]
@@ -74,7 +55,7 @@ exports.onCreateGuide = onDocumentCreated({
     const oobCode = urlObj.searchParams.get('oobCode');
     
     // Crear link directo a tu página
-    const directLink = `${APP_URL}/set-password.html?mode=resetPassword&oobCode=${oobCode}`;
+    const directLink = `${appUrl.value()}/set-password.html?mode=resetPassword&oobCode=${oobCode}`;
     
     logger.info('Link generado', { email: guide.email, oobCode: oobCode.substring(0, 10) + '...' });
    
@@ -131,9 +112,6 @@ exports.onCreateGuide = onDocumentCreated({
   }
 });
 
-// =========================================
-// FUNCIÓN: assignGuideClaims (sin cambios)
-// =========================================
 exports.assignGuideClaims = onRequest({
   cors: true
 }, async (req, res) => {
@@ -163,12 +141,9 @@ exports.assignGuideClaims = onRequest({
   }
 });
 
-// =========================================
-// FUNCIÓN: setManagerClaims (sin cambios)
-// =========================================
 exports.setManagerClaims = onRequest(async (req, res) => {
   try {
-    const email = req.body.email || MANAGER_EMAIL;
+    const email = req.body.email || 'madrid@spainfoodsherpas.com';
     const user = await getAuth().getUserByEmail(email);
    
     await getAuth().setCustomUserClaims(user.uid, {
@@ -181,9 +156,6 @@ exports.setManagerClaims = onRequest(async (req, res) => {
   }
 });
 
-// =========================================
-// FUNCIÓN: seedInitialShifts (sin cambios)
-// =========================================
 exports.seedInitialShifts = onRequest(async (req, res) => {
   try {
     const shiftsSnapshot = await getFirestore().collection('shifts').limit(1).get();
@@ -228,9 +200,6 @@ exports.seedInitialShifts = onRequest(async (req, res) => {
   }
 });
 
-// =========================================
-// FUNCIÓN: devSetPassword (sin cambios)
-// =========================================
 exports.devSetPassword = onRequest(async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -242,21 +211,11 @@ exports.devSetPassword = onRequest(async (req, res) => {
   }
 });
 
-// =========================================
-// FUNCIÓN: generateMonthlyShifts (sin cambios)
-// =========================================
 const { generateMonthlyShifts } = require('./src/generateMonthlyShifts');
 exports.generateMonthlyShifts = generateMonthlyShifts;
 
-// =========================================
-// FUNCIÓN: onUpdateShift (sin cambios)
-// =========================================
 const { onUpdateShift } = require('./src/onUpdateShift');
 exports.onUpdateShift = onUpdateShift;
-
-// =========================================
-// FUNCIÓN: onCreateGuideGenerateShifts (sin cambios)
-// =========================================
 exports.onCreateGuideGenerateShifts = onDocumentCreated({
   document: 'guides/{guideId}'
 }, async (event) => {
