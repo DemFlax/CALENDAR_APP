@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manager Mobile - Mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+  <!-- Header -->
+  <header class="bg-blue-600 text-white p-3">
+    <div class="flex justify-between items-center">
+      <h1 class="text-lg font-bold">Manager Dashboard</h1>
+      <button class="bg-blue-700 px-3 py-1.5 rounded text-sm">Salir</button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="p-3">
+    <!-- Filtros -->
+    <div class="bg-white p-3 rounded-lg shadow mb-3 space-y-2">
+      <div>
+        <label class="block text-xs font-medium mb-1">Mes</label>
+        <select class="w-full border rounded px-3 py-2 text-sm">
+          <option>Octubre 2025</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium mb-1">Guía</label>
+        <select class="w-full border rounded px-3 py-2 text-sm bg-yellow-50 border-yellow-400">
+          <option>🎯 DAN (vista individual)</option>
+          <option>Ejeanne Mae</option>
+          <option>DANI</option>
+          <option>María García</option>
+          <option>Pedro López</option>
+          <option>─────────────</option>
+          <option>📊 TODOS (solo lectura)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium mb-1">Estado</label>
+        <select class="w-full border rounded px-3 py-2 text-sm">
+          <option>Todos</option>
+          <option>Solo Libres</option>
+          <option>Asignados</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Calendario Individual -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <div class="bg-blue-50 p-2 border-b border-blue-200">
+        <p class="text-sm font-semibold text-blue-900">📋 Calendario: DAN</p>
+      </div>
+      
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="border px-3 py-2 text-left font-semibold">Fecha</th>
+              <th class="border px-3 py-2 font-semibold">Mañana</th>
+              <th class="border px-3 py-2 font-semibold">Tarde</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="border px-3 py-2 font-medium">mié, 1 oct</td>
+              <td class="border px-2 py-2">
+                <select class="w-full border rounded px-2 py-2 bg-green-100 text-green-800 text-sm">
+                  <option>LIBRE</option>
+                  <option>ASIGNAR</option>
+                </select>
+              </td>
+              <td class="border px-2 py-2">
+                <div class="bg-red-500 text-white px-2 py-2 rounded text-center text-xs font-semibold">
+                  NO DISPONIBLE
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="border px-3 py-2 font-medium">jue, 2 oct</td>
+              <td class="border px-2 py-2">
+                <select class="w-full border rounded px-2 py-2 bg-green-100 text-green-800 text-sm">
+                  <option>LIBRE</option>
+                  <option>ASIGNAR</option>
+                </select>
+              </td>
+              <td class="border px-2 py-2">
+                <select class="w-full border rounded px-2 py-2 bg-green-100 text-green-800 text-sm">
+                  <option>LIBRE</option>
+                  <option>ASIGNAR T1</option>
+                  <option>ASIGNAR T2</option>
+                  <option>ASIGNAR T3</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td class="border px-3 py-2 font-medium">vie, 3 oct</td>
+              <td class="border px-2 py-2">
+                <select class="w-full border rounded px-2 py-2 bg-blue-600 text-white text-sm font-semibold">
+                  <option>ASIGNADO</option>
+                  <option>LIBERAR</option>
+                </select>
+              </td>
+              <td class="border px-2 py-2">
+                <select class="w-full border rounded px-2 py-2 bg-blue-600 text-white text-sm font-semibold">
+                  <option>ASIGNADO T1+T2</option>
+                  <option>LIBERAR</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td class="border px-3 py-2 font-medium">sáb, 4 oct</td>
+              <td class="border px-2 py-2">
+                <select class="w-full border rounded px-2 py-2 bg-green-100 text-green-800 text-sm">
+                  <option>LIBRE</option>
+                  <option>ASIGNAR</option>
+                </select>
+              </td>
+              <td class="border px-2 py-2">
+                <select class="w-full border rounded px-2 py-2 bg-green-100 text-green-800 text-sm">
+                  <option>LIBRE</option>
+                  <option>ASIGNAR T1</option>
+                  <option>ASIGNAR T2</option>
+                  <option>ASIGNAR T3</option>
+                </select>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Opción: Vista TODOS (solo lectura) -->
+    <div class="bg-white rounded-lg shadow mt-3 p-3">
+      <div class="bg-gray-50 p-2 rounded mb-2">
+        <p class="text-xs font-semibold text-gray-700">💡 Vista "TODOS" - Solo lectura</p>
+      </div>
+      <div class="text-xs text-gray-600 space-y-1">
+        <p>• Muestra tabla compacta con todos los guías</p>
+        <p>• Solo colores de estado (no dropdowns)</p>
+        <p>• Click en celda → Modal para asignar</p>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
