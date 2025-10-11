@@ -557,6 +557,26 @@ async function handleShiftAction(event, docPath, guideId, actionValue = null) {
         event.target.disabled = false;
         return;
       }
+      
+      // Verificar que ningún otro guía tenga este turno asignado
+      const guidesSnapshot = await getDocs(query(collection(db, 'guides'), where('estado', '==', 'activo')));
+      for (const guideDoc of guidesSnapshot.docs) {
+        const conflictQuery = query(
+          collection(db, 'guides', guideDoc.id, 'shifts'),
+          where('fecha', '==', shiftData.fecha),
+          where('slot', '==', shiftData.slot),
+          where('estado', '==', 'ASIGNADO')
+        );
+        const conflictDocs = await getDocs(conflictQuery);
+        if (!conflictDocs.empty) {
+          const conflictGuide = guideDoc.data();
+          showToast(`ERROR: Turno ya asignado a ${conflictGuide.nombre}`, 'error');
+          event.target.value = '';
+          event.target.disabled = false;
+          return;
+        }
+      }
+      
       await updateDoc(shiftRef, { estado: 'ASIGNADO', updatedAt: serverTimestamp() });
       try {
         const guideDoc = await getDoc(doc(db, 'guides', guideId));
