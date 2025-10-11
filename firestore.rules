@@ -1,23 +1,23 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isManager() {
       return isAuthenticated() && request.auth.token.role == "manager";
     }
-    
+
     function isGuide() {
       return isAuthenticated() && request.auth.token.role == "guide";
     }
-    
+
     function isOwnerGuide(guideId) {
       return isAuthenticated() && request.auth.token.guideId == guideId;
     }
-    
+
     match /guides/{guideId} {
       allow read: if isManager() || isOwnerGuide(guideId);
       allow create: if isManager();
@@ -25,41 +25,40 @@ service cloud.firestore {
                        request.resource.data.email == resource.data.email &&
                        request.resource.data.dni == resource.data.dni;
       allow delete: if false;
+      
+      // Subcolección shifts por guía
+      match /shifts/{shiftId} {
+        // Manager lee todos los shifts de todos los guías
+        allow read: if isManager();
+        
+        // Guía solo lee sus propios shifts
+        allow read: if isOwnerGuide(guideId);
+        
+        // Solo Cloud Functions crean shifts
+        allow create: if false;
+        
+        // Manager: LIBRE → ASIGNADO
+        allow update: if isManager() &&
+                         resource.data.estado == 'LIBRE' &&
+                         request.resource.data.estado == 'ASIGNADO';
+        
+        // Manager: ASIGNADO → LIBRE
+        allow update: if isManager() &&
+                         resource.data.estado == 'ASIGNADO' &&
+                         request.resource.data.estado == 'LIBRE';
+        
+        // Guía: LIBRE → NO_DISPONIBLE (bloquear)
+        allow update: if isOwnerGuide(guideId) &&
+                         resource.data.estado == 'LIBRE' &&
+                         request.resource.data.estado == 'NO_DISPONIBLE';
+        
+        // Guía: NO_DISPONIBLE → LIBRE (desbloquear)
+        allow update: if isOwnerGuide(guideId) &&
+                         resource.data.estado == 'NO_DISPONIBLE' &&
+                         request.resource.data.estado == 'LIBRE';
+      }
     }
-    
-    match /shifts/{shiftId} {
-      allow read: if isManager();
-      allow read: if isGuide() && (
-        resource.data.guiaId == request.auth.token.guideId ||
-        resource.data.estado == 'LIBRE'
-      );
-      
-      allow create: if isManager();
-      
-      // Manager: LIBRE → ASIGNADO
-      allow update: if isManager() &&
-                       resource.data.estado == 'LIBRE' &&
-                       request.resource.data.estado == 'ASIGNADO';
-      
-      // Manager: ASIGNADO → LIBRE
-      allow update: if isManager() &&
-                       resource.data.estado == 'ASIGNADO' &&
-                       request.resource.data.estado == 'LIBRE';
-      
-      // Guía: LIBRE → NO_DISPONIBLE (bloquear)
-      allow update: if isGuide() &&
-                       resource.data.estado == 'LIBRE' &&
-                       request.resource.data.estado == 'NO_DISPONIBLE' &&
-                       request.resource.data.guiaId == request.auth.token.guideId;
-      
-      // Guía: NO_DISPONIBLE → LIBRE (desbloquear) - guiaId persiste
-      allow update: if isGuide() &&
-                       resource.data.estado == 'NO_DISPONIBLE' &&
-                       resource.data.guiaId == request.auth.token.guideId &&
-                       request.resource.data.estado == 'LIBRE' &&
-                       request.resource.data.guiaId == request.auth.token.guideId;
-    }
-    
+
     match /notifications/{notificationId} {
       allow read: if isManager();
       allow write: if false;

@@ -59,10 +59,7 @@ exports.onCreateGuide = onDocumentCreated({
       updatedAt: FieldValue.serverTimestamp()
     });
     
-    // Configurar SendGrid
     sgMail.setApiKey(sendgridKey.value());
-    
-    // Generar link Firebase
     const firebaseLink = await getAuth().generatePasswordResetLink(guide.email);
     const urlObj = new URL(firebaseLink);
     const oobCode = urlObj.searchParams.get('oobCode');
@@ -72,10 +69,7 @@ exports.onCreateGuide = onDocumentCreated({
    
     const msg = {
       to: guide.email,
-      from: {
-        email: FROM_EMAIL,
-        name: FROM_NAME
-      },
+      from: { email: FROM_EMAIL, name: FROM_NAME },
       subject: 'Invitación - Calendario Tours Spain Food Sherpas',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -110,11 +104,7 @@ exports.onCreateGuide = onDocumentCreated({
     });
     
   } catch (error) {
-    logger.error('Error onCreateGuide', { 
-      error: error.message,
-      guideId
-    });
-    
+    logger.error('Error onCreateGuide', { error: error.message, guideId });
     await getFirestore().collection('notifications').add({
       guiaId: guideId,
       tipo: 'INVITACION',
@@ -137,18 +127,15 @@ exports.onUpdateGuide = onDocumentUpdated({
   const after = event.data.after.data();
   const guideId = event.params.guideId;
   
-  // Detectar reactivación: inactivo → activo
   if (before.estado === 'inactivo' && after.estado === 'activo') {
     logger.info('Guía reactivado - enviando email invitación', { guideId, email: after.email });
     
     try {
-      // Verificar si usuario Auth existe
       let userRecord;
       try {
         userRecord = await getAuth().getUserByEmail(after.email);
         logger.info('Usuario Auth existe - generando reset link', { uid: userRecord.uid });
       } catch (authError) {
-        // Usuario Auth no existe - crear nuevo
         logger.warn('Usuario Auth no existe - creando nuevo', { email: after.email });
         userRecord = await getAuth().createUser({
           email: after.email,
@@ -167,7 +154,6 @@ exports.onUpdateGuide = onDocumentUpdated({
         });
       }
       
-      // Generar password reset link
       const firebaseLink = await getAuth().generatePasswordResetLink(after.email);
       const urlObj = new URL(firebaseLink);
       const oobCode = urlObj.searchParams.get('oobCode');
@@ -175,15 +161,10 @@ exports.onUpdateGuide = onDocumentUpdated({
       
       logger.info('Link generado para reactivación', { email: after.email, oobCode: oobCode.substring(0, 10) + '...' });
       
-      // Configurar SendGrid
       sgMail.setApiKey(sendgridKey.value());
-      
       const msg = {
         to: after.email,
-        from: {
-          email: FROM_EMAIL,
-          name: FROM_NAME
-        },
+        from: { email: FROM_EMAIL, name: FROM_NAME },
         subject: '¡Bienvenido de nuevo! - Reactivación Calendario Tours',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -208,7 +189,6 @@ exports.onUpdateGuide = onDocumentUpdated({
       await sgMail.send(msg);
       logger.info('Email reactivación enviado vía SendGrid', { email: after.email });
       
-      // Registrar notificación
       await getFirestore().collection('notifications').add({
         guiaId: guideId,
         tipo: 'REACTIVACION',
@@ -219,12 +199,7 @@ exports.onUpdateGuide = onDocumentUpdated({
       });
       
     } catch (error) {
-      logger.error('Error enviando email reactivación', { 
-        error: error.message,
-        guideId,
-        email: after.email
-      });
-      
+      logger.error('Error enviando email reactivación', { error: error.message, guideId, email: after.email });
       await getFirestore().collection('notifications').add({
         guiaId: guideId,
         tipo: 'REACTIVACION',
@@ -238,29 +213,76 @@ exports.onUpdateGuide = onDocumentUpdated({
 });
 
 // =========================================
+// FUNCIÓN: onCreateGuideGenerateShifts
+// =========================================
+exports.onCreateGuideGenerateShifts = onDocumentCreated({
+  document: 'guides/{guideId}'
+}, async (event) => {
+  const guide = event.data.data();
+  const guideId = event.params.guideId;
+  
+  if (guide.estado !== 'activo') {
+    logger.info('Guía no activo - skip shifts', { guideId });
+    return;
+  }
+  
+  try {
+    const db = getFirestore();
+    const today = new Date();
+    const slots = ['MAÑANA', 'T1', 'T2', 'T3'];
+    let created = 0;
+    
+    for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
+      const targetDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      
+      const batch = db.batch();
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const fecha = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        for (const slot of slots) {
+          const docId = `${fecha}_${slot}`;
+          const docRef = db.collection('guides').doc(guideId).collection('shifts').doc(docId);
+          
+          batch.set(docRef, {
+            fecha,
+            slot,
+            estado: 'LIBRE',
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+          });
+          created++;
+        }
+      }
+      
+      await batch.commit();
+    }
+    
+    logger.info('Shifts generados', { guideId, count: created });
+    
+  } catch (error) {
+    logger.error('Error generando turnos', { guideId, error: error.message });
+  }
+});
+
+// =========================================
 // FUNCIÓN: assignGuideClaims
 // =========================================
-exports.assignGuideClaims = onRequest({
-  cors: true
-}, async (req, res) => {
+exports.assignGuideClaims = onRequest({ cors: true }, async (req, res) => {
   try {
     const { uid, guideId } = req.body;
-
     if (!uid || !guideId) {
       res.status(400).json({ error: 'uid y guideId requeridos' });
       return;
     }
-
-    await getAuth().setCustomUserClaims(uid, {
-      role: 'guide',
-      guideId: guideId
-    });
-
+    await getAuth().setCustomUserClaims(uid, { role: 'guide', guideId: guideId });
     await getFirestore().collection('guides').doc(guideId).update({
       uid: uid,
       updatedAt: FieldValue.serverTimestamp()
     });
-
     logger.info('Claims assigned', { uid, guideId });
     res.json({ success: true });
   } catch (error) {
@@ -276,59 +298,8 @@ exports.setManagerClaims = onRequest(async (req, res) => {
   try {
     const email = req.body.email || MANAGER_EMAIL;
     const user = await getAuth().getUserByEmail(email);
-   
-    await getAuth().setCustomUserClaims(user.uid, {
-      role: 'manager'
-    });
-   
+    await getAuth().setCustomUserClaims(user.uid, { role: 'manager' });
     res.json({ success: true, uid: user.uid });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// =========================================
-// FUNCIÓN: seedInitialShifts
-// =========================================
-exports.seedInitialShifts = onRequest(async (req, res) => {
-  try {
-    const shiftsSnapshot = await getFirestore().collection('shifts').limit(1).get();
-   
-    if (!shiftsSnapshot.empty) {
-      return res.json({ message: 'Shifts already exist', count: 0 });
-    }
-   
-    const batch = getFirestore().batch();
-    const slots = ['MAÑANA', 'T1', 'T2', 'T3'];
-    const today = new Date();
-    let count = 0;
-   
-    for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
-      const targetDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
-      const year = targetDate.getFullYear();
-      const month = targetDate.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-     
-      for (let day = 1; day <= daysInMonth; day++) {
-        const fecha = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-       
-        slots.forEach(slot => {
-          const docId = `${fecha}_${slot}`;
-          const shiftRef = getFirestore().collection('shifts').doc(docId);
-          batch.set(shiftRef, {
-            fecha: fecha,
-            slot: slot,
-            estado: 'LIBRE',
-            guiaId: null,
-            createdAt: FieldValue.serverTimestamp()
-          });
-          count++;
-        });
-      }
-    }
-   
-    await batch.commit();
-    res.json({ success: true, shiftsCreated: count });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -345,75 +316,5 @@ exports.devSetPassword = onRequest(async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
-  }
-});
-
-// =========================================
-// FUNCIÓN: generateMonthlyShifts
-// =========================================
-const { generateMonthlyShifts } = require('./src/generateMonthlyShifts');
-exports.generateMonthlyShifts = generateMonthlyShifts;
-
-// =========================================
-// FUNCIÓN: onUpdateShift
-// =========================================
-const { onUpdateShift } = require('./src/onUpdateShift');
-exports.onUpdateShift = onUpdateShift;
-
-// =========================================
-// FUNCIÓN: onCreateGuideGenerateShifts
-// =========================================
-exports.onCreateGuideGenerateShifts = onDocumentCreated({
-  document: 'guides/{guideId}'
-}, async (event) => {
-  const guide = event.data.data();
-  const guideId = event.params.guideId;
-  
-  if (guide.estado !== 'activo') {
-    logger.info('Guía no activo - no se generan turnos', { guideId });
-    return;
-  }
-  
-  try {
-    const db = getFirestore();
-    const today = new Date();
-    const slots = ['MAÑANA', 'T1', 'T2', 'T3'];
-    let created = 0;
-    
-    // Generar 3 meses de turnos
-    for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
-      const targetDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
-      const year = targetDate.getFullYear();
-      const month = targetDate.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      
-      const batch = db.batch();
-      
-      for (let day = 1; day <= daysInMonth; day++) {
-        const fecha = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        
-        for (const slot of slots) {
-          const docId = `${fecha}_${slot}_${guideId}`;
-          const docRef = db.collection('shifts').doc(docId);
-          
-          batch.set(docRef, {
-            fecha,
-            slot,
-            guiaId: guideId,
-            estado: 'LIBRE',
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp()
-          });
-          created++;
-        }
-      }
-      
-      await batch.commit();
-    }
-    
-    logger.info('Turnos generados para nuevo guía', { guideId, count: created });
-    
-  } catch (error) {
-    logger.error('Error generando turnos', { guideId, error: error.message });
   }
 });

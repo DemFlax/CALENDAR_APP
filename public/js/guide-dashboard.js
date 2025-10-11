@@ -14,12 +14,11 @@ import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/
 
 let currentUser = null;
 let currentGuideId = null;
-let shiftsUnsubscribe = [];
+let shiftsUnsubscribe = null;
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
-    
     const token = await user.getIdTokenResult(true);
     currentGuideId = token.claims.guideId;
     
@@ -31,7 +30,6 @@ onAuthStateChanged(auth, async (user) => {
     }
     
     const guideDoc = await getDoc(doc(db, 'guides', currentGuideId));
-    
     if (!guideDoc.exists() || guideDoc.data().estado !== 'activo') {
       alert('Cuenta inactiva');
       await signOut(auth);
@@ -40,7 +38,6 @@ onAuthStateChanged(auth, async (user) => {
     }
     
     document.getElementById('guide-name').textContent = guideDoc.data().nombre;
-    
     loadUpcomingAssignments();
     initCalendar();
   } else {
@@ -50,10 +47,8 @@ onAuthStateChanged(auth, async (user) => {
 
 async function loadUpcomingAssignments() {
   const today = new Date().toISOString().split('T')[0];
-  
   const assignmentsQuery = query(
-    collection(db, 'shifts'),
-    where('guiaId', '==', currentGuideId),
+    collection(db, 'guides', currentGuideId, 'shifts'),
     where('estado', '==', 'ASIGNADO'),
     where('fecha', '>=', today)
   );
@@ -67,19 +62,13 @@ async function loadUpcomingAssignments() {
   }
   
   const assignments = [];
-  snapshot.forEach(doc => {
-    assignments.push({ id: doc.id, ...doc.data() });
-  });
-  
+  snapshot.forEach(doc => assignments.push({ id: doc.id, ...doc.data() }));
   assignments.sort((a, b) => a.fecha.localeCompare(b.fecha));
   
   assignmentsList.innerHTML = assignments.map(a => `
     <div class="bg-blue-50 dark:bg-blue-900 p-2 sm:p-3 rounded mb-2">
       <p class="font-semibold text-sm sm:text-base dark:text-white">${new Date(a.fecha + 'T12:00:00').toLocaleDateString('es-ES', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
       })}</p>
       <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-300">${a.slot === 'MAÑANA' ? 'Mañana' : `Tarde ${a.slot}`}</p>
     </div>
@@ -89,105 +78,54 @@ async function loadUpcomingAssignments() {
 function initCalendar() {
   const monthFilter = document.getElementById('month-filter');
   const estadoFilter = document.getElementById('estado-filter');
-  
   const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  monthFilter.value = `${year}-${month}`;
-  
+  monthFilter.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   monthFilter.addEventListener('change', loadCalendar);
   estadoFilter.addEventListener('change', loadCalendar);
-  
   loadCalendar();
 }
 
 function loadCalendar() {
   const monthInput = document.getElementById('month-filter');
   const estadoFilter = document.getElementById('estado-filter').value;
-  
-  const monthFilter = monthInput.value;
-  const [year, month] = monthFilter.split('-');
+  const [year, month] = monthInput.value.split('-');
   const startDate = `${year}-${month}-01`;
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const endDate = `${year}-${month}-${String(daysInMonth).padStart(2, '0')}`;
+  const endDate = `${year}-${month}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
   
-  console.log('DEBUG loadCalendar:', { monthFilter, startDate, endDate, currentGuideId });
-  
-  if (shiftsUnsubscribe.length > 0) {
-    shiftsUnsubscribe.forEach(unsub => unsub());
-    shiftsUnsubscribe = [];
+  if (shiftsUnsubscribe) {
+    shiftsUnsubscribe();
   }
   
-  const allShifts = new Map();
-  
-  const myShiftsQuery = query(
-    collection(db, 'shifts'),
-    where('guiaId', '==', currentGuideId),
+  const shiftsQuery = query(
+    collection(db, 'guides', currentGuideId, 'shifts'),
     where('fecha', '>=', startDate),
     where('fecha', '<=', endDate)
   );
   
-  const freeShiftsQuery = query(
-    collection(db, 'shifts'),
-    where('estado', '==', 'LIBRE'),
-    where('fecha', '>=', startDate),
-    where('fecha', '<=', endDate)
-  );
-  
-  shiftsUnsubscribe.push(
-    onSnapshot(myShiftsQuery, (snapshot) => {
-      console.log('DEBUG myShifts snapshot:', snapshot.size, 'docs');
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        console.log('myShift:', docSnap.id, data);
-        allShifts.set(docSnap.id, { id: docSnap.id, ...data });
-      });
-      renderCalendar(allShifts, estadoFilter);
-    }, (error) => {
-      console.error('Error en listener mis turnos:', error);
-      showToast('Error al cargar turnos', 'error');
-    })
-  );
-  
-  shiftsUnsubscribe.push(
-    onSnapshot(freeShiftsQuery, (snapshot) => {
-      console.log('DEBUG freeShifts snapshot:', snapshot.size, 'docs');
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        console.log('freeShift:', docSnap.id, data);
-        allShifts.set(docSnap.id, { id: docSnap.id, ...data });
-      });
-      renderCalendar(allShifts, estadoFilter);
-    }, (error) => {
-      console.error('Error en listener turnos libres:', error);
-      showToast('Error al cargar turnos libres', 'error');
-    })
-  );
+  shiftsUnsubscribe = onSnapshot(shiftsQuery, (snapshot) => {
+    const allShifts = new Map();
+    snapshot.forEach(docSnap => {
+      const data = docSnap.data();
+      allShifts.set(docSnap.id, { id: docSnap.id, ...data });
+    });
+    renderCalendar(allShifts, estadoFilter);
+  }, (error) => {
+    console.error('Error listener shifts:', error);
+    showToast('Error al cargar turnos', 'error');
+  });
 }
 
 function renderCalendar(shiftsMap, estadoFilter) {
-  console.log('DEBUG renderCalendar llamado con:', shiftsMap.size, 'turnos');
-  
   const calendarGrid = document.getElementById('calendar-grid');
   calendarGrid.innerHTML = '';
   
   const shiftsByDate = {};
   Array.from(shiftsMap.values()).forEach(shift => {
-    if (!shiftsByDate[shift.fecha]) {
-      shiftsByDate[shift.fecha] = [];
-    }
+    if (!shiftsByDate[shift.fecha]) shiftsByDate[shift.fecha] = [];
     shiftsByDate[shift.fecha].push(shift);
   });
   
   const dates = Object.keys(shiftsByDate).sort();
-  
-  console.log('DEBUG renderCalendar:', { 
-    totalShifts: shiftsMap.size, 
-    totalDates: dates.length,
-    dates: dates.slice(0, 5),
-    firstDateShifts: dates[0] ? shiftsByDate[dates[0]] : null
-  });
-  
   if (dates.length === 0) {
     calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm sm:text-base">No hay turnos en este periodo</p>';
     return;
@@ -195,16 +133,15 @@ function renderCalendar(shiftsMap, estadoFilter) {
   
   const table = document.createElement('table');
   table.className = 'guide-calendar-table w-full border-collapse';
-  
-  const thead = document.createElement('thead');
-  thead.innerHTML = `
-    <tr class="bg-gray-100 dark:bg-gray-700">
-      <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-left text-xs sm:text-base dark:text-white">Fecha</th>
-      <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white">MAÑANA</th>
-      <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white">TARDE</th>
-    </tr>
+  table.innerHTML = `
+    <thead>
+      <tr class="bg-gray-100 dark:bg-gray-700">
+        <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-left text-xs sm:text-base dark:text-white">Fecha</th>
+        <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white">MAÑANA</th>
+        <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white">TARDE</th>
+      </tr>
+    </thead>
   `;
-  table.appendChild(thead);
   
   const tbody = document.createElement('tbody');
   dates.forEach(fecha => {
@@ -214,11 +151,7 @@ function renderCalendar(shiftsMap, estadoFilter) {
     const day = dateObj.getDate();
     const monthName = dateObj.toLocaleDateString('es-ES', { month: 'short' });
     
-    console.log('DEBUG renderizando fila:', { fecha, dayName, day, monthName, shiftsCount: shifts.length });
-    
     const row = document.createElement('tr');
-    
-    // Celda de fecha
     const dateCell = document.createElement('td');
     dateCell.className = 'border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white';
     dateCell.textContent = `${dayName}, ${day} ${monthName}`;
@@ -227,9 +160,8 @@ function renderCalendar(shiftsMap, estadoFilter) {
     const morningShift = shifts.find(s => s.slot === 'MAÑANA');
     const morningCell = document.createElement('td');
     morningCell.className = 'border dark:border-gray-600 px-1 sm:px-3 py-2 sm:py-3 text-center';
-    
     if (morningShift) {
-      morningCell.appendChild(createShiftButton(morningShift, 'morning'));
+      morningCell.appendChild(createShiftButton(morningShift));
     } else {
       morningCell.innerHTML = '<span class="text-gray-400 dark:text-gray-500 text-xs sm:text-base">-</span>';
     }
@@ -238,45 +170,36 @@ function renderCalendar(shiftsMap, estadoFilter) {
     const afternoonShifts = shifts.filter(s => ['T1', 'T2', 'T3'].includes(s.slot));
     const afternoonCell = document.createElement('td');
     afternoonCell.className = 'border dark:border-gray-600 px-1 sm:px-3 py-2 sm:py-3 text-center';
-    
     if (afternoonShifts.length > 0) {
       afternoonCell.appendChild(createAfternoonButton(afternoonShifts, fecha));
     } else {
       afternoonCell.innerHTML = '<span class="text-gray-400 dark:text-gray-500 text-xs sm:text-base">-</span>';
     }
     row.appendChild(afternoonCell);
-    
     tbody.appendChild(row);
   });
   
   table.appendChild(tbody);
   calendarGrid.appendChild(table);
-  
-  console.log('DEBUG renderCalendar completado, tabla con', dates.length, 'filas');
 }
 
-function createShiftButton(shift, type) {
+function createShiftButton(shift) {
   const button = document.createElement('button');
   button.className = 'w-full px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-semibold transition-colors duration-150';
   
-  if (shift.estado === 'ASIGNADO' && shift.guiaId === currentGuideId) {
+  if (shift.estado === 'ASIGNADO') {
     button.className += ' bg-blue-600 dark:bg-blue-700 text-white cursor-not-allowed';
     button.textContent = 'ASIGNADO';
     button.disabled = true;
-  } else if (shift.estado === 'NO_DISPONIBLE' && shift.guiaId === currentGuideId) {
+  } else if (shift.estado === 'NO_DISPONIBLE') {
     button.className += ' bg-gray-500 dark:bg-gray-600 text-white hover:bg-gray-600 dark:hover:bg-gray-700';
     button.textContent = 'BLOQUEADO';
     button.onclick = () => unlockShift(shift.id);
-  } else if (shift.estado === 'LIBRE') {
+  } else {
     button.className += ' bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700';
     button.textContent = 'BLOQUEAR';
     button.onclick = () => lockShift(shift.id);
-  } else {
-    button.className += ' bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-300 cursor-not-allowed';
-    button.textContent = shift.estado;
-    button.disabled = true;
   }
-  
   return button;
 }
 
@@ -284,9 +207,8 @@ function createAfternoonButton(afternoonShifts, fecha) {
   const button = document.createElement('button');
   button.className = 'w-full px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-semibold transition-colors duration-150';
   
-  const myShifts = afternoonShifts.filter(s => s.guiaId === currentGuideId);
-  const hasAssigned = myShifts.some(s => s.estado === 'ASIGNADO');
-  const allBlocked = myShifts.length > 0 && myShifts.every(s => s.estado === 'NO_DISPONIBLE');
+  const hasAssigned = afternoonShifts.some(s => s.estado === 'ASIGNADO');
+  const allBlocked = afternoonShifts.every(s => s.estado === 'NO_DISPONIBLE');
   const allFree = afternoonShifts.every(s => s.estado === 'LIBRE');
   
   if (hasAssigned) {
@@ -306,15 +228,13 @@ function createAfternoonButton(afternoonShifts, fecha) {
     button.textContent = 'MIXTO';
     button.disabled = true;
   }
-  
   return button;
 }
 
 async function lockShift(shiftId) {
   try {
-    await updateDoc(doc(db, 'shifts', shiftId), {
+    await updateDoc(doc(db, 'guides', currentGuideId, 'shifts', shiftId), {
       estado: 'NO_DISPONIBLE',
-      guiaId: currentGuideId,
       updatedAt: serverTimestamp()
     });
     showToast('Turno bloqueado', 'success');
@@ -326,7 +246,7 @@ async function lockShift(shiftId) {
 
 async function unlockShift(shiftId) {
   try {
-    await updateDoc(doc(db, 'shifts', shiftId), {
+    await updateDoc(doc(db, 'guides', currentGuideId, 'shifts', shiftId), {
       estado: 'LIBRE',
       updatedAt: serverTimestamp()
     });
@@ -339,22 +259,15 @@ async function unlockShift(shiftId) {
 
 async function lockAfternoon(fecha) {
   try {
-    const myFreeShiftsQuery = query(
-      collection(db, 'shifts'),
+    const shiftsQuery = query(
+      collection(db, 'guides', currentGuideId, 'shifts'),
       where('fecha', '==', fecha),
-      where('guiaId', '==', currentGuideId),
-      where('estado', '==', 'LIBRE'),
       where('slot', 'in', ['T1', 'T2', 'T3'])
     );
-    
-    const snapshot = await getDocs(myFreeShiftsQuery);
+    const snapshot = await getDocs(shiftsQuery);
     const updates = snapshot.docs.map(docSnap =>
-      updateDoc(docSnap.ref, {
-        estado: 'NO_DISPONIBLE',
-        updatedAt: serverTimestamp()
-      })
+      updateDoc(docSnap.ref, { estado: 'NO_DISPONIBLE', updatedAt: serverTimestamp() })
     );
-    
     await Promise.all(updates);
     showToast('Tarde bloqueada', 'success');
   } catch (error) {
@@ -365,21 +278,15 @@ async function lockAfternoon(fecha) {
 
 async function unlockAfternoon(fecha) {
   try {
-    const myShiftsQuery = query(
-      collection(db, 'shifts'),
+    const shiftsQuery = query(
+      collection(db, 'guides', currentGuideId, 'shifts'),
       where('fecha', '==', fecha),
-      where('guiaId', '==', currentGuideId),
       where('slot', 'in', ['T1', 'T2', 'T3'])
     );
-    
-    const snapshot = await getDocs(myShiftsQuery);
+    const snapshot = await getDocs(shiftsQuery);
     const updates = snapshot.docs.map(docSnap =>
-      updateDoc(docSnap.ref, {
-        estado: 'LIBRE',
-        updatedAt: serverTimestamp()
-      })
+      updateDoc(docSnap.ref, { estado: 'LIBRE', updatedAt: serverTimestamp() })
     );
-    
     await Promise.all(updates);
     showToast('Tarde desbloqueada', 'success');
   } catch (error) {
@@ -391,18 +298,12 @@ async function unlockAfternoon(fecha) {
 function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
   const toastMessage = document.getElementById('toast-message');
-  
   toastMessage.textContent = message;
   toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg ${
-    type === 'success' ? 'bg-green-500' :
-    type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+    type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'
   } text-white text-sm sm:text-base`;
-  
   toast.classList.remove('hidden');
-  
-  setTimeout(() => {
-    toast.classList.add('hidden');
-  }, 3000);
+  setTimeout(() => toast.classList.add('hidden'), 3000);
 }
 
 document.getElementById('logout-btn').addEventListener('click', async () => {
@@ -415,7 +316,5 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 });
 
 window.addEventListener('beforeunload', () => {
-  if (shiftsUnsubscribe.length > 0) {
-    shiftsUnsubscribe.forEach(unsub => unsub());
-  }
+  if (shiftsUnsubscribe) shiftsUnsubscribe();
 });
