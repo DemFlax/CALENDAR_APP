@@ -494,6 +494,46 @@ Validar roles, estado transitions, ownership de turnos.
 - Functions bypasseables si alguien accede Admin SDK
 - Rules más eficientes (eval en servidor sin cold start)
 
+
+---
+
+## ADR-011: Cambios Incrementales sobre Refactoring Completo
+
+**Fecha:** 2025-10-11  
+**Estado:** Aprobado  
+**Decisores:** Director Técnico, PMO
+
+### Contexto
+Sistema en producción con usuarios activos. Necesidad de evolucionar features sin romper funcionalidad existente.
+
+### Opciones Consideradas
+1. **Refactoring completo** - Reescribir módulos para nueva feature
+2. **Cambios incrementales** - Añadir mínimo necesario sin tocar código funcional
+3. **Branch paralelo** - Mantener 2 versiones durante transición
+
+### Decisión
+**Cambios incrementales mínimos**
+
+### Justificación
+
+**Reglas aplicación:**
+1. Si código funciona → cambio mínimo necesario
+2. Nueva feature → añadir sin reescribir existente
+3. Refactor solo si bug crítico o deuda técnica bloquea avance
+4. Cada cambio debe ser revertible con `git revert`
+
+**Pros:**
+- Menor riesgo regresión
+- Testing incremental vs reescritura total
+- Rollback simple (1 commit)
+- Deploy confianza mayor
+
+**Contras:**
+- Acumula deuda técnica
+- Código menos elegante
+- Require disciplina no "mejorar" código funcional
+
+**Ejemplo real:**
 ### Matriz de Responsabilidades
 
 | Validación                   | Rules | Functions |

@@ -19,20 +19,18 @@
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body class="bg-gray-50 dark:bg-gray-900">
-  <nav class="bg-blue-600 dark:bg-gray-800 text-white p-3 sm:p-4 shadow-md">
-    <div class="container mx-auto flex justify-between items-center flex-wrap gap-2">
-      <h1 class="text-lg sm:text-xl font-bold">Calendario Tours - Guía</h1>
-      <div class="flex items-center gap-2 sm:gap-4">
-        <button id="dark-mode-toggle" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-1.5 rounded text-xs sm:text-sm">
-          🌙
-        </button>
-        <span id="guide-name" class="text-xs sm:text-sm font-medium"></span>
-        <button id="logout-btn" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-1.5 sm:px-4 sm:py-2 rounded text-xs sm:text-sm">
-          Cerrar Sesión
-        </button>
-      </div>
+  <!-- REEMPLAZAR desde <nav> hasta </nav> -->
+  <nav class="bg-blue-600 dark:bg-gray-800 text-white p-3 shadow-md">
+  <div class="container mx-auto flex justify-between items-center">
+    <h1 id="page-title" class="text-base sm:text-xl font-bold">Calendario Tours - Guía</h1>
+    <div class="flex items-center gap-2 sm:gap-3">
+      <button id="dark-mode-toggle" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-lg sm:text-sm">🌙</button>
+      <button id="lang-toggle" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm font-bold">EN</button>
+      <span id="guide-name" class="hidden sm:inline text-sm font-medium"></span>
+      <button id="logout-btn" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm font-medium">Salir</button>
     </div>
-  </nav>
+  </div>
+</nav>
   <main class="container mx-auto p-3 sm:p-6 max-w-7xl">
     <!-- Próximas Asignaciones -->
     <section class="mb-6 sm:mb-8">
@@ -43,19 +41,18 @@
     </section>
     <!-- Calendario -->
     <section>
-      <div class="mb-4">
-        <h2 class="text-xl sm:text-2xl font-bold mb-3 dark:text-white">Calendario de Turnos</h2>
-        <div class="flex flex-col sm:flex-row gap-2 sm:gap-4">
+      <div class="mb-3">
+        <h2 class="text-xl sm:text-2xl font-bold mb-2 dark:text-white">Calendario de Turnos</h2>
+        <div class="grid grid-cols-2 gap-2">
           <input
             type="month"
             id="month-filter"
-            class="border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 text-sm w-full sm:w-auto"
-          >
-          <select id="estado-filter" class="border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 text-sm w-full sm:w-auto">
-            <option value="todos">Todos</option>
-            <option value="LIBRE">Solo Libres</option>
-            <option value="ASIGNADO">Mis Asignados</option>
-            <option value="NO_DISPONIBLE">Mis Bloqueados</option>
+            class="border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2.5 text-sm w-full font-medium">
+          <select id="estado-filter" class="border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2.5 text-sm w-full font-medium">
+            <option value="todos">📋 Todos</option>
+            <option value="LIBRE">✅ Libres</option>
+            <option value="ASIGNADO">⭐ Asignados</option>
+            <option value="NO_DISPONIBLE">🚫 Bloqueados</option>
           </select>
         </div>
       </div>

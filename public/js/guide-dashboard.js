@@ -12,6 +12,50 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
+// i18n
+const i18n = {
+  es: {
+    morning: 'Mañana',
+    afternoon: 'Tarde',
+    assigned: 'ASIGNADO',
+    blocked: 'BLOQUEADO',
+    block: 'BLOQUEAR',
+    blockAfternoon: 'BLOQUEAR TARDE',
+    mixed: 'MIXTO',
+    noAssignments: 'No tienes asignaciones próximas',
+    noShifts: 'No hay turnos en este periodo',
+    dateHeader: 'Fecha',
+    morningHeader: 'MAÑANA',
+    afternoonHeader: 'TARDE',
+    toastBlocked: 'Turno bloqueado',
+    toastUnblocked: 'Turno desbloqueado',
+    toastAfternoonBlocked: 'Tarde bloqueada',
+    toastAfternoonUnblocked: 'Tarde desbloqueada',
+    toastError: 'Error'
+  },
+  en: {
+    morning: 'Morning',
+    afternoon: 'Afternoon',
+    assigned: 'ASSIGNED',
+    blocked: 'BLOCKED',
+    block: 'BLOCK',
+    blockAfternoon: 'BLOCK AFTERNOON',
+    mixed: 'MIXED',
+    noAssignments: 'No upcoming assignments',
+    noShifts: 'No shifts in this period',
+    dateHeader: 'Date',
+    morningHeader: 'MORNING',
+    afternoonHeader: 'AFTERNOON',
+    toastBlocked: 'Shift blocked',
+    toastUnblocked: 'Shift unblocked',
+    toastAfternoonBlocked: 'Afternoon blocked',
+    toastAfternoonUnblocked: 'Afternoon unblocked',
+    toastError: 'Error'
+  }
+};
+let lang = localStorage.getItem('lang') || 'es';
+function t(key) { return i18n[lang][key] || key; }
+
 let currentUser = null;
 let currentGuideId = null;
 let shiftsUnsubscribe = null;
@@ -38,12 +82,26 @@ onAuthStateChanged(auth, async (user) => {
     }
     
     document.getElementById('guide-name').textContent = guideDoc.data().nombre;
+    document.getElementById('page-title').textContent = `Calendario Tours - ${guideDoc.data().nombre}`;
+    initLanguageToggle();
     loadUpcomingAssignments();
     initCalendar();
   } else {
     window.location.href = '/login.html';
   }
 });
+
+function initLanguageToggle() {
+  const langToggle = document.getElementById('lang-toggle');
+  langToggle.textContent = lang === 'es' ? 'EN' : 'ES';
+  langToggle.addEventListener('click', () => {
+    lang = lang === 'es' ? 'en' : 'es';
+    localStorage.setItem('lang', lang);
+    langToggle.textContent = lang === 'es' ? 'EN' : 'ES';
+    loadUpcomingAssignments();
+    loadCalendar();
+  });
+}
 
 async function loadUpcomingAssignments() {
   const today = new Date().toISOString().split('T')[0];
@@ -57,7 +115,7 @@ async function loadUpcomingAssignments() {
   const assignmentsList = document.getElementById('next-assignments');
   
   if (snapshot.empty) {
-    assignmentsList.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">No tienes asignaciones próximas</p>';
+    assignmentsList.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">${t('noAssignments')}</p>`;
     return;
   }
   
@@ -65,12 +123,13 @@ async function loadUpcomingAssignments() {
   snapshot.forEach(doc => assignments.push({ id: doc.id, ...doc.data() }));
   assignments.sort((a, b) => a.fecha.localeCompare(b.fecha));
   
+  const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+  const locale = lang === 'es' ? 'es-ES' : 'en-US';
+  
   assignmentsList.innerHTML = assignments.map(a => `
     <div class="bg-blue-50 dark:bg-blue-900 p-2 sm:p-3 rounded mb-2">
-      <p class="font-semibold text-sm sm:text-base dark:text-white">${new Date(a.fecha + 'T12:00:00').toLocaleDateString('es-ES', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-      })}</p>
-      <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-300">${a.slot === 'MAÑANA' ? 'Mañana' : `Tarde ${a.slot}`}</p>
+      <p class="font-semibold text-sm sm:text-base dark:text-white">${new Date(a.fecha + 'T12:00:00').toLocaleDateString(locale, dateOptions)}</p>
+      <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-300">${a.slot === 'MAÑANA' ? t('morning') : `${t('afternoon')} ${a.slot}`}</p>
     </div>
   `).join('');
 }
@@ -106,16 +165,18 @@ function loadCalendar() {
     const allShifts = new Map();
     snapshot.forEach(docSnap => {
       const data = docSnap.data();
-      allShifts.set(docSnap.id, { id: docSnap.id, ...data });
+      if (estadoFilter === 'todos' || data.estado === estadoFilter) {
+        allShifts.set(docSnap.id, { id: docSnap.id, ...data });
+      }
     });
-    renderCalendar(allShifts, estadoFilter);
+    renderCalendar(allShifts);
   }, (error) => {
     console.error('Error listener shifts:', error);
-    showToast('Error al cargar turnos', 'error');
+    showToast(t('toastError'), 'error');
   });
 }
 
-function renderCalendar(shiftsMap, estadoFilter) {
+function renderCalendar(shiftsMap) {
   const calendarGrid = document.getElementById('calendar-grid');
   calendarGrid.innerHTML = '';
   
@@ -127,7 +188,7 @@ function renderCalendar(shiftsMap, estadoFilter) {
   
   const dates = Object.keys(shiftsByDate).sort();
   if (dates.length === 0) {
-    calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm sm:text-base">No hay turnos en este periodo</p>';
+    calendarGrid.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm sm:text-base">${t('noShifts')}</p>`;
     return;
   }
   
@@ -136,22 +197,32 @@ function renderCalendar(shiftsMap, estadoFilter) {
   table.innerHTML = `
     <thead>
       <tr class="bg-gray-100 dark:bg-gray-700">
-        <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-left text-xs sm:text-base dark:text-white">Fecha</th>
-        <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white">MAÑANA</th>
-        <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white">TARDE</th>
+        <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-left text-xs sm:text-base dark:text-white">${t('dateHeader')}</th>
+        <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white">${t('morningHeader')}</th>
+        <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white">${t('afternoonHeader')}</th>
       </tr>
     </thead>
   `;
   
   const tbody = document.createElement('tbody');
+  const locale = lang === 'es' ? 'es-ES' : 'en-US';
+  
   dates.forEach(fecha => {
     const shifts = shiftsByDate[fecha];
     const dateObj = new Date(fecha + 'T12:00:00');
-    const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'long' });
+    const dayName = dateObj.toLocaleDateString(locale, { weekday: 'long' });
     const day = dateObj.getDate();
-    const monthName = dateObj.toLocaleDateString('es-ES', { month: 'short' });
+    const monthName = dateObj.toLocaleDateString(locale, { month: 'short' });
     
     const row = document.createElement('tr');
+    row.className = 'hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors cursor-pointer';
+    // Añadir zebra striping para mobile
+    const rowIndex = dates.indexOf(fecha);
+    if (rowIndex % 2 === 0) {
+      row.className += ' bg-gray-50 dark:bg-gray-800/50';
+    } else {
+      row.className += ' bg-white dark:bg-gray-800';
+    }
     const dateCell = document.createElement('td');
     dateCell.className = 'border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white';
     dateCell.textContent = `${dayName}, ${day} ${monthName}`;
@@ -189,15 +260,15 @@ function createShiftButton(shift) {
   
   if (shift.estado === 'ASIGNADO') {
     button.className += ' bg-blue-600 dark:bg-blue-700 text-white cursor-not-allowed';
-    button.textContent = 'ASIGNADO';
+    button.textContent = t('assigned');
     button.disabled = true;
   } else if (shift.estado === 'NO_DISPONIBLE') {
     button.className += ' bg-gray-500 dark:bg-gray-600 text-white hover:bg-gray-600 dark:hover:bg-gray-700';
-    button.textContent = 'BLOQUEADO';
+    button.textContent = t('blocked');
     button.onclick = () => unlockShift(shift.id);
   } else {
     button.className += ' bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700';
-    button.textContent = 'BLOQUEAR';
+    button.textContent = t('block');
     button.onclick = () => lockShift(shift.id);
   }
   return button;
@@ -213,19 +284,19 @@ function createAfternoonButton(afternoonShifts, fecha) {
   
   if (hasAssigned) {
     button.className += ' bg-blue-600 dark:bg-blue-700 text-white cursor-not-allowed';
-    button.textContent = 'ASIGNADO';
+    button.textContent = t('assigned');
     button.disabled = true;
   } else if (allBlocked) {
     button.className += ' bg-gray-500 dark:bg-gray-600 text-white hover:bg-gray-600 dark:hover:bg-gray-700';
-    button.textContent = 'BLOQUEADO';
+    button.textContent = t('blocked');
     button.onclick = () => unlockAfternoon(fecha);
   } else if (allFree) {
     button.className += ' bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700';
-    button.textContent = 'BLOQUEAR TARDE';
+    button.textContent = t('blockAfternoon');
     button.onclick = () => lockAfternoon(fecha);
   } else {
     button.className += ' bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-300 cursor-not-allowed';
-    button.textContent = 'MIXTO';
+    button.textContent = t('mixed');
     button.disabled = true;
   }
   return button;
@@ -237,10 +308,10 @@ async function lockShift(shiftId) {
       estado: 'NO_DISPONIBLE',
       updatedAt: serverTimestamp()
     });
-    showToast('Turno bloqueado', 'success');
+    showToast(t('toastBlocked'), 'success');
   } catch (error) {
     console.error('Error locking shift:', error);
-    showToast('Error al bloquear', 'error');
+    showToast(t('toastError'), 'error');
   }
 }
 
@@ -250,10 +321,10 @@ async function unlockShift(shiftId) {
       estado: 'LIBRE',
       updatedAt: serverTimestamp()
     });
-    showToast('Turno desbloqueado', 'success');
+    showToast(t('toastUnblocked'), 'success');
   } catch (error) {
     console.error('Error unlocking shift:', error);
-    showToast('Error al desbloquear', 'error');
+    showToast(t('toastError'), 'error');
   }
 }
 
@@ -269,10 +340,10 @@ async function lockAfternoon(fecha) {
       updateDoc(docSnap.ref, { estado: 'NO_DISPONIBLE', updatedAt: serverTimestamp() })
     );
     await Promise.all(updates);
-    showToast('Tarde bloqueada', 'success');
+    showToast(t('toastAfternoonBlocked'), 'success');
   } catch (error) {
     console.error('Error locking afternoon:', error);
-    showToast('Error al bloquear tarde', 'error');
+    showToast(t('toastError'), 'error');
   }
 }
 
@@ -288,10 +359,10 @@ async function unlockAfternoon(fecha) {
       updateDoc(docSnap.ref, { estado: 'LIBRE', updatedAt: serverTimestamp() })
     );
     await Promise.all(updates);
-    showToast('Tarde desbloqueada', 'success');
+    showToast(t('toastAfternoonUnblocked'), 'success');
   } catch (error) {
     console.error('Error unlocking afternoon:', error);
-    showToast('Error al desbloquear tarde', 'error');
+    showToast(t('toastError'), 'error');
   }
 }
 
