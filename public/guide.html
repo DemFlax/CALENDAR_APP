@@ -4,41 +4,54 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard Guía - Tours Madrid</title>
+  <script>
+    // CRITICAL: Forzar light mode antes de Tailwind
+    if (localStorage.getItem('darkMode') !== 'true') {
+      document.documentElement.classList.remove('dark');
+    }
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class'
+    }
+  </script>
+  <link rel="stylesheet" href="/css/styles.css">
 </head>
-<body class="bg-gray-50">
-  <nav class="bg-blue-600 text-white p-3 sm:p-4 shadow-md">
+<body class="bg-gray-50 dark:bg-gray-900">
+  <nav class="bg-blue-600 dark:bg-gray-800 text-white p-3 sm:p-4 shadow-md">
     <div class="container mx-auto flex justify-between items-center flex-wrap gap-2">
       <h1 class="text-lg sm:text-xl font-bold">Calendario Tours - Guía</h1>
       <div class="flex items-center gap-2 sm:gap-4">
+        <button id="dark-mode-toggle" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-1.5 rounded text-xs sm:text-sm">
+          🌙
+        </button>
         <span id="guide-name" class="text-xs sm:text-sm font-medium"></span>
-        <button id="logout-btn" class="bg-blue-700 hover:bg-blue-800 px-3 py-1.5 sm:px-4 sm:py-2 rounded text-xs sm:text-sm">
+        <button id="logout-btn" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-1.5 sm:px-4 sm:py-2 rounded text-xs sm:text-sm">
           Cerrar Sesión
         </button>
       </div>
     </div>
   </nav>
-
   <main class="container mx-auto p-3 sm:p-6 max-w-7xl">
     <!-- Próximas Asignaciones -->
     <section class="mb-6 sm:mb-8">
-      <h2 class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">Mis Próximas Asignaciones</h2>
-      <div id="next-assignments" class="bg-white rounded-lg shadow p-4 sm:p-6">
-        <p class="text-gray-500 text-sm sm:text-base">Cargando...</p>
+      <h2 class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 dark:text-white">Mis Próximas Asignaciones</h2>
+      <div id="next-assignments" class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
+        <p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">Cargando...</p>
       </div>
     </section>
-
     <!-- Calendario -->
     <section>
       <div class="mb-4">
-        <h2 class="text-xl sm:text-2xl font-bold mb-3">Calendario de Turnos</h2>
+        <h2 class="text-xl sm:text-2xl font-bold mb-3 dark:text-white">Calendario de Turnos</h2>
         <div class="flex flex-col sm:flex-row gap-2 sm:gap-4">
           <input
             type="month"
             id="month-filter"
-            class="border rounded px-3 py-2 text-sm w-full sm:w-auto"
+            class="border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 text-sm w-full sm:w-auto"
           >
-          <select id="estado-filter" class="border rounded px-3 py-2 text-sm w-full sm:w-auto">
+          <select id="estado-filter" class="border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 text-sm w-full sm:w-auto">
             <option value="todos">Todos</option>
             <option value="LIBRE">Solo Libres</option>
             <option value="ASIGNADO">Mis Asignados</option>
@@ -46,18 +59,39 @@
           </select>
         </div>
       </div>
-
-      <div id="calendar-grid" class="bg-white rounded-lg shadow p-2 sm:p-6 overflow-x-auto">
-        <p class="text-gray-500 text-sm sm:text-base">Cargando calendario...</p>
+      <div id="calendar-grid" class="bg-white dark:bg-gray-800 rounded-lg shadow p-2 sm:p-6 guide-calendar-container">
+        <p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">Cargando calendario...</p>
       </div>
     </section>
   </main>
-
   <!-- Toast -->
-  <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg text-white text-sm sm:text-base max-w-xs sm:max-w-md">
+  <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg text-white text-sm sm:text-base max-w-xs sm:max-w-md z-50">
     <p id="toast-message"></p>
   </div>
-
+  
+  <script>
+    // Dark mode toggle
+    const darkModeToggle = document.getElementById('dark-mode-toggle');
+    const html = document.documentElement;
+    
+    // Cargar preferencia (default: light mode)
+    const savedMode = localStorage.getItem('darkMode');
+    if (savedMode === 'true') {
+      html.classList.add('dark');
+      darkModeToggle.textContent = '☀️';
+    } else {
+      html.classList.remove('dark');
+      darkModeToggle.textContent = '🌙';
+    }
+    
+    darkModeToggle.addEventListener('click', () => {
+      html.classList.toggle('dark');
+      const isDark = html.classList.contains('dark');
+      localStorage.setItem('darkMode', isDark);
+      darkModeToggle.textContent = isDark ? '☀️' : '🌙';
+    });
+  </script>
+  
   <script type="module" src="/js/guide-dashboard.js"></script>
 </body>
 </html>

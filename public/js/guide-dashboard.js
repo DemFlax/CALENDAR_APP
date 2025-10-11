@@ -62,7 +62,7 @@ async function loadUpcomingAssignments() {
   const assignmentsList = document.getElementById('next-assignments');
   
   if (snapshot.empty) {
-    assignmentsList.innerHTML = '<p class="text-gray-500 text-sm sm:text-base">No tienes asignaciones próximas</p>';
+    assignmentsList.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">No tienes asignaciones próximas</p>';
     return;
   }
   
@@ -74,14 +74,14 @@ async function loadUpcomingAssignments() {
   assignments.sort((a, b) => a.fecha.localeCompare(b.fecha));
   
   assignmentsList.innerHTML = assignments.map(a => `
-    <div class="bg-blue-50 p-2 sm:p-3 rounded mb-2">
-      <p class="font-semibold text-sm sm:text-base">${new Date(a.fecha + 'T12:00:00').toLocaleDateString('es-ES', {
+    <div class="bg-blue-50 dark:bg-blue-900 p-2 sm:p-3 rounded mb-2">
+      <p class="font-semibold text-sm sm:text-base dark:text-white">${new Date(a.fecha + 'T12:00:00').toLocaleDateString('es-ES', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
         day: 'numeric'
       })}</p>
-      <p class="text-xs sm:text-sm text-gray-600">${a.slot === 'MAÑANA' ? 'Mañana' : `Tarde ${a.slot}`}</p>
+      <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-300">${a.slot === 'MAÑANA' ? 'Mañana' : `Tarde ${a.slot}`}</p>
     </div>
   `).join('');
 }
@@ -111,6 +111,8 @@ function loadCalendar() {
   const daysInMonth = new Date(year, month, 0).getDate();
   const endDate = `${year}-${month}-${String(daysInMonth).padStart(2, '0')}`;
   
+  console.log('DEBUG loadCalendar:', { monthFilter, startDate, endDate, currentGuideId });
+  
   if (shiftsUnsubscribe.length > 0) {
     shiftsUnsubscribe.forEach(unsub => unsub());
     shiftsUnsubscribe = [];
@@ -134,8 +136,10 @@ function loadCalendar() {
   
   shiftsUnsubscribe.push(
     onSnapshot(myShiftsQuery, (snapshot) => {
+      console.log('DEBUG myShifts snapshot:', snapshot.size, 'docs');
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
+        console.log('myShift:', docSnap.id, data);
         allShifts.set(docSnap.id, { id: docSnap.id, ...data });
       });
       renderCalendar(allShifts, estadoFilter);
@@ -147,8 +151,10 @@ function loadCalendar() {
   
   shiftsUnsubscribe.push(
     onSnapshot(freeShiftsQuery, (snapshot) => {
+      console.log('DEBUG freeShifts snapshot:', snapshot.size, 'docs');
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
+        console.log('freeShift:', docSnap.id, data);
         allShifts.set(docSnap.id, { id: docSnap.id, ...data });
       });
       renderCalendar(allShifts, estadoFilter);
@@ -160,6 +166,8 @@ function loadCalendar() {
 }
 
 function renderCalendar(shiftsMap, estadoFilter) {
+  console.log('DEBUG renderCalendar llamado con:', shiftsMap.size, 'turnos');
+  
   const calendarGrid = document.getElementById('calendar-grid');
   calendarGrid.innerHTML = '';
   
@@ -173,20 +181,27 @@ function renderCalendar(shiftsMap, estadoFilter) {
   
   const dates = Object.keys(shiftsByDate).sort();
   
+  console.log('DEBUG renderCalendar:', { 
+    totalShifts: shiftsMap.size, 
+    totalDates: dates.length,
+    dates: dates.slice(0, 5),
+    firstDateShifts: dates[0] ? shiftsByDate[dates[0]] : null
+  });
+  
   if (dates.length === 0) {
-    calendarGrid.innerHTML = '<p class="text-center text-gray-500 py-4 text-sm sm:text-base">No hay turnos en este periodo</p>';
+    calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm sm:text-base">No hay turnos en este periodo</p>';
     return;
   }
   
   const table = document.createElement('table');
-  table.className = 'w-full border-collapse';
+  table.className = 'guide-calendar-table w-full border-collapse';
   
   const thead = document.createElement('thead');
   thead.innerHTML = `
-    <tr class="bg-gray-100">
-      <th class="border px-2 sm:px-4 py-2 sm:py-3 font-semibold text-left text-xs sm:text-base">Fecha</th>
-      <th class="border px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base">MAÑANA</th>
-      <th class="border px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base">TARDE</th>
+    <tr class="bg-gray-100 dark:bg-gray-700">
+      <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-left text-xs sm:text-base dark:text-white">Fecha</th>
+      <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white">MAÑANA</th>
+      <th class="border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white">TARDE</th>
     </tr>
   `;
   table.appendChild(thead);
@@ -199,28 +214,35 @@ function renderCalendar(shiftsMap, estadoFilter) {
     const day = dateObj.getDate();
     const monthName = dateObj.toLocaleDateString('es-ES', { month: 'short' });
     
+    console.log('DEBUG renderizando fila:', { fecha, dayName, day, monthName, shiftsCount: shifts.length });
+    
     const row = document.createElement('tr');
-    row.innerHTML = `<td class="border px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base">${dayName}, ${day} ${monthName}</td>`;
+    
+    // Celda de fecha
+    const dateCell = document.createElement('td');
+    dateCell.className = 'border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white';
+    dateCell.textContent = `${dayName}, ${day} ${monthName}`;
+    row.appendChild(dateCell);
     
     const morningShift = shifts.find(s => s.slot === 'MAÑANA');
     const morningCell = document.createElement('td');
-    morningCell.className = 'border px-1 sm:px-3 py-2 sm:py-3 text-center';
+    morningCell.className = 'border dark:border-gray-600 px-1 sm:px-3 py-2 sm:py-3 text-center';
     
     if (morningShift) {
       morningCell.appendChild(createShiftButton(morningShift, 'morning'));
     } else {
-      morningCell.innerHTML = '<span class="text-gray-400 text-xs sm:text-base">-</span>';
+      morningCell.innerHTML = '<span class="text-gray-400 dark:text-gray-500 text-xs sm:text-base">-</span>';
     }
     row.appendChild(morningCell);
     
     const afternoonShifts = shifts.filter(s => ['T1', 'T2', 'T3'].includes(s.slot));
     const afternoonCell = document.createElement('td');
-    afternoonCell.className = 'border px-1 sm:px-3 py-2 sm:py-3 text-center';
+    afternoonCell.className = 'border dark:border-gray-600 px-1 sm:px-3 py-2 sm:py-3 text-center';
     
     if (afternoonShifts.length > 0) {
       afternoonCell.appendChild(createAfternoonButton(afternoonShifts, fecha));
     } else {
-      afternoonCell.innerHTML = '<span class="text-gray-400 text-xs sm:text-base">-</span>';
+      afternoonCell.innerHTML = '<span class="text-gray-400 dark:text-gray-500 text-xs sm:text-base">-</span>';
     }
     row.appendChild(afternoonCell);
     
@@ -229,26 +251,28 @@ function renderCalendar(shiftsMap, estadoFilter) {
   
   table.appendChild(tbody);
   calendarGrid.appendChild(table);
+  
+  console.log('DEBUG renderCalendar completado, tabla con', dates.length, 'filas');
 }
 
 function createShiftButton(shift, type) {
   const button = document.createElement('button');
-  button.className = 'w-full px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-semibold transition-colors';
+  button.className = 'w-full px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-semibold transition-colors duration-150';
   
   if (shift.estado === 'ASIGNADO' && shift.guiaId === currentGuideId) {
-    button.className += ' bg-blue-600 text-white cursor-not-allowed';
+    button.className += ' bg-blue-600 dark:bg-blue-700 text-white cursor-not-allowed';
     button.textContent = 'ASIGNADO';
     button.disabled = true;
   } else if (shift.estado === 'NO_DISPONIBLE' && shift.guiaId === currentGuideId) {
-    button.className += ' bg-gray-500 text-white hover:bg-gray-600';
+    button.className += ' bg-gray-500 dark:bg-gray-600 text-white hover:bg-gray-600 dark:hover:bg-gray-700';
     button.textContent = 'BLOQUEADO';
     button.onclick = () => unlockShift(shift.id);
   } else if (shift.estado === 'LIBRE') {
-    button.className += ' bg-green-500 text-white hover:bg-green-600';
+    button.className += ' bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700';
     button.textContent = 'BLOQUEAR';
     button.onclick = () => lockShift(shift.id);
   } else {
-    button.className += ' bg-gray-300 text-gray-600 cursor-not-allowed';
+    button.className += ' bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-300 cursor-not-allowed';
     button.textContent = shift.estado;
     button.disabled = true;
   }
@@ -258,7 +282,7 @@ function createShiftButton(shift, type) {
 
 function createAfternoonButton(afternoonShifts, fecha) {
   const button = document.createElement('button');
-  button.className = 'w-full px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-semibold transition-colors';
+  button.className = 'w-full px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-semibold transition-colors duration-150';
   
   const myShifts = afternoonShifts.filter(s => s.guiaId === currentGuideId);
   const hasAssigned = myShifts.some(s => s.estado === 'ASIGNADO');
@@ -266,19 +290,19 @@ function createAfternoonButton(afternoonShifts, fecha) {
   const allFree = afternoonShifts.every(s => s.estado === 'LIBRE');
   
   if (hasAssigned) {
-    button.className += ' bg-blue-600 text-white cursor-not-allowed';
+    button.className += ' bg-blue-600 dark:bg-blue-700 text-white cursor-not-allowed';
     button.textContent = 'ASIGNADO';
     button.disabled = true;
   } else if (allBlocked) {
-    button.className += ' bg-gray-500 text-white hover:bg-gray-600';
+    button.className += ' bg-gray-500 dark:bg-gray-600 text-white hover:bg-gray-600 dark:hover:bg-gray-700';
     button.textContent = 'BLOQUEADO';
     button.onclick = () => unlockAfternoon(fecha);
   } else if (allFree) {
-    button.className += ' bg-green-500 text-white hover:bg-green-600';
+    button.className += ' bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700';
     button.textContent = 'BLOQUEAR TARDE';
     button.onclick = () => lockAfternoon(fecha);
   } else {
-    button.className += ' bg-gray-300 text-gray-600 cursor-not-allowed';
+    button.className += ' bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-300 cursor-not-allowed';
     button.textContent = 'MIXTO';
     button.disabled = true;
   }

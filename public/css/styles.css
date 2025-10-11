@@ -1,11 +1,10 @@
-/* ========== MANAGER DASHBOARD STYLES ========== */
-
-/* Scroll horizontal fix */
+/* ========== GLOBAL FIXES ========== */
 html, body {
   overflow-x: hidden;
   max-width: 100vw;
 }
 
+/* ========== MANAGER DASHBOARD ========== */
 .calendar-container {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -16,7 +15,7 @@ html, body {
   min-width: 100%;
 }
 
-/* Row selection - ULTRA TRANSPARENTE */
+/* Row selection */
 .row-selected {
   background-color: rgba(14, 165, 233, 0.10) !important;
 }
@@ -34,7 +33,47 @@ html, body {
   color: #f1f5f9 !important;
 }
 
-/* Mobile styles */
+/* ========== GUIDE DASHBOARD ========== */
+.guide-calendar-container {
+  overflow-x: hidden;
+}
+
+.guide-calendar-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* ========== DARK MODE ========== */
+.dark {
+  background-color: #1e293b;
+  color: #f1f5f9;
+}
+
+.dark .bg-white {
+  background-color: #334155 !important;
+}
+
+.dark .bg-gray-50 {
+  background-color: #1e293b !important;
+}
+
+.dark .text-gray-900 {
+  color: #f1f5f9 !important;
+}
+
+.dark .text-gray-700 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+.dark .border-gray-200 {
+  border-color: #475569 !important;
+}
+
+/* ========== MOBILE RESPONSIVE ========== */
 @media (max-width: 768px) {
   .desktop-only {
     display: none !important;
@@ -43,9 +82,36 @@ html, body {
   .guide-card {
     font-size: 0.85rem;
   }
+  
+  /* Guide Dashboard Mobile */
+  .guide-calendar-table th:first-child,
+  .guide-calendar-table td:first-child {
+    width: 35%;
+  }
+  
+  .guide-calendar-table th:nth-child(2),
+  .guide-calendar-table td:nth-child(2),
+  .guide-calendar-table th:nth-child(3),
+  .guide-calendar-table td:nth-child(3) {
+    width: 32.5%;
+  }
+  
+  .guide-calendar-table th,
+  .guide-calendar-table td {
+    padding: 0.5rem 0.25rem !important;
+    font-size: 0.7rem !important;
+    word-wrap: break-word;
+  }
+  
+  .calendar-btn {
+    padding: 0.4rem 0.2rem !important;
+    font-size: 0.65rem !important;
+    white-space: normal;
+    line-height: 1.2;
+  }
 }
 
-/* Desktop styles */
+/* ========== DESKTOP ========== */
 @media (min-width: 769px) {
   .mobile-only {
     display: none !important;
@@ -61,7 +127,6 @@ html, body {
     white-space: nowrap;
   }
   
-  /* Hover más suave en filas */
   .calendar-table tbody tr:hover {
     background-color: rgba(148, 163, 184, 0.15) !important;
   }
@@ -70,7 +135,6 @@ html, body {
     background-color: rgba(148, 163, 184, 0.20) !important;
   }
   
-  /* Prioridad: hover sobre selected */
   .calendar-table tbody tr.row-selected:hover {
     background-color: rgba(14, 165, 233, 0.05) !important;
   }
@@ -85,7 +149,6 @@ html, body {
     font-weight: 500 !important;
   }
   
-  /* Mejorar contraste fechas */
   .calendar-table td:first-child {
     font-weight: 600 !important;
     color: #334155 !important;
@@ -96,7 +159,6 @@ html, body {
     color: #e2e8f0 !important;
   }
   
-  /* Headers más contrastados */
   .calendar-table th {
     font-weight: 600 !important;
     color: #1e293b !important;

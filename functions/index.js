@@ -13,28 +13,29 @@ const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
 const {logger} = require('firebase-functions');
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 
 initializeApp();
 
 // =========================================
-// SECRETS (Secret Manager - método correcto)
+// SECRETS (Secret Manager)
 // =========================================
-const gmailEmail = defineSecret('GMAIL_EMAIL');
-const gmailPassword = defineSecret('GMAIL_APP_PASSWORD');
+const sendgridKey = defineSecret('SENDGRID_API_KEY');
 
 // =========================================
 // VARIABLES DE ENTORNO (.env)
 // =========================================
 const APP_URL = process.env.APP_URL || 'https://calendar-app-tours.web.app';
 const MANAGER_EMAIL = process.env.MANAGER_EMAIL || 'madrid@spainfoodsherpas.com';
+const FROM_EMAIL = 'madrid@spainfoodsherpas.com';
+const FROM_NAME = 'Spain Food Sherpas';
 
 // =========================================
-// FUNCIÓN: onCreateGuide (sin cambios)
+// FUNCIÓN: onCreateGuide
 // =========================================
 exports.onCreateGuide = onDocumentCreated({
   document: 'guides/{guideId}',
-  secrets: [gmailEmail, gmailPassword]
+  secrets: [sendgridKey]
 }, async (event) => {
   const guide = event.data.data();
   const guideId = event.params.guideId;
@@ -58,29 +59,23 @@ exports.onCreateGuide = onDocumentCreated({
       updatedAt: FieldValue.serverTimestamp()
     });
     
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: gmailEmail.value(),
-        pass: gmailPassword.value()
-      }
-    });
+    // Configurar SendGrid
+    sgMail.setApiKey(sendgridKey.value());
     
     // Generar link Firebase
     const firebaseLink = await getAuth().generatePasswordResetLink(guide.email);
-    
-    // Extraer oobCode
     const urlObj = new URL(firebaseLink);
     const oobCode = urlObj.searchParams.get('oobCode');
-    
-    // Crear link directo a tu página
     const directLink = `${APP_URL}/set-password.html?mode=resetPassword&oobCode=${oobCode}`;
     
     logger.info('Link generado', { email: guide.email, oobCode: oobCode.substring(0, 10) + '...' });
    
-    const mailOptions = {
-      from: `Spain Food Sherpas <${gmailEmail.value()}>`,
+    const msg = {
       to: guide.email,
+      from: {
+        email: FROM_EMAIL,
+        name: FROM_NAME
+      },
       subject: 'Invitación - Calendario Tours Spain Food Sherpas',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -102,8 +97,8 @@ exports.onCreateGuide = onDocumentCreated({
       `
     };
    
-    await transporter.sendMail(mailOptions);
-    logger.info('Email enviado', { email: guide.email });
+    await sgMail.send(msg);
+    logger.info('Email enviado vía SendGrid', { email: guide.email });
    
     await getFirestore().collection('notifications').add({
       guiaId: guideId,
@@ -132,7 +127,118 @@ exports.onCreateGuide = onDocumentCreated({
 });
 
 // =========================================
-// FUNCIÓN: assignGuideClaims (sin cambios)
+// FUNCIÓN: onUpdateGuide (reactivación guías)
+// =========================================
+exports.onUpdateGuide = onDocumentUpdated({
+  document: 'guides/{guideId}',
+  secrets: [sendgridKey]
+}, async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  const guideId = event.params.guideId;
+  
+  // Detectar reactivación: inactivo → activo
+  if (before.estado === 'inactivo' && after.estado === 'activo') {
+    logger.info('Guía reactivado - enviando email invitación', { guideId, email: after.email });
+    
+    try {
+      // Verificar si usuario Auth existe
+      let userRecord;
+      try {
+        userRecord = await getAuth().getUserByEmail(after.email);
+        logger.info('Usuario Auth existe - generando reset link', { uid: userRecord.uid });
+      } catch (authError) {
+        // Usuario Auth no existe - crear nuevo
+        logger.warn('Usuario Auth no existe - creando nuevo', { email: after.email });
+        userRecord = await getAuth().createUser({
+          email: after.email,
+          emailVerified: false,
+          disabled: false
+        });
+        
+        await getAuth().setCustomUserClaims(userRecord.uid, {
+          role: 'guide',
+          guideId: guideId
+        });
+        
+        await getFirestore().collection('guides').doc(guideId).update({
+          uid: userRecord.uid,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+      
+      // Generar password reset link
+      const firebaseLink = await getAuth().generatePasswordResetLink(after.email);
+      const urlObj = new URL(firebaseLink);
+      const oobCode = urlObj.searchParams.get('oobCode');
+      const directLink = `${APP_URL}/set-password.html?mode=resetPassword&oobCode=${oobCode}`;
+      
+      logger.info('Link generado para reactivación', { email: after.email, oobCode: oobCode.substring(0, 10) + '...' });
+      
+      // Configurar SendGrid
+      sgMail.setApiKey(sendgridKey.value());
+      
+      const msg = {
+        to: after.email,
+        from: {
+          email: FROM_EMAIL,
+          name: FROM_NAME
+        },
+        subject: '¡Bienvenido de nuevo! - Reactivación Calendario Tours',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Bienvenido de nuevo a Spain Food Sherpas</h2>
+            <p>Hola ${after.nombre || ''},</p>
+            <p>Tu cuenta de guía ha sido <strong>reactivada</strong>.</p>
+            <p>Para acceder de nuevo al sistema, establece tu contraseña:</p>
+            <div style="margin: 20px 0;">
+              <a href="${directLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+                Establecer Contraseña
+              </a>
+            </div>
+            <p>O copia y pega este enlace:</p>
+            <p style="word-break: break-all; color: #666; background: #f5f5f5; padding: 10px; border-radius: 4px;">${directLink}</p>
+            <p><small>Este enlace expira en 1 hora.</small></p>
+            <hr style="border: 1px solid #eee; margin: 20px 0;">
+            <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
+          </div>
+        `
+      };
+      
+      await sgMail.send(msg);
+      logger.info('Email reactivación enviado vía SendGrid', { email: after.email });
+      
+      // Registrar notificación
+      await getFirestore().collection('notifications').add({
+        guiaId: guideId,
+        tipo: 'REACTIVACION',
+        emailTo: after.email,
+        invitationLink: directLink,
+        status: 'sent',
+        createdAt: FieldValue.serverTimestamp()
+      });
+      
+    } catch (error) {
+      logger.error('Error enviando email reactivación', { 
+        error: error.message,
+        guideId,
+        email: after.email
+      });
+      
+      await getFirestore().collection('notifications').add({
+        guiaId: guideId,
+        tipo: 'REACTIVACION',
+        emailTo: after.email,
+        status: 'failed',
+        errorMessage: error.message,
+        createdAt: FieldValue.serverTimestamp()
+      });
+    }
+  }
+});
+
+// =========================================
+// FUNCIÓN: assignGuideClaims
 // =========================================
 exports.assignGuideClaims = onRequest({
   cors: true
@@ -164,7 +270,7 @@ exports.assignGuideClaims = onRequest({
 });
 
 // =========================================
-// FUNCIÓN: setManagerClaims (sin cambios)
+// FUNCIÓN: setManagerClaims
 // =========================================
 exports.setManagerClaims = onRequest(async (req, res) => {
   try {
@@ -182,7 +288,7 @@ exports.setManagerClaims = onRequest(async (req, res) => {
 });
 
 // =========================================
-// FUNCIÓN: seedInitialShifts (sin cambios)
+// FUNCIÓN: seedInitialShifts
 // =========================================
 exports.seedInitialShifts = onRequest(async (req, res) => {
   try {
@@ -229,7 +335,7 @@ exports.seedInitialShifts = onRequest(async (req, res) => {
 });
 
 // =========================================
-// FUNCIÓN: devSetPassword (sin cambios)
+// FUNCIÓN: devSetPassword
 // =========================================
 exports.devSetPassword = onRequest(async (req, res) => {
   try {
@@ -243,19 +349,19 @@ exports.devSetPassword = onRequest(async (req, res) => {
 });
 
 // =========================================
-// FUNCIÓN: generateMonthlyShifts (sin cambios)
+// FUNCIÓN: generateMonthlyShifts
 // =========================================
 const { generateMonthlyShifts } = require('./src/generateMonthlyShifts');
 exports.generateMonthlyShifts = generateMonthlyShifts;
 
 // =========================================
-// FUNCIÓN: onUpdateShift (sin cambios)
+// FUNCIÓN: onUpdateShift
 // =========================================
 const { onUpdateShift } = require('./src/onUpdateShift');
 exports.onUpdateShift = onUpdateShift;
 
 // =========================================
-// FUNCIÓN: onCreateGuideGenerateShifts (sin cambios)
+// FUNCIÓN: onCreateGuideGenerateShifts
 // =========================================
 exports.onCreateGuideGenerateShifts = onDocumentCreated({
   document: 'guides/{guideId}'

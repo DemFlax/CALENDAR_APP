@@ -144,12 +144,16 @@ window.closeGuideModal = () => {
   document.getElementById('guide-form').reset();
 };
 
+// =========================================
+// FIX: Formulario guías con lógica reactivación
+// =========================================
 document.getElementById('guide-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type="submit"]');
   const originalText = submitBtn.textContent;
   submitBtn.disabled = true;
   submitBtn.textContent = 'Guardando...';
+  
   try {
     const formData = {
       nombre: document.getElementById('nombre').value.trim(),
@@ -161,17 +165,54 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
       estado: 'activo',
       updatedAt: serverTimestamp()
     };
+    
     const mode = e.target.dataset.mode;
+    
     if (mode === 'create') {
+      // NUEVA LÓGICA: Verificar si ya existe guía con ese email
+      const existingQuery = query(
+        collection(db, 'guides'),
+        where('email', '==', formData.email)
+      );
+      const existingDocs = await getDocs(existingQuery);
+      
+      if (!existingDocs.empty) {
+        // Ya existe un guía con ese email
+        const existingDoc = existingDocs.docs[0];
+        const existingGuide = existingDoc.data();
+        
+        if (existingGuide.estado === 'activo') {
+          // Ya existe y está activo → ERROR
+          showToast('Error: Ya existe un guía con ese email (activo)', 'error');
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+          return;
+        } else {
+          // Existe pero está inactivo → REACTIVAR
+          formData.reactivatedAt = serverTimestamp();
+          await updateDoc(doc(db, 'guides', existingDoc.id), formData);
+          showToast('Guía reactivado correctamente', 'success');
+          closeGuideModal();
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+          return;
+        }
+      }
+      
+      // No existe → CREAR NUEVO
       formData.createdAt = serverTimestamp();
       await addDoc(collection(db, 'guides'), formData);
       showToast('Guía creado correctamente', 'success');
+      
     } else if (mode === 'edit') {
+      // Modo edición: sin cambios
       const guideId = e.target.dataset.guideId;
       await updateDoc(doc(db, 'guides', guideId), formData);
       showToast('Guía actualizado correctamente', 'success');
     }
+    
     closeGuideModal();
+    
   } catch (error) {
     console.error('Error saving guide:', error);
     showToast(error.message || 'Error al guardar guía', 'error');
