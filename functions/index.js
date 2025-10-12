@@ -8,6 +8,7 @@ require('dotenv').config();
 // =========================================
 const {onDocumentCreated, onDocumentUpdated} = require('firebase-functions/v2/firestore');
 const {onRequest} = require('firebase-functions/v2/https');
+const {onSchedule} = require('firebase-functions/v2/scheduler');
 const {defineSecret} = require('firebase-functions/params');
 const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
@@ -29,6 +30,82 @@ const APP_URL = process.env.APP_URL || 'https://calendar-app-tours.web.app';
 const MANAGER_EMAIL = process.env.MANAGER_EMAIL || 'madrid@spainfoodsherpas.com';
 const FROM_EMAIL = 'madrid@spainfoodsherpas.com';
 const FROM_NAME = 'Spain Food Sherpas';
+
+// =========================================
+// FUNCIÓN AUXILIAR: generateMonthShifts
+// =========================================
+async function generateMonthShifts(guideId, year, month) {
+  const db = getFirestore();
+  const slots = ['MAÑANA', 'T1', 'T2', 'T3'];
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  
+  const batch = db.batch();
+  let created = 0;
+  
+  for (let day = 1; day <= daysInMonth; day++) {
+    const fecha = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    for (const slot of slots) {
+      const docId = `${fecha}_${slot}`;
+      const docRef = db.collection('guides').doc(guideId).collection('shifts').doc(docId);
+      
+      batch.set(docRef, {
+        fecha,
+        slot,
+        estado: 'LIBRE',
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      created++;
+    }
+  }
+  
+  await batch.commit();
+  return created;
+}
+
+// =========================================
+// FUNCIÓN AUXILIAR: deleteMonthShifts
+// =========================================
+async function deleteMonthShifts(guideId, year, month) {
+  const db = getFirestore();
+  const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+  const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(new Date(year, month + 1, 0).getDate()).padStart(2, '0')}`;
+  
+  const shiftsRef = db.collection('guides').doc(guideId).collection('shifts');
+  const query = shiftsRef
+    .where('fecha', '>=', startDate)
+    .where('fecha', '<=', endDate)
+    .limit(500);
+  
+  return new Promise((resolve, reject) => {
+    deleteQueryBatch(db, query, resolve, reject);
+  });
+}
+
+async function deleteQueryBatch(db, query, resolve, reject) {
+  try {
+    const snapshot = await query.get();
+    
+    if (snapshot.size === 0) {
+      resolve();
+      return;
+    }
+    
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    
+    await batch.commit();
+    
+    process.nextTick(() => {
+      deleteQueryBatch(db, query, resolve, reject);
+    });
+  } catch (error) {
+    reject(error);
+  }
+}
 
 // =========================================
 // FUNCIÓN: onCreateGuide
@@ -227,44 +304,102 @@ exports.onCreateGuideGenerateShifts = onDocumentCreated({
   }
   
   try {
-    const db = getFirestore();
     const today = new Date();
-    const slots = ['MAÑANA', 'T1', 'T2', 'T3'];
-    let created = 0;
+    let totalCreated = 0;
     
     for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
       const targetDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
       const year = targetDate.getFullYear();
       const month = targetDate.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
       
-      const batch = db.batch();
-      
-      for (let day = 1; day <= daysInMonth; day++) {
-        const fecha = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        
-        for (const slot of slots) {
-          const docId = `${fecha}_${slot}`;
-          const docRef = db.collection('guides').doc(guideId).collection('shifts').doc(docId);
-          
-          batch.set(docRef, {
-            fecha,
-            slot,
-            estado: 'LIBRE',
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp()
-          });
-          created++;
-        }
-      }
-      
-      await batch.commit();
+      const created = await generateMonthShifts(guideId, year, month);
+      totalCreated += created;
     }
     
-    logger.info('Shifts generados', { guideId, count: created });
+    logger.info('Shifts generados onCreate', { guideId, count: totalCreated });
     
   } catch (error) {
-    logger.error('Error generando turnos', { guideId, error: error.message });
+    logger.error('Error generando turnos onCreate', { guideId, error: error.message });
+  }
+});
+
+// =========================================
+// FUNCIÓN: maintainTemporalHorizon (SCHEDULED)
+// =========================================
+exports.maintainTemporalHorizon = onSchedule({
+  schedule: '0 0 1 * *',
+  timeZone: 'Europe/Madrid'
+}, async (event) => {
+  logger.info('Iniciando mantenimiento horizonte temporal');
+  
+  try {
+    const db = getFirestore();
+    const today = new Date();
+    
+    // Calcular mes a generar (+3 desde hoy)
+    const generateDate = new Date(today.getFullYear(), today.getMonth() + 3, 1);
+    const generateYear = generateDate.getFullYear();
+    const generateMonth = generateDate.getMonth();
+    
+    // Calcular mes a eliminar (-2 desde hoy)
+    const deleteDate = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+    const deleteYear = deleteDate.getFullYear();
+    const deleteMonth = deleteDate.getMonth();
+    
+    logger.info('Fechas calculadas', {
+      generar: `${generateYear}-${String(generateMonth + 1).padStart(2, '0')}`,
+      eliminar: `${deleteYear}-${String(deleteMonth + 1).padStart(2, '0')}`
+    });
+    
+    // Obtener todos los guías activos
+    const guidesSnapshot = await db.collection('guides')
+      .where('estado', '==', 'activo')
+      .get();
+    
+    if (guidesSnapshot.empty) {
+      logger.info('No hay guías activos - skip');
+      return;
+    }
+    
+    let totalGenerated = 0;
+    let totalDeleted = 0;
+    const errors = [];
+    
+    // Procesar cada guía
+    for (const guideDoc of guidesSnapshot.docs) {
+      const guideId = guideDoc.id;
+      
+      try {
+        // Generar mes +3
+        const generated = await generateMonthShifts(guideId, generateYear, generateMonth);
+        totalGenerated += generated;
+        logger.info('Shifts generados', { guideId, mes: `${generateYear}-${generateMonth + 1}`, count: generated });
+        
+        // Eliminar mes -2
+        await deleteMonthShifts(guideId, deleteYear, deleteMonth);
+        logger.info('Shifts eliminados', { guideId, mes: `${deleteYear}-${deleteMonth + 1}` });
+        totalDeleted++;
+        
+      } catch (error) {
+        logger.error('Error procesando guía', { guideId, error: error.message });
+        errors.push({ guideId, error: error.message });
+      }
+    }
+    
+    logger.info('Mantenimiento completado', {
+      guiasActivos: guidesSnapshot.size,
+      shiftsGenerados: totalGenerated,
+      guiasEliminados: totalDeleted,
+      errores: errors.length
+    });
+    
+    if (errors.length > 0) {
+      logger.warn('Errores durante mantenimiento', { errores: errors });
+    }
+    
+  } catch (error) {
+    logger.error('Error crítico en mantenimiento horizonte', { error: error.message, stack: error.stack });
+    throw error;
   }
 });
 
