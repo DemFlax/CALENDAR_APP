@@ -532,6 +532,140 @@ Sistema en producción con usuarios activos. Necesidad de evolucionar features s
 - Acumula deuda técnica
 - Código menos elegante
 - Require disciplina no "mejorar" código funcional
+# ADR-012: Horizonte Temporal Automático de Shifts
+
+**Fecha:** 2025-10-12  
+**Estado:** Aprobado  
+**Decisores:** Director Técnico, PMO  
+**Relacionado:** ADR-005, ADR-011
+
+---
+
+## Contexto
+
+Sistema genera 370 shifts por guía al crearlos (onCreate). Sin cleanup ni generación continua:
+- Acumulación indefinida de shifts pasados (coste storage + reads)
+- UI muestra meses irrelevantes (años atrás/adelante)
+- Cuando expiran 370 días, no hay nuevos shifts disponibles
+
+**Requisito negocio:** Mantener solo shifts relevantes (mes actual + 2 meses adelante).
+
+---
+
+## Decisión
+
+**Horizonte dinámico automático: Mes actual + 2 meses**
+
+### Implementación
+
+**1. onCreate guía** - Genera 3 meses (actual + 2):
+```javascript
+generateMonthShifts(guideId, year, month) // × 3 meses
+```
+
+**2. Cloud Function scheduled** - Cron mensual (día 1, 00:00 Madrid):
+```javascript
+exports.maintainTemporalHorizon = onSchedule({
+  schedule: '0 0 1 * *',
+  timeZone: 'Europe/Madrid'
+}, async (event) => {
+  // Generar mes +3 (mantener +2 desde nuevo mes actual)
+  await generateMonthShifts(guideId, year+3, month+3);
+  
+  // Eliminar mes -2 (ya fuera del horizonte)
+  await deleteMonthShifts(guideId, year-2, month-2);
+});
+```
+
+**3. Helpers reutilizables:**
+- `generateMonthShifts(guideId, year, month)` - Batch create 1 mes
+- `deleteMonthShifts(guideId, year, month)` - Batch delete recursivo
+
+---
+
+## Alternativas Consideradas
+
+### Opción A: Horizonte fijo desde primer shift
+**Descartado:** Complejidad innecesaria. "Hoy" es referencia natural.
+
+### Opción B: Cron diario
+**Descartado:** 365 ejecuciones/año vs 12. Mismo resultado final.
+
+### Opción C: Horizonte 6 meses
+**Descartado:** Manager solo planifica 2 meses adelante. Mayor storage sin beneficio.
+
+---
+
+## Justificación
+
+**Pros:**
+- Storage eficiente: ~120 docs/guía (vs 370)
+- UI relevante: Solo fechas operativas visibles
+- Escalabilidad: O(guías × 120) vs O(guías × 370)
+- Automatización: Zero intervención manual
+- Idempotencia: Cron verifica antes de crear/borrar
+
+**Contras:**
+- Cron dependency: Si falla, horizonte se acorta (mitigado: retry automático Cloud Scheduler)
+- Cold start potencial: Primera ejecución mes puede tardar 10-15s con muchos guías
+
+---
+
+## Consecuencias
+
+### Positivas
+- Reducción 67% docs shifts en Firestore
+- Queries UI más rápidas (menos docs a filtrar)
+- Costes read/write optimizados
+
+### Negativas
+- Histórico limitado: Solo -2 meses disponibles
+  - **Mitigación:** Si necesario en futuro, cambiar a soft-delete con `deletedAt`
+- Dependencia Cloud Scheduler (requiere Blaze plan)
+  - **Estado actual:** Ya en Blaze por otras features
+
+### Técnicas
+- `deleteQueryBatch()` recursivo: Evita timeout con >500 docs
+- `process.nextTick()`: Previene stack overflow
+- Batch commit: Max 500 ops/batch (límite Firestore)
+
+---
+
+## Implementación
+
+**Código:**
+- `/functions/index.js` - Funciones scheduled + helpers
+- Deploy: `firebase deploy --only functions`
+
+**Cloud Scheduler:**
+- Job: `firebase-schedule-maintainTemporalHorizon-us-central1`
+- Región: us-central1
+- Próxima ejecución: 1 nov 2025 00:00:00
+
+**Impacto UI:**
+- ✅ Zero breaking changes
+- Manager/Guía dashboards: Queries ya filtran por rango fecha
+- Validación conflictos: Independiente de cantidad docs
+
+---
+
+## Monitoreo
+
+**Métricas clave:**
+- Cloud Logging: `maintainTemporalHorizon` execution time
+- Firestore: Collection `guides/{guideId}/shifts` size
+- Alertas: Si función falla 2 ejecuciones consecutivas
+
+**Rollback:**
+```bash
+git revert <commit-hash>
+firebase deploy --only functions
+```
+
+---
+
+**Versión:** 1.0  
+**Próxima revisión:** Post-ejecución 1 nov 2025
 
 **Ejemplo real:**
 ### Matriz de Responsabilidades
@@ -553,21 +687,6 @@ Sistema en producción con usuarios activos. Necesidad de evolucionar features s
 - Auditoría trimestral Rules (compliance)
 
 ---
-
-## Resumen Decisiones
-
-| ADR | Decisión | Impacto |
-|-----|----------|---------|
-| 001 | Vanilla JS | Time-to-market ↑, Bundle size ↓ |
-| 002 | Híbrido Functions + Apps Script | Complejidad deploy, Elimina OAuth |
-| 003 | Email + Password | Control onboarding |
-| 004 | Firestore | Queries complejos, Security Rules |
-| 005 | Cloud Scheduler | Automatización confiable |
-| 006 | Validación síncrona | UX feedback inmediato |
-| 007 | Apps Script GmailApp | 0 autenticación email |
-| 008 | Firestore listeners | Real-time <1s |
-| 009 | GitHub Actions CI/CD | Deploy predecible |
-| 010 | Rules + Functions | Defensa en profundidad |
 
 ---
 

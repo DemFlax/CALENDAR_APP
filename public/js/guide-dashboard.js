@@ -217,12 +217,12 @@ function renderCalendar(shiftsMap) {
     const row = document.createElement('tr');
     row.className = 'hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors cursor-pointer';
     // Añadir zebra striping para mobile
-    const rowIndex = dates.indexOf(fecha);
-    if (rowIndex % 2 === 0) {
-      row.className += ' bg-gray-50 dark:bg-gray-800/50';
-    } else {
-      row.className += ' bg-white dark:bg-gray-800';
-    }
+  const rowIndex = dates.indexOf(fecha);
+  if (rowIndex % 2 === 0) {
+    row.className += ' bg-gray-50 dark:bg-gray-800/50';
+  } else {
+    row.className += ' bg-white dark:bg-gray-800';
+  }
     const dateCell = document.createElement('td');
     dateCell.className = 'border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white';
     dateCell.textContent = `${dayName}, ${day} ${monthName}`;
