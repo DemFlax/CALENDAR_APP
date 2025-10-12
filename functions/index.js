@@ -452,4 +452,71 @@ exports.devSetPassword = onRequest(async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+  // =========================================
+// FUNCIÓN: resendInvitation
+// =========================================
+const {onCall, HttpsError} = require('firebase-functions/v2/https');
+
+exports.resendInvitation = onCall({
+  secrets: [sendgridKey]
+}, async (request) => {
+  const { email } = request.data;
+  
+  if (!email) {
+    throw new HttpsError('invalid-argument', 'Email requerido');
+  }
+  
+  try {
+    logger.info('Reenviando invitación', { email });
+    
+    // Verificar que el usuario existe
+    let userRecord;
+    try {
+      userRecord = await getAuth().getUserByEmail(email);
+    } catch (error) {
+      throw new HttpsError('not-found', 'Usuario no encontrado');
+    }
+    
+    // Generar nuevo link
+    const firebaseLink = await getAuth().generatePasswordResetLink(email);
+    const urlObj = new URL(firebaseLink);
+    const oobCode = urlObj.searchParams.get('oobCode');
+    const directLink = `${APP_URL}/set-password.html?mode=resetPassword&oobCode=${oobCode}`;
+    
+    logger.info('Nuevo link generado', { email, oobCode: oobCode.substring(0, 10) + '...' });
+    
+    // Enviar email
+    sgMail.setApiKey(sendgridKey.value());
+    const msg = {
+      to: email,
+      from: { email: FROM_EMAIL, name: FROM_NAME },
+      subject: 'Nueva invitación - Calendario Tours Spain Food Sherpas',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Nueva invitación</h2>
+          <p>Has solicitado un nuevo enlace de invitación.</p>
+          <p>Para establecer tu contraseña, haz clic en el siguiente enlace:</p>
+          <div style="margin: 20px 0;">
+            <a href="${directLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+              Establecer Contraseña
+            </a>
+          </div>
+          <p>O copia y pega este enlace:</p>
+          <p style="word-break: break-all; color: #666; background: #f5f5f5; padding: 10px; border-radius: 4px;">${directLink}</p>
+          <p><small>Este enlace expira en 1 hora.</small></p>
+          <hr style="border: 1px solid #eee; margin: 20px 0;">
+          <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
+        </div>
+      `
+    };
+    
+    await sgMail.send(msg);
+    logger.info('Email reenviado exitosamente', { email });
+    
+    return { success: true, message: 'Invitación reenviada correctamente' };
+    
+  } catch (error) {
+    logger.error('Error reenviando invitación', { email, error: error.message });
+    throw new HttpsError('internal', `Error: ${error.message}`);
+  }
 });
