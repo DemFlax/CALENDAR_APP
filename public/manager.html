@@ -47,13 +47,17 @@
   <main class="container mx-auto p-4">
     <section class="mb-6 sm:mb-8">
       <div class="flex justify-between items-center mb-3 sm:mb-4 flex-wrap gap-2">
-        <h2 class="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-200">Guías</h2>
+        <button onclick="toggleGuides()" class="flex items-center gap-2 text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-200 hover:text-sky-600 dark:hover:text-sky-400 transition">
+          <span id="guides-chevron" class="text-xl">▼</span>
+          Guías
+        </button>
         <button onclick="showCreateGuideModal()" class="bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-800 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-base font-semibold shadow-sm transition">
           + Crear Guía
         </button>
       </div>
       
-      <div id="guides-list" class="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div id="guides-container" class="overflow-hidden transition-all duration-300" style="max-height: 0px;">
+        <div id="guides-list" class="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3"></div>
       </div>
     </section>
 
@@ -70,7 +74,7 @@
               </svg>
               Mes
             </label>
-            <input type="month" id="month-filter" class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 font-medium transition focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400 focus:border-sky-500">
+            <input type="month" id="month-filter" class="w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-700 dark:text-white dark:border-gray-600 [color-scheme:dark]">
           </div>
           
           <div>
@@ -160,5 +164,38 @@
   </div>
 
   <script type="module" src="/js/manager-dashboard.js?v=7"></script>
+  <script>
+    window.toggleGuides = () => {
+      const container = document.getElementById('guides-container');
+      const chevron = document.getElementById('guides-chevron');
+      const isOpen = localStorage.getItem('guidesOpen') === 'true';
+      
+      if (isOpen) {
+        container.style.maxHeight = '0px';
+        chevron.textContent = '▶';
+        localStorage.setItem('guidesOpen', 'false');
+      } else {
+        container.style.maxHeight = container.scrollHeight + 'px';
+        chevron.textContent = '▼';
+        localStorage.setItem('guidesOpen', 'true');
+      }
+    };
+
+    // Abrir por defecto al cargar (recordar estado)
+    window.addEventListener('load', () => {
+      const isOpen = localStorage.getItem('guidesOpen') !== 'false';
+      const container = document.getElementById('guides-container');
+      const chevron = document.getElementById('guides-chevron');
+      
+      if (isOpen) {
+        setTimeout(() => {
+          container.style.maxHeight = container.scrollHeight + 'px';
+          chevron.textContent = '▼';
+        }, 100);
+      } else {
+        chevron.textContent = '▶';
+      }
+    });
+  </script>
 </body>
 </html>
