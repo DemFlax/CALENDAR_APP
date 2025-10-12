@@ -18,6 +18,7 @@ let currentUser = null;
 let guidesUnsubscribe = null;
 let shiftsUnsubscribes = [];
 let allGuides = [];
+let collapsedDates = new Set();
 
 function isMobile() {
   return window.innerWidth < 768;
@@ -272,18 +273,17 @@ function renderCalendar(shiftsMap, guides, estadoFilter) {
   });
   
   if (isMobile()) {
-    const guideFilterEl = document.getElementById('guide-filter');
-    const selectedGuideId = guideFilterEl ? guideFilterEl.value : '';
-    renderMobileCalendar(shiftsByDate, guides, selectedGuideId);
+    renderMobileAccordion(shiftsByDate, guides);
   } else {
     renderDesktopCalendar(shiftsByDate, guides);
   }
 }
 
-function renderMobileCalendar(shiftsByDate, guides, selectedGuideId) {
+function renderMobileAccordion(shiftsByDate, guides) {
   const calendarGrid = document.getElementById('calendar-grid');
   calendarGrid.innerHTML = '';
   const dates = Object.keys(shiftsByDate).sort();
+  
   if (dates.length === 0) {
     calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay turnos en este periodo</p>';
     return;
@@ -292,127 +292,137 @@ function renderMobileCalendar(shiftsByDate, guides, selectedGuideId) {
     calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay guías registrados.</p>';
     return;
   }
-  if (!selectedGuideId) {
-    renderDesktopCalendar(shiftsByDate, guides);
-  } else {
-    const selectedGuide = guides.find(g => g.id === selectedGuideId);
-    if (!selectedGuide) return;
-    const table = document.createElement('table');
-    table.className = 'w-full text-sm';
-    table.innerHTML = `
-      <thead>
-        <tr class="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-750">
-          <th class="border-b-2 border-gray-200 dark:border-gray-600 px-3 py-3 text-left font-bold text-gray-700 dark:text-gray-200">Fecha</th>
-          <th class="border-b-2 border-gray-200 dark:border-gray-600 px-3 py-3 font-bold text-gray-700 dark:text-gray-200">Mañana</th>
-          <th class="border-b-2 border-gray-200 dark:border-gray-600 px-3 py-3 font-bold text-gray-700 dark:text-gray-200">Tarde</th>
-        </tr>
-      </thead>
+  
+  const accordion = document.createElement('div');
+  accordion.className = 'space-y-2';
+  
+  dates.forEach(fecha => {
+    const shifts = shiftsByDate[fecha];
+    const dateObj = new Date(fecha + 'T12:00:00');
+    const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'short' });
+    const day = dateObj.getDate();
+    const month = dateObj.getMonth() + 1;
+    const isCollapsed = collapsedDates.has(fecha);
+    
+    const dateCard = document.createElement('div');
+    dateCard.className = 'bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden';
+    
+    const header = document.createElement('div');
+    header.className = 'flex items-center justify-between p-3 cursor-pointer bg-gradient-to-r from-sky-500 to-cyan-600 dark:from-sky-700 dark:to-cyan-800 text-white';
+    header.onclick = () => toggleDate(fecha);
+    header.innerHTML = `
+      <span class="font-semibold">${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${day}/${month}</span>
+      <span class="text-xl transition-transform duration-200 ${isCollapsed ? '' : 'rotate-180'}">▼</span>
     `;
-    const tbody = document.createElement('tbody');
-    dates.forEach(fecha => {
-      const shifts = shiftsByDate[fecha];
-      const dateObj = new Date(fecha + 'T12:00:00');
-      const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'short' });
-      const day = dateObj.getDate();
-      const monthName = dateObj.toLocaleDateString('es-ES', { month: 'short' });
-      const row = document.createElement('tr');
-      row.id = `row-${fecha}`;
-      row.className = 'hover:bg-sky-50 dark:hover:bg-sky-900/20 transition';
-      const dateCell = document.createElement('td');
-      dateCell.className = 'border-b border-gray-100 dark:border-gray-700 px-3 py-3 font-semibold text-gray-800 dark:text-gray-200 cursor-pointer';
-      dateCell.textContent = `${dayName}, ${day} ${monthName}`;
-      dateCell.onclick = () => selectRow(`row-${fecha}`);
-      row.appendChild(dateCell);
-      const morningShift = shifts.find(s => s.slot === 'MAÑANA' && s.guideId === selectedGuide.id);
-      const morningCell = document.createElement('td');
-      morningCell.className = 'border-b border-gray-100 dark:border-gray-700 px-2 py-2';
-      morningCell.appendChild(createMobileShiftElement(morningShift, selectedGuide.id));
-      row.appendChild(morningCell);
-      const afternoonShifts = shifts.filter(s => ['T1', 'T2', 'T3'].includes(s.slot) && s.guideId === selectedGuide.id);
-      const tardeCell = document.createElement('td');
-      tardeCell.className = 'border-b border-gray-100 dark:border-gray-700 px-2 py-2';
-      tardeCell.appendChild(createMobileAfternoonElement(afternoonShifts, selectedGuide.id));
-      row.appendChild(tardeCell);
-      tbody.appendChild(row);
+    
+    const content = document.createElement('div');
+    content.className = `overflow-hidden transition-all duration-300 ${isCollapsed ? 'max-h-0' : 'max-h-[2000px]'}`;
+    content.id = `date-${fecha}`;
+    
+    const guidesList = document.createElement('div');
+    guidesList.className = 'divide-y divide-gray-200 dark:divide-gray-700';
+    
+    guides.forEach(guide => {
+      const morningShift = shifts.find(s => s.slot === 'MAÑANA' && s.guideId === guide.id);
+      const afternoonShifts = shifts.filter(s => ['T1', 'T2', 'T3'].includes(s.slot) && s.guideId === guide.id);
+      
+      const guideRow = document.createElement('div');
+      guideRow.className = 'p-3 hover:bg-gray-50 dark:hover:bg-gray-750 transition';
+      guideRow.innerHTML = `
+        <div class="font-medium text-sm mb-2 text-gray-800 dark:text-gray-200 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+          ${guide.nombre}
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">🌅 Mañana</div>
+            ${createMobileShiftBadge(morningShift, guide.id)}
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">🌆 Tarde</div>
+            ${createMobileAfternoonBadge(afternoonShifts, guide.id)}
+          </div>
+        </div>
+      `;
+      
+      guidesList.appendChild(guideRow);
     });
-    table.appendChild(tbody);
-    calendarGrid.appendChild(table);
-  }
+    
+    content.appendChild(guidesList);
+    dateCard.appendChild(header);
+    dateCard.appendChild(content);
+    accordion.appendChild(dateCard);
+  });
+  
+  calendarGrid.appendChild(accordion);
 }
 
-function createMobileShiftElement(shift, guideId) {
-  if (!shift) {
-    const div = document.createElement('div');
-    div.textContent = '-';
-    div.className = 'text-center text-gray-400 dark:text-gray-600';
-    return div;
+function toggleDate(fecha) {
+  if (collapsedDates.has(fecha)) {
+    collapsedDates.delete(fecha);
+  } else {
+    collapsedDates.add(fecha);
   }
+  loadCalendar();
+}
+
+function createMobileShiftBadge(shift, guideId) {
+  if (!shift) return '<div class="text-center text-gray-400 dark:text-gray-600 text-xs">-</div>';
+  
   if (shift.estado === 'ASIGNADO') {
-    const select = document.createElement('select');
-    select.className = 'w-full border-2 border-sky-400 dark:border-sky-500 bg-sky-500 dark:bg-sky-600 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-sky-400 dark:focus:ring-sky-300 transition shadow-sm';
-    select.innerHTML = '<option>★ ASIGNADO</option><option value="LIBERAR">← LIBERAR</option>';
-    select.addEventListener('change', (e) => handleShiftAction(e, shift.docPath, guideId));
-    return select;
+    return `
+      <select onchange="handleShiftActionGlobal(event, '${shift.docPath}', '${guideId}')" class="w-full text-xs font-bold rounded-lg px-2 py-1.5 bg-sky-500 dark:bg-sky-600 text-white border-2 border-sky-400 dark:border-sky-500">
+        <option>🔵 ASIG</option>
+        <option value="LIBERAR">← Liberar</option>
+      </select>
+    `;
   } else if (shift.estado === 'NO_DISPONIBLE') {
-    const div = document.createElement('div');
-    div.className = 'bg-red-500 dark:bg-red-600 text-white rounded-xl px-3 py-2.5 text-center text-xs font-bold shadow-sm';
-    div.textContent = '✕ NO DISPONIBLE';
-    return div;
+    return '<div class="bg-red-500 dark:bg-red-600 text-white rounded-lg px-2 py-1.5 text-center text-xs font-bold">🔴 NO DISP</div>';
   } else if (shift.estado === 'LIBRE') {
-    const select = document.createElement('select');
-    select.className = 'w-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm font-semibold focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400 transition';
-    select.innerHTML = '<option>✓ LIBRE</option><option value="ASIGNAR">→ ASIGNAR</option>';
-    select.addEventListener('change', (e) => handleShiftAction(e, shift.docPath, guideId));
-    return select;
+    return `
+      <select onchange="handleShiftActionGlobal(event, '${shift.docPath}', '${guideId}')" class="w-full text-xs rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600">
+        <option>🟢 LIBRE</option>
+        <option value="ASIGNAR">→ Asignar</option>
+      </select>
+    `;
   }
-  const div = document.createElement('div');
-  div.textContent = shift.estado;
-  div.className = 'text-center text-gray-500 dark:text-gray-400';
-  return div;
+  return '<div class="text-center text-gray-500 text-xs">-</div>';
 }
 
-function createMobileAfternoonElement(afternoonShifts, guideId) {
+function createMobileAfternoonBadge(afternoonShifts, guideId) {
   const assignedShifts = afternoonShifts.filter(s => s.estado === 'ASIGNADO');
   const blockedShifts = afternoonShifts.filter(s => s.estado === 'NO_DISPONIBLE');
   const freeShifts = afternoonShifts.filter(s => s.estado === 'LIBRE');
+  
   if (assignedShifts.length > 0) {
-    const select = document.createElement('select');
-    select.className = 'w-full border-2 border-sky-400 dark:border-sky-500 bg-sky-500 dark:bg-sky-600 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-sky-400 dark:focus:ring-sky-300 transition shadow-sm';
     const slotNames = assignedShifts.map(s => s.slot).join('+');
-    select.innerHTML = `<option>★ ASIGNADO ${slotNames}</option><option value="LIBERAR">← LIBERAR</option>`;
-    select.addEventListener('change', (e) => handleShiftAction(e, assignedShifts[0].docPath, guideId));
-    return select;
+    return `
+      <select onchange="handleShiftActionGlobal(event, '${assignedShifts[0].docPath}', '${guideId}')" class="w-full text-xs font-bold rounded-lg px-2 py-1.5 bg-sky-500 dark:bg-sky-600 text-white border-2 border-sky-400 dark:border-sky-500">
+        <option>🔵 ${slotNames}</option>
+        <option value="LIBERAR">← Liberar</option>
+      </select>
+    `;
   } else if (blockedShifts.length === 3) {
-    const div = document.createElement('div');
-    div.className = 'bg-red-500 dark:bg-red-600 text-white rounded-xl px-3 py-2.5 text-center text-xs font-bold shadow-sm';
-    div.textContent = '✕ NO DISPONIBLE';
-    return div;
+    return '<div class="bg-red-500 dark:bg-red-600 text-white rounded-lg px-2 py-1.5 text-center text-xs font-bold">🔴 NO DISP</div>';
   } else if (freeShifts.length > 0) {
-    const select = document.createElement('select');
-    select.className = 'w-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm font-semibold focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400 transition';
-    select.innerHTML = '<option>✓ LIBRE</option>';
-    freeShifts.forEach(shift => {
-      select.innerHTML += `<option value="ASIGNAR_${shift.docPath}">→ ASIGNAR ${shift.slot}</option>`;
-    });
-    select.addEventListener('change', (e) => handleShiftAction(e, null, guideId, e.target.value));
-    return select;
+    const options = freeShifts.map(shift => 
+      `<option value="ASIGNAR_${shift.docPath}">→ Asig ${shift.slot}</option>`
+    ).join('');
+    return `
+      <select onchange="handleShiftActionGlobal(event, null, '${guideId}', event.target.value)" class="w-full text-xs rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600">
+        <option>🟢 LIBRE</option>
+        ${options}
+      </select>
+    `;
   } else if (blockedShifts.length > 0) {
-    const div = document.createElement('div');
-    div.className = 'bg-gray-400 dark:bg-gray-600 text-white rounded-xl px-3 py-2.5 text-center text-xs font-bold shadow-sm';
-    div.textContent = 'PARCIAL';
-    return div;
+    return '<div class="bg-gray-400 dark:bg-gray-600 text-white rounded-lg px-2 py-1.5 text-center text-xs font-bold">PARC</div>';
   }
-  const div = document.createElement('div');
-  div.textContent = '-';
-  div.className = 'text-center text-gray-400 dark:text-gray-600';
-  return div;
+  return '<div class="text-center text-gray-400 dark:text-gray-600 text-xs">-</div>';
 }
 
-function selectRow(rowId) {
-  document.querySelectorAll('tbody tr').forEach(r => r.classList.remove('row-selected'));
-  const row = document.getElementById(rowId);
-  if (row) row.classList.add('row-selected');
-}
+window.handleShiftActionGlobal = (event, docPath, guideId, actionValue = null) => {
+  handleShiftAction(event, docPath, guideId, actionValue);
+};
 
 function renderDesktopCalendar(shiftsByDate, guides) {
   const calendarGrid = document.getElementById('calendar-grid');
@@ -558,7 +568,6 @@ async function handleShiftAction(event, docPath, guideId, actionValue = null) {
         return;
       }
       
-      // Verificar que ningún otro guía tenga este turno asignado
       const guidesSnapshot = await getDocs(query(collection(db, 'guides'), where('estado', '==', 'activo')));
       for (const guideDoc of guidesSnapshot.docs) {
         const conflictQuery = query(
