@@ -7,7 +7,7 @@ require('dotenv').config();
 // IMPORTS
 // =========================================
 const {onDocumentCreated, onDocumentUpdated} = require('firebase-functions/v2/firestore');
-const {onRequest} = require('firebase-functions/v2/https');
+const {onRequest, onCall, HttpsError} = require('firebase-functions/v2/https');
 const {onSchedule} = require('firebase-functions/v2/scheduler');
 const {defineSecret} = require('firebase-functions/params');
 const {initializeApp} = require('firebase-admin/app');
@@ -336,12 +336,10 @@ exports.maintainTemporalHorizon = onSchedule({
     const db = getFirestore();
     const today = new Date();
     
-    // Calcular mes a generar (+3 desde hoy)
     const generateDate = new Date(today.getFullYear(), today.getMonth() + 3, 1);
     const generateYear = generateDate.getFullYear();
     const generateMonth = generateDate.getMonth();
     
-    // Calcular mes a eliminar (-2 desde hoy)
     const deleteDate = new Date(today.getFullYear(), today.getMonth() - 2, 1);
     const deleteYear = deleteDate.getFullYear();
     const deleteMonth = deleteDate.getMonth();
@@ -351,7 +349,6 @@ exports.maintainTemporalHorizon = onSchedule({
       eliminar: `${deleteYear}-${String(deleteMonth + 1).padStart(2, '0')}`
     });
     
-    // Obtener todos los guías activos
     const guidesSnapshot = await db.collection('guides')
       .where('estado', '==', 'activo')
       .get();
@@ -365,17 +362,14 @@ exports.maintainTemporalHorizon = onSchedule({
     let totalDeleted = 0;
     const errors = [];
     
-    // Procesar cada guía
     for (const guideDoc of guidesSnapshot.docs) {
       const guideId = guideDoc.id;
       
       try {
-        // Generar mes +3
         const generated = await generateMonthShifts(guideId, generateYear, generateMonth);
         totalGenerated += generated;
         logger.info('Shifts generados', { guideId, mes: `${generateYear}-${generateMonth + 1}`, count: generated });
         
-        // Eliminar mes -2
         await deleteMonthShifts(guideId, deleteYear, deleteMonth);
         logger.info('Shifts eliminados', { guideId, mes: `${deleteYear}-${deleteMonth + 1}` });
         totalDeleted++;
@@ -400,6 +394,70 @@ exports.maintainTemporalHorizon = onSchedule({
   } catch (error) {
     logger.error('Error crítico en mantenimiento horizonte', { error: error.message, stack: error.stack });
     throw error;
+  }
+});
+
+// =========================================
+// FUNCIÓN: resendInvitation
+// =========================================
+exports.resendInvitation = onCall({
+  secrets: [sendgridKey]
+}, async (request) => {
+  const { email } = request.data;
+  
+  if (!email) {
+    throw new HttpsError('invalid-argument', 'Email requerido');
+  }
+  
+  try {
+    logger.info('Reenviando invitación', { email });
+    
+    let userRecord;
+    try {
+      userRecord = await getAuth().getUserByEmail(email);
+    } catch (error) {
+      throw new HttpsError('not-found', 'Usuario no encontrado');
+    }
+    
+    const firebaseLink = await getAuth().generatePasswordResetLink(email);
+    const urlObj = new URL(firebaseLink);
+    const oobCode = urlObj.searchParams.get('oobCode');
+    const directLink = `${APP_URL}/set-password.html?mode=resetPassword&oobCode=${oobCode}`;
+    
+    logger.info('Nuevo link generado', { email, oobCode: oobCode.substring(0, 10) + '...' });
+    
+    sgMail.setApiKey(sendgridKey.value());
+    const msg = {
+      to: email,
+      from: { email: FROM_EMAIL, name: FROM_NAME },
+      subject: 'Nueva invitación - Calendario Tours Spain Food Sherpas',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Nueva invitación</h2>
+          <p>Has solicitado un nuevo enlace de invitación.</p>
+          <p>Para establecer tu contraseña, haz clic en el siguiente enlace:</p>
+          <div style="margin: 20px 0;">
+            <a href="${directLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+              Establecer Contraseña
+            </a>
+          </div>
+          <p>O copia y pega este enlace:</p>
+          <p style="word-break: break-all; color: #666; background: #f5f5f5; padding: 10px; border-radius: 4px;">${directLink}</p>
+          <p><small>Este enlace expira en 1 hora.</small></p>
+          <hr style="border: 1px solid #eee; margin: 20px 0;">
+          <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
+        </div>
+      `
+    };
+    
+    await sgMail.send(msg);
+    logger.info('Email reenviado exitosamente', { email });
+    
+    return { success: true, message: 'Invitación reenviada correctamente' };
+    
+  } catch (error) {
+    logger.error('Error reenviando invitación', { email, error: error.message });
+    throw new HttpsError('internal', `Error: ${error.message}`);
   }
 });
 
@@ -451,72 +509,5 @@ exports.devSetPassword = onRequest(async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
-  }
-  // =========================================
-// FUNCIÓN: resendInvitation
-// =========================================
-const {onCall, HttpsError} = require('firebase-functions/v2/https');
-
-exports.resendInvitation = onCall({
-  secrets: [sendgridKey]
-}, async (request) => {
-  const { email } = request.data;
-  
-  if (!email) {
-    throw new HttpsError('invalid-argument', 'Email requerido');
-  }
-  
-  try {
-    logger.info('Reenviando invitación', { email });
-    
-    // Verificar que el usuario existe
-    let userRecord;
-    try {
-      userRecord = await getAuth().getUserByEmail(email);
-    } catch (error) {
-      throw new HttpsError('not-found', 'Usuario no encontrado');
-    }
-    
-    // Generar nuevo link
-    const firebaseLink = await getAuth().generatePasswordResetLink(email);
-    const urlObj = new URL(firebaseLink);
-    const oobCode = urlObj.searchParams.get('oobCode');
-    const directLink = `${APP_URL}/set-password.html?mode=resetPassword&oobCode=${oobCode}`;
-    
-    logger.info('Nuevo link generado', { email, oobCode: oobCode.substring(0, 10) + '...' });
-    
-    // Enviar email
-    sgMail.setApiKey(sendgridKey.value());
-    const msg = {
-      to: email,
-      from: { email: FROM_EMAIL, name: FROM_NAME },
-      subject: 'Nueva invitación - Calendario Tours Spain Food Sherpas',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">Nueva invitación</h2>
-          <p>Has solicitado un nuevo enlace de invitación.</p>
-          <p>Para establecer tu contraseña, haz clic en el siguiente enlace:</p>
-          <div style="margin: 20px 0;">
-            <a href="${directLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
-              Establecer Contraseña
-            </a>
-          </div>
-          <p>O copia y pega este enlace:</p>
-          <p style="word-break: break-all; color: #666; background: #f5f5f5; padding: 10px; border-radius: 4px;">${directLink}</p>
-          <p><small>Este enlace expira en 1 hora.</small></p>
-          <hr style="border: 1px solid #eee; margin: 20px 0;">
-          <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
-        </div>
-      `
-    };
-    
-    await sgMail.send(msg);
-    logger.info('Email reenviado exitosamente', { email });
-    
-    return { success: true, message: 'Invitación reenviada correctamente' };
-    
-  } catch (error) {
-    logger.error('Error reenviando invitación', { email, error: error.message });
-    throw new HttpsError('internal', `Error: ${error.message}`);
   }
 });
