@@ -511,3 +511,9 @@ exports.devSetPassword = onRequest(async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// =========================================
+// FUNCIÓN: onUpdateShiftAlerts
+// =========================================
+const { onUpdateShiftAlerts } = require('./src/onUpdateShiftAlerts');
+exports.onUpdateShiftAlerts = onUpdateShiftAlerts;
