@@ -1,16 +1,16 @@
 import { auth, db } from './firebase-config.js';
 import { validateTour, addGuideToCalendarEvent, removeGuideFromCalendarEvent } from './calendar-api.js';
-import { 
-  collection, 
-  addDoc, 
+import {
+  collection,
+  addDoc,
   updateDoc,
   doc,
   getDoc,
   getDocs,
-  query, 
-  where, 
+  query,
+  where,
   onSnapshot,
-  serverTimestamp 
+  serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
@@ -18,7 +18,7 @@ let currentUser = null;
 let guidesUnsubscribe = null;
 let shiftsUnsubscribes = [];
 let allGuides = [];
-let collapsedDates = new Set();
+let openDate = null; // CAMBIO: Solo una fecha abierta a la vez (acordeón)
 
 function isMobile() {
   return window.innerWidth < 768;
@@ -133,7 +133,7 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
   const originalText = submitBtn.textContent;
   submitBtn.disabled = true;
   submitBtn.textContent = 'Guardando...';
-  
+
   try {
     const formData = {
       nombre: document.getElementById('nombre').value.trim(),
@@ -145,17 +145,17 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
       estado: 'activo',
       updatedAt: serverTimestamp()
     };
-    
+
     const mode = e.target.dataset.mode;
-    
+
     if (mode === 'create') {
       const existingQuery = query(collection(db, 'guides'), where('email', '==', formData.email));
       const existingDocs = await getDocs(existingQuery);
-      
+
       if (!existingDocs.empty) {
         const existingDoc = existingDocs.docs[0];
         const existingGuide = existingDoc.data();
-        
+
         if (existingGuide.estado === 'activo') {
           showToast('Error: Ya existe un guía con ese email (activo)', 'error');
           submitBtn.disabled = false;
@@ -171,19 +171,19 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
           return;
         }
       }
-      
+
       formData.createdAt = serverTimestamp();
       await addDoc(collection(db, 'guides'), formData);
       showToast('Guía creado correctamente', 'success');
-      
+
     } else if (mode === 'edit') {
       const guideId = e.target.dataset.guideId;
       await updateDoc(doc(db, 'guides', guideId), formData);
       showToast('Guía actualizado correctamente', 'success');
     }
-    
+
     closeGuideModal();
-    
+
   } catch (error) {
     console.error('Error saving guide:', error);
     showToast(error.message || 'Error al guardar guía', 'error');
@@ -213,7 +213,10 @@ function initCalendar() {
   const guideFilter = document.getElementById('guide-filter');
   const today = new Date();
   monthFilter.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  monthFilter.addEventListener('change', loadCalendar);
+  monthFilter.addEventListener('change', () => {
+    openDate = null; // Reset al cambiar mes
+    loadCalendar();
+  });
   estadoFilter.addEventListener('change', loadCalendar);
   if (guideFilter) guideFilter.addEventListener('change', loadCalendar);
   loadCalendar();
@@ -229,37 +232,37 @@ async function loadCalendar() {
   const [year, month] = monthInput.value.split('-');
   const startDate = `${year}-${month}-01`;
   const endDate = `${year}-${month}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
-  
+
   shiftsUnsubscribes.forEach(unsub => unsub());
   shiftsUnsubscribes = [];
-  
+
   const guidesSnapshot = await getDocs(query(collection(db, 'guides'), where('estado', '==', 'activo')));
   const guides = [];
   guidesSnapshot.forEach(doc => guides.push({ id: doc.id, ...doc.data() }));
-  
+
   const allShifts = new Map();
-  
+
   for (const guide of guides) {
     const shiftsQuery = query(
       collection(db, 'guides', guide.id, 'shifts'),
       where('fecha', '>=', startDate),
       where('fecha', '<=', endDate)
     );
-    
+
     const unsub = onSnapshot(shiftsQuery, (snapshot) => {
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
         const key = `${guide.id}_${data.fecha}_${data.slot}`;
-        allShifts.set(key, { 
-          id: docSnap.id, 
+        allShifts.set(key, {
+          id: docSnap.id,
           guideId: guide.id,
           docPath: `guides/${guide.id}/shifts/${docSnap.id}`,
-          ...data 
+          ...data
         });
       });
       renderCalendar(allShifts, guides, estadoFilter);
     });
-    
+
     shiftsUnsubscribes.push(unsub);
   }
 }
@@ -271,7 +274,7 @@ function renderCalendar(shiftsMap, guides, estadoFilter) {
     if (!shiftsByDate[shift.fecha]) shiftsByDate[shift.fecha] = [];
     shiftsByDate[shift.fecha].push(shift);
   });
-  
+
   if (isMobile()) {
     renderMobileAccordion(shiftsByDate, guides);
   } else {
@@ -283,7 +286,7 @@ function renderMobileAccordion(shiftsByDate, guides) {
   const calendarGrid = document.getElementById('calendar-grid');
   calendarGrid.innerHTML = '';
   const dates = Object.keys(shiftsByDate).sort();
-  
+
   if (dates.length === 0) {
     calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay turnos en este periodo</p>';
     return;
@@ -292,97 +295,98 @@ function renderMobileAccordion(shiftsByDate, guides) {
     calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay guías registrados.</p>';
     return;
   }
-  
+
   const accordion = document.createElement('div');
   accordion.className = 'space-y-2';
-  
+
   dates.forEach(fecha => {
     const shifts = shiftsByDate[fecha];
     const dateObj = new Date(fecha + 'T12:00:00');
     const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'short' });
     const day = dateObj.getDate();
     const month = dateObj.getMonth() + 1;
-    const isCollapsed = collapsedDates.has(fecha);
-    
+    const isOpen = openDate === fecha; // CAMBIO: Solo una fecha abierta
+
     const dateCard = document.createElement('div');
     dateCard.className = 'bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden';
-    
+
     const header = document.createElement('div');
     header.className = 'flex items-center justify-between p-3 cursor-pointer bg-gradient-to-r from-sky-500 to-cyan-600 dark:from-sky-700 dark:to-cyan-800 text-white';
     header.onclick = () => toggleDate(fecha);
     header.innerHTML = `
       <span class="font-semibold">${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${day}/${month}</span>
-      <span class="text-xl transition-transform duration-200 ${isCollapsed ? '' : 'rotate-180'}">▼</span>
+      <span class="text-xl transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}">▼</span>
     `;
-    
+
     const content = document.createElement('div');
-    content.className = `overflow-hidden transition-all duration-300 ${isCollapsed ? 'max-h-0' : 'max-h-[2000px]'}`;
+    content.className = `overflow-hidden transition-all duration-300 ${isOpen ? 'max-h-[2000px]' : 'max-h-0'}`;
     content.id = `date-${fecha}`;
-    
+
     const guidesList = document.createElement('div');
     guidesList.className = 'divide-y divide-gray-200 dark:divide-gray-700';
-    
+
     guides.forEach(guide => {
       const morningShift = shifts.find(s => s.slot === 'MAÑANA' && s.guideId === guide.id);
       const afternoonShifts = shifts.filter(s => ['T1', 'T2', 'T3'].includes(s.slot) && s.guideId === guide.id);
-      
+
       const guideRow = document.createElement('div');
-      guideRow.className = 'p-3 hover:bg-gray-50 dark:hover:bg-gray-750 transition';
+      guideRow.className = guideRow.className = 'p-3';
       guideRow.innerHTML = `
         <div class="font-medium text-sm mb-2 text-gray-800 dark:text-gray-200 flex items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-sky-500"></span>
           ${guide.nombre}
         </div>
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-2 gap-3">
           <div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">🌅 Mañana</div>
+            <div class="text-base font-bold text-gray-900 dark:text-white mb-1.5">MAÑANA</div>
             ${createMobileShiftBadge(morningShift, guide.id)}
           </div>
           <div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">🌆 Tarde</div>
+            <div class="text-base font-bold text-gray-900 dark:text-white mb-1.5">TARDE</div>
             ${createMobileAfternoonBadge(afternoonShifts, guide.id)}
           </div>
         </div>
       `;
-      
+
       guidesList.appendChild(guideRow);
     });
-    
+
     content.appendChild(guidesList);
     dateCard.appendChild(header);
     dateCard.appendChild(content);
     accordion.appendChild(dateCard);
   });
-  
+
   calendarGrid.appendChild(accordion);
 }
 
+// CAMBIO: Acordeón - cierra otros al abrir uno
 function toggleDate(fecha) {
-  if (collapsedDates.has(fecha)) {
-    collapsedDates.delete(fecha);
+  if (openDate === fecha) {
+    openDate = null; // Cerrar si ya está abierto
   } else {
-    collapsedDates.add(fecha);
+    openDate = fecha; // Abrir y cerrar otros
   }
   loadCalendar();
 }
 
 function createMobileShiftBadge(shift, guideId) {
   if (!shift) return '<div class="text-center text-gray-400 dark:text-gray-600 text-xs">-</div>';
-  
+
   if (shift.estado === 'ASIGNADO') {
     return `
       <select onchange="handleShiftActionGlobal(event, '${shift.docPath}', '${guideId}')" class="w-full text-xs font-bold rounded-lg px-2 py-1.5 bg-sky-500 dark:bg-sky-600 text-white border-2 border-sky-400 dark:border-sky-500">
-        <option>🔵 ASIG</option>
-        <option value="LIBERAR">← Liberar</option>
+        <option>✅ ASIG</option>
+        <option value="LIBERAR">↩ Liberar</option>
       </select>
     `;
   } else if (shift.estado === 'NO_DISPONIBLE') {
-    return '<div class="bg-red-500 dark:bg-red-600 text-white rounded-lg px-2 py-1.5 text-center text-xs font-bold">🔴 NO DISP</div>';
+    return '<div class="bg-red-500 dark:bg-red-600 text-white rounded-lg px-2 py-1.5 text-center text-xs font-bold">🚫 NO DISP</div>';
   } else if (shift.estado === 'LIBRE') {
     return `
       <select onchange="handleShiftActionGlobal(event, '${shift.docPath}', '${guideId}')" class="w-full text-xs rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600">
         <option>🟢 LIBRE</option>
-        <option value="ASIGNAR">→ Asignar</option>
+        <option value="ASIGNAR">↪ Asignar</option>
       </select>
     `;
   }
@@ -393,20 +397,20 @@ function createMobileAfternoonBadge(afternoonShifts, guideId) {
   const assignedShifts = afternoonShifts.filter(s => s.estado === 'ASIGNADO');
   const blockedShifts = afternoonShifts.filter(s => s.estado === 'NO_DISPONIBLE');
   const freeShifts = afternoonShifts.filter(s => s.estado === 'LIBRE');
-  
+
   if (assignedShifts.length > 0) {
     const slotNames = assignedShifts.map(s => s.slot).join('+');
     return `
       <select onchange="handleShiftActionGlobal(event, '${assignedShifts[0].docPath}', '${guideId}')" class="w-full text-xs font-bold rounded-lg px-2 py-1.5 bg-sky-500 dark:bg-sky-600 text-white border-2 border-sky-400 dark:border-sky-500">
-        <option>🔵 ${slotNames}</option>
-        <option value="LIBERAR">← Liberar</option>
+        <option>✅ ${slotNames}</option>
+        <option value="LIBERAR">↩ Liberar</option>
       </select>
     `;
   } else if (blockedShifts.length === 3) {
-    return '<div class="bg-red-500 dark:bg-red-600 text-white rounded-lg px-2 py-1.5 text-center text-xs font-bold">🔴 NO DISP</div>';
+    return '<div class="bg-red-500 dark:bg-red-600 text-white rounded-lg px-2 py-1.5 text-center text-xs font-bold">🚫 NO DISP</div>';
   } else if (freeShifts.length > 0) {
-    const options = freeShifts.map(shift => 
-      `<option value="ASIGNAR_${shift.docPath}">→ Asig ${shift.slot}</option>`
+    const options = freeShifts.map(shift =>
+      `<option value="ASIGNAR_${shift.docPath}">↪ Asig ${shift.slot}</option>`
     ).join('');
     return `
       <select onchange="handleShiftActionGlobal(event, null, '${guideId}', event.target.value)" class="w-full text-xs rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600">
@@ -567,7 +571,7 @@ async function handleShiftAction(event, docPath, guideId, actionValue = null) {
         event.target.disabled = false;
         return;
       }
-      
+
       const guidesSnapshot = await getDocs(query(collection(db, 'guides'), where('estado', '==', 'activo')));
       for (const guideDoc of guidesSnapshot.docs) {
         const conflictQuery = query(
@@ -585,7 +589,7 @@ async function handleShiftAction(event, docPath, guideId, actionValue = null) {
           return;
         }
       }
-      
+
       await updateDoc(shiftRef, { estado: 'ASIGNADO', updatedAt: serverTimestamp() });
       try {
         const guideDoc = await getDoc(doc(db, 'guides', guideId));
