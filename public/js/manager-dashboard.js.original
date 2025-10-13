@@ -243,6 +243,7 @@ async function loadCalendar() {
   let guides = [];
   guidesSnapshot.forEach(doc => guides.push({ id: doc.id, ...doc.data() }));
 
+  // NUEVO: Filtrar por guía si hay selección
   if (selectedGuideId) {
     guides = guides.filter(g => g.id === selectedGuideId);
   }
@@ -273,6 +274,7 @@ async function loadCalendar() {
     shiftsUnsubscribes.push(unsub);
   }
 
+  // NUEVO: Si no hay guías que coincidan con el filtro, renderizar vacío inmediatamente
   if (guides.length === 0) {
     renderCalendar(new Map(), guides, estadoFilter);
   }
@@ -298,6 +300,7 @@ function renderMobileAccordion(shiftsByDate, guides) {
   calendarGrid.innerHTML = '';
   const dates = Object.keys(shiftsByDate).sort();
 
+  // NUEVO: Validar si no hay guías filtrados
   if (guides.length === 0) {
     calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay guías que coincidan con el filtro.</p>';
     return;
@@ -444,6 +447,7 @@ function renderDesktopCalendar(shiftsByDate, guides) {
   calendarGrid.innerHTML = '';
   const dates = Object.keys(shiftsByDate).sort();
 
+  // NUEVO: Validar si no hay guías filtrados
   if (guides.length === 0) {
     calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay guías que coincidan con el filtro.</p>';
     return;
@@ -604,13 +608,7 @@ async function handleShiftAction(event, docPath, guideId, actionValue = null) {
         }
       }
 
-      await updateDoc(shiftRef, { 
-        estado: 'ASIGNADO', 
-        eventId: tourExists.eventId,
-        tourName: tourExists.summary,
-        updatedAt: serverTimestamp() 
-      });
-      
+      await updateDoc(shiftRef, { estado: 'ASIGNADO', updatedAt: serverTimestamp() });
       try {
         const guideDoc = await getDoc(doc(db, 'guides', guideId));
         const guideEmail = guideDoc.data().email;
