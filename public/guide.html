@@ -28,7 +28,6 @@
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body class="bg-gray-50 dark:bg-gray-900">
-  <!-- REEMPLAZAR desde <nav> hasta </nav> -->
   <nav class="bg-blue-600 dark:bg-gray-800 text-white p-3 shadow-md">
   <div class="container mx-auto flex justify-between items-center">
     <h1 id="page-title" class="text-base sm:text-xl font-bold">Calendario Tours - Guía</h1>
@@ -43,7 +42,7 @@
   <main class="container mx-auto p-3 sm:p-6 max-w-7xl">
     <!-- Próximas Asignaciones -->
     <section class="mb-6 sm:mb-8">
-      <h2 class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 dark:text-white">Mis Próximas Asignaciones</h2>
+      <h2 id="upcoming-title" class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 dark:text-white">Mis Próximas Asignaciones</h2>
       <div id="next-assignments" class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
         <p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">Cargando...</p>
       </div>
@@ -51,7 +50,7 @@
     <!-- Calendario -->
     <section>
       <div class="mb-3">
-        <h2 class="text-xl sm:text-2xl font-bold mb-2 dark:text-white">Calendario de Turnos</h2>
+        <h2 id="calendar-title" class="text-xl sm:text-2xl font-bold mb-2 dark:text-white">Calendario de Turnos</h2>
         <div class="grid grid-cols-2 gap-2">
           <input
             type="month"

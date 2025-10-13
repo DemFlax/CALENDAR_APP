@@ -15,6 +15,13 @@ import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/
 // i18n
 const i18n = {
   es: {
+    pageTitle: 'Calendario Tours - Guía',
+    upcomingAssignments: 'Mis Próximas Asignaciones',
+    calendarTitle: 'Calendario de Turnos',
+    allStates: '📋 Todos',
+    freeState: '✅ Libres',
+    assignedState: '⭐ Asignados',
+    blockedState: '🚫 Bloqueados',
     morning: 'Mañana',
     afternoon: 'Tarde',
     assigned: 'ASIGNADO',
@@ -34,6 +41,13 @@ const i18n = {
     toastError: 'Error'
   },
   en: {
+    pageTitle: 'Tours Calendar - Guide',
+    upcomingAssignments: 'My Upcoming Assignments',
+    calendarTitle: 'Shifts Calendar',
+    allStates: '📋 All',
+    freeState: '✅ Free',
+    assignedState: '⭐ Assigned',
+    blockedState: '🚫 Blocked',
     morning: 'Morning',
     afternoon: 'Afternoon',
     assigned: 'ASSIGNED',
@@ -65,14 +79,14 @@ onAuthStateChanged(auth, async (user) => {
     currentUser = user;
     const token = await user.getIdTokenResult(true);
     currentGuideId = token.claims.guideId;
-    
+
     if (!currentGuideId) {
       alert('No tienes permisos de guía');
       await signOut(auth);
       window.location.href = '/login.html';
       return;
     }
-    
+
     const guideDoc = await getDoc(doc(db, 'guides', currentGuideId));
     if (!guideDoc.exists() || guideDoc.data().estado !== 'activo') {
       alert('Cuenta inactiva');
@@ -80,9 +94,9 @@ onAuthStateChanged(auth, async (user) => {
       window.location.href = '/login.html';
       return;
     }
-    
+
     document.getElementById('guide-name').textContent = guideDoc.data().nombre;
-    document.getElementById('page-title').textContent = `Calendario Tours - ${guideDoc.data().nombre}`;
+    updateUILanguage();
     initLanguageToggle();
     loadUpcomingAssignments();
     initCalendar();
@@ -91,6 +105,19 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
+function updateUILanguage() {
+  document.getElementById('page-title').textContent = t('pageTitle');
+  document.getElementById('upcoming-title').textContent = t('upcomingAssignments');
+  document.getElementById('calendar-title').textContent = t('calendarTitle');
+  
+  // Actualizar opciones del filtro de estado
+  const estadoFilter = document.getElementById('estado-filter');
+  estadoFilter.options[0].text = t('allStates');
+  estadoFilter.options[1].text = t('freeState');
+  estadoFilter.options[2].text = t('assignedState');
+  estadoFilter.options[3].text = t('blockedState');
+}
+
 function initLanguageToggle() {
   const langToggle = document.getElementById('lang-toggle');
   langToggle.textContent = lang === 'es' ? 'EN' : 'ES';
@@ -98,6 +125,7 @@ function initLanguageToggle() {
     lang = lang === 'es' ? 'en' : 'es';
     localStorage.setItem('lang', lang);
     langToggle.textContent = lang === 'es' ? 'EN' : 'ES';
+    updateUILanguage();
     loadUpcomingAssignments();
     loadCalendar();
   });
@@ -110,22 +138,22 @@ async function loadUpcomingAssignments() {
     where('estado', '==', 'ASIGNADO'),
     where('fecha', '>=', today)
   );
-  
+
   const snapshot = await getDocs(assignmentsQuery);
   const assignmentsList = document.getElementById('next-assignments');
-  
+
   if (snapshot.empty) {
     assignmentsList.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">${t('noAssignments')}</p>`;
     return;
   }
-  
+
   const assignments = [];
   snapshot.forEach(doc => assignments.push({ id: doc.id, ...doc.data() }));
   assignments.sort((a, b) => a.fecha.localeCompare(b.fecha));
-  
+
   const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
-  
+
   assignmentsList.innerHTML = assignments.map(a => `
     <div class="bg-blue-50 dark:bg-blue-900 p-2 sm:p-3 rounded mb-2">
       <p class="font-semibold text-sm sm:text-base dark:text-white">${new Date(a.fecha + 'T12:00:00').toLocaleDateString(locale, dateOptions)}</p>
@@ -150,17 +178,17 @@ function loadCalendar() {
   const [year, month] = monthInput.value.split('-');
   const startDate = `${year}-${month}-01`;
   const endDate = `${year}-${month}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
-  
+
   if (shiftsUnsubscribe) {
     shiftsUnsubscribe();
   }
-  
+
   const shiftsQuery = query(
     collection(db, 'guides', currentGuideId, 'shifts'),
     where('fecha', '>=', startDate),
     where('fecha', '<=', endDate)
   );
-  
+
   shiftsUnsubscribe = onSnapshot(shiftsQuery, (snapshot) => {
     const allShifts = new Map();
     snapshot.forEach(docSnap => {
@@ -179,19 +207,19 @@ function loadCalendar() {
 function renderCalendar(shiftsMap) {
   const calendarGrid = document.getElementById('calendar-grid');
   calendarGrid.innerHTML = '';
-  
+
   const shiftsByDate = {};
   Array.from(shiftsMap.values()).forEach(shift => {
     if (!shiftsByDate[shift.fecha]) shiftsByDate[shift.fecha] = [];
     shiftsByDate[shift.fecha].push(shift);
   });
-  
+
   const dates = Object.keys(shiftsByDate).sort();
   if (dates.length === 0) {
     calendarGrid.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm sm:text-base">${t('noShifts')}</p>`;
     return;
   }
-  
+
   const table = document.createElement('table');
   table.className = 'guide-calendar-table w-full border-collapse';
   table.innerHTML = `
@@ -203,31 +231,30 @@ function renderCalendar(shiftsMap) {
       </tr>
     </thead>
   `;
-  
+
   const tbody = document.createElement('tbody');
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
-  
+
   dates.forEach(fecha => {
     const shifts = shiftsByDate[fecha];
     const dateObj = new Date(fecha + 'T12:00:00');
     const dayName = dateObj.toLocaleDateString(locale, { weekday: 'long' });
     const day = dateObj.getDate();
     const monthName = dateObj.toLocaleDateString(locale, { month: 'short' });
-    
+
     const row = document.createElement('tr');
     row.className = 'hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors cursor-pointer';
-    // Añadir zebra striping para mobile
-  const rowIndex = dates.indexOf(fecha);
-  if (rowIndex % 2 === 0) {
-    row.className += ' bg-gray-50 dark:bg-gray-800/50';
-  } else {
-    row.className += ' bg-white dark:bg-gray-800';
-  }
+    const rowIndex = dates.indexOf(fecha);
+    if (rowIndex % 2 === 0) {
+      row.className += ' bg-gray-50 dark:bg-gray-800/50';
+    } else {
+      row.className += ' bg-white dark:bg-gray-800';
+    }
     const dateCell = document.createElement('td');
     dateCell.className = 'border dark:border-gray-600 px-2 sm:px-4 py-2 sm:py-3 font-semibold text-xs sm:text-base dark:text-white';
     dateCell.textContent = `${dayName}, ${day} ${monthName}`;
     row.appendChild(dateCell);
-    
+
     const morningShift = shifts.find(s => s.slot === 'MAÑANA');
     const morningCell = document.createElement('td');
     morningCell.className = 'border dark:border-gray-600 px-1 sm:px-3 py-2 sm:py-3 text-center';
@@ -237,7 +264,7 @@ function renderCalendar(shiftsMap) {
       morningCell.innerHTML = '<span class="text-gray-400 dark:text-gray-500 text-xs sm:text-base">-</span>';
     }
     row.appendChild(morningCell);
-    
+
     const afternoonShifts = shifts.filter(s => ['T1', 'T2', 'T3'].includes(s.slot));
     const afternoonCell = document.createElement('td');
     afternoonCell.className = 'border dark:border-gray-600 px-1 sm:px-3 py-2 sm:py-3 text-center';
@@ -249,7 +276,7 @@ function renderCalendar(shiftsMap) {
     row.appendChild(afternoonCell);
     tbody.appendChild(row);
   });
-  
+
   table.appendChild(tbody);
   calendarGrid.appendChild(table);
 }
@@ -257,7 +284,7 @@ function renderCalendar(shiftsMap) {
 function createShiftButton(shift) {
   const button = document.createElement('button');
   button.className = 'w-full px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-semibold transition-colors duration-150';
-  
+
   if (shift.estado === 'ASIGNADO') {
     button.className += ' bg-blue-600 dark:bg-blue-700 text-white cursor-not-allowed';
     button.textContent = t('assigned');
@@ -277,11 +304,11 @@ function createShiftButton(shift) {
 function createAfternoonButton(afternoonShifts, fecha) {
   const button = document.createElement('button');
   button.className = 'w-full px-2 sm:px-3 py-2 rounded text-xs sm:text-sm font-semibold transition-colors duration-150';
-  
+
   const hasAssigned = afternoonShifts.some(s => s.estado === 'ASIGNADO');
   const allBlocked = afternoonShifts.every(s => s.estado === 'NO_DISPONIBLE');
   const allFree = afternoonShifts.every(s => s.estado === 'LIBRE');
-  
+
   if (hasAssigned) {
     button.className += ' bg-blue-600 dark:bg-blue-700 text-white cursor-not-allowed';
     button.textContent = t('assigned');
@@ -384,8 +411,6 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
   } catch (error) {
     console.error('Error signing out:', error);
   }
-});
-
-window.addEventListener('beforeunload', () => {
+}); window.addEventListener('beforeunload', () => {
   if (shiftsUnsubscribe) shiftsUnsubscribe();
 });
