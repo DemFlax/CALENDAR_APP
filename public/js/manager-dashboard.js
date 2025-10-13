@@ -18,7 +18,7 @@ let currentUser = null;
 let guidesUnsubscribe = null;
 let shiftsUnsubscribes = [];
 let allGuides = [];
-let openDate = null; // CAMBIO: Solo una fecha abierta a la vez (acordeón)
+let openDate = null;
 
 function isMobile() {
   return window.innerWidth < 768;
@@ -214,7 +214,7 @@ function initCalendar() {
   const today = new Date();
   monthFilter.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   monthFilter.addEventListener('change', () => {
-    openDate = null; // Reset al cambiar mes
+    openDate = null;
     loadCalendar();
   });
   estadoFilter.addEventListener('change', loadCalendar);
@@ -225,6 +225,9 @@ function initCalendar() {
 async function loadCalendar() {
   const monthInput = document.getElementById('month-filter');
   const estadoFilter = document.getElementById('estado-filter').value;
+  const guideFilter = document.getElementById('guide-filter');
+  const selectedGuideId = guideFilter ? guideFilter.value : '';
+
   if (!monthInput.value) {
     const today = new Date();
     monthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
@@ -237,8 +240,13 @@ async function loadCalendar() {
   shiftsUnsubscribes = [];
 
   const guidesSnapshot = await getDocs(query(collection(db, 'guides'), where('estado', '==', 'activo')));
-  const guides = [];
+  let guides = [];
   guidesSnapshot.forEach(doc => guides.push({ id: doc.id, ...doc.data() }));
+
+  // NUEVO: Filtrar por guía si hay selección
+  if (selectedGuideId) {
+    guides = guides.filter(g => g.id === selectedGuideId);
+  }
 
   const allShifts = new Map();
 
@@ -265,6 +273,11 @@ async function loadCalendar() {
 
     shiftsUnsubscribes.push(unsub);
   }
+
+  // NUEVO: Si no hay guías que coincidan con el filtro, renderizar vacío inmediatamente
+  if (guides.length === 0) {
+    renderCalendar(new Map(), guides, estadoFilter);
+  }
 }
 
 function renderCalendar(shiftsMap, guides, estadoFilter) {
@@ -287,12 +300,14 @@ function renderMobileAccordion(shiftsByDate, guides) {
   calendarGrid.innerHTML = '';
   const dates = Object.keys(shiftsByDate).sort();
 
-  if (dates.length === 0) {
-    calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay turnos en este periodo</p>';
+  // NUEVO: Validar si no hay guías filtrados
+  if (guides.length === 0) {
+    calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay guías que coincidan con el filtro.</p>';
     return;
   }
-  if (guides.length === 0) {
-    calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay guías registrados.</p>';
+
+  if (dates.length === 0) {
+    calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay turnos en este periodo</p>';
     return;
   }
 
@@ -305,7 +320,7 @@ function renderMobileAccordion(shiftsByDate, guides) {
     const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'short' });
     const day = dateObj.getDate();
     const month = dateObj.getMonth() + 1;
-    const isOpen = openDate === fecha; // CAMBIO: Solo una fecha abierta
+    const isOpen = openDate === fecha;
 
     const dateCard = document.createElement('div');
     dateCard.className = 'bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden';
@@ -330,7 +345,7 @@ function renderMobileAccordion(shiftsByDate, guides) {
       const afternoonShifts = shifts.filter(s => ['T1', 'T2', 'T3'].includes(s.slot) && s.guideId === guide.id);
 
       const guideRow = document.createElement('div');
-      guideRow.className = guideRow.className = 'p-3';
+      guideRow.className = 'p-3';
       guideRow.innerHTML = `
         <div class="font-medium text-sm mb-2 text-gray-800 dark:text-gray-200 flex items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-sky-500"></span>
@@ -360,12 +375,11 @@ function renderMobileAccordion(shiftsByDate, guides) {
   calendarGrid.appendChild(accordion);
 }
 
-// CAMBIO: Acordeón - cierra otros al abrir uno
 function toggleDate(fecha) {
   if (openDate === fecha) {
-    openDate = null; // Cerrar si ya está abierto
+    openDate = null;
   } else {
-    openDate = fecha; // Abrir y cerrar otros
+    openDate = fecha;
   }
   loadCalendar();
 }
@@ -432,14 +446,18 @@ function renderDesktopCalendar(shiftsByDate, guides) {
   const calendarGrid = document.getElementById('calendar-grid');
   calendarGrid.innerHTML = '';
   const dates = Object.keys(shiftsByDate).sort();
+
+  // NUEVO: Validar si no hay guías filtrados
+  if (guides.length === 0) {
+    calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay guías que coincidan con el filtro.</p>';
+    return;
+  }
+
   if (dates.length === 0) {
     calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay turnos en este periodo</p>';
     return;
   }
-  if (guides.length === 0) {
-    calendarGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">No hay guías registrados.</p>';
-    return;
-  }
+
   const table = document.createElement('table');
   table.className = 'calendar-table w-full border-collapse text-sm';
   const thead = document.createElement('thead');
