@@ -12,7 +12,7 @@ const firebaseConfig = {
 };
 
 export const appsScriptConfig = {
-  url: 'https://script.google.com/macros/s/AKfycbxObVxcrVN03Jmiy7svvDS-AbHcPJ_YjbiLCqnrkkxEEDID2j-w8QMRHSGJH8A_ZZ_j8Q/exec',
+  url: 'https://script.google.com/macros/s/AKfycbxjxRAXD9_6xOye9TdcmYMpWThfWGa5Kr7BXMHhxDv7IoAbtyepN0kge_AR4p3ujhcdzg/exec',
   apiKey: 'tu-api-key-segura-123'
 };
 

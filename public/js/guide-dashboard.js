@@ -153,20 +153,33 @@ async function loadUpcomingAssignments() {
   const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
 
-  assignmentsList.innerHTML = assignments.map(a => {
+  assignmentsList.innerHTML = assignments.map((a, index) => {
     const dateStr = new Date(a.fecha + 'T12:00:00').toLocaleDateString(locale, dateOptions);
     const slotStr = a.slot === 'MAÑANA' ? t('morning') : `${t('afternoon')} ${a.slot}`;
     
-    // Construir HTML con evento click
     return `
-      <div class="bg-blue-50 dark:bg-blue-900 p-2 sm:p-3 rounded mb-2 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors" 
-           onclick="navigateToTourDetails('${a.eventId || ''}', '${a.tourName || 'Tour'}', '${a.fecha}', '${getTimeFromSlot(a.slot)}')">
+      <div class="assignment-card bg-blue-50 dark:bg-blue-900 p-2 sm:p-3 rounded mb-2 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors" 
+           data-event-id="${a.eventId || ''}"
+           data-tour-name="${(a.tourName || 'Tour').replace(/"/g, '&quot;')}"
+           data-fecha="${a.fecha}"
+           data-slot="${a.slot}">
         <p class="font-semibold text-sm sm:text-base dark:text-white">${dateStr}</p>
         <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-300">${slotStr}</p>
         ${a.tourName ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${a.tourName}</p>` : ''}
       </div>
     `;
   }).join('');
+  
+  // Añadir event listeners
+  document.querySelectorAll('.assignment-card').forEach(card => {
+    card.addEventListener('click', function() {
+      const eventId = this.dataset.eventId;
+      const tourName = this.dataset.tourName;
+      const fecha = this.dataset.fecha;
+      const slot = this.dataset.slot;
+      navigateToTourDetails(eventId, tourName, fecha, getTimeFromSlot(slot));
+    });
+  });
 }
 
 /**
@@ -185,7 +198,7 @@ function getTimeFromSlot(slot) {
 /**
  * Navega a página de detalles del tour
  */
-window.navigateToTourDetails = function(eventId, tourName, fecha, time) {
+function navigateToTourDetails(eventId, tourName, fecha, time) {
   if (!eventId) {
     showToast('Información del tour no disponible', 'error');
     return;
