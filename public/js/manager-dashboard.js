@@ -2,7 +2,6 @@ import { auth, db } from './firebase-config.js';
 import { validateTour, addGuideToCalendarEvent, removeGuideFromCalendarEvent } from './calendar-api.js';
 import {
   collection,
-  addDoc,
   updateDoc,
   doc,
   getDoc,
@@ -34,22 +33,15 @@ onAuthStateChanged(auth, (user) => {
   }
 });
 
+// SIMPLIFIED: Only loads guides for filter dropdown
 function loadGuides() {
   const guidesQuery = query(collection(db, 'guides'), where('estado', '==', 'activo'));
   if (guidesUnsubscribe) guidesUnsubscribe();
   guidesUnsubscribe = onSnapshot(guidesQuery, (snapshot) => {
-    const guidesList = document.getElementById('guides-list');
-    guidesList.innerHTML = '';
-    if (snapshot.empty) {
-      guidesList.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-sm">No hay guías registrados</p>';
-      allGuides = [];
-      return;
-    }
     allGuides = [];
     snapshot.forEach((docSnap) => {
       const guide = docSnap.data();
       allGuides.push({ id: docSnap.id, ...guide });
-      guidesList.appendChild(createGuideCard(docSnap.id, guide));
     });
     updateGuideFilter();
   });
@@ -63,149 +55,6 @@ function updateGuideFilter() {
     guideFilter.innerHTML += `<option value="${guide.id}">${guide.nombre}</option>`;
   });
 }
-
-function createGuideCard(id, guide) {
-  const card = document.createElement('div');
-  card.className = 'guide-card bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-2xl shadow-lg hover:shadow-xl transition';
-  card.innerHTML = `
-    <div class="flex justify-between items-start gap-2">
-      <div class="flex-1 min-w-0">
-        <h3 class="font-semibold text-base sm:text-lg truncate text-gray-800 dark:text-gray-200">${guide.nombre}</h3>
-        <p class="text-gray-600 dark:text-gray-400 text-xs sm:text-sm truncate">Email: ${guide.email}</p>
-        <p class="text-gray-500 dark:text-gray-500 text-xs sm:text-sm">DNI: ${guide.dni}</p>
-        <p class="text-gray-500 dark:text-gray-500 text-xs sm:text-sm">Tel: ${guide.telefono || 'Sin teléfono'}</p>
-      </div>
-      <div class="flex flex-col gap-1.5 sm:gap-2">
-        <button onclick="window.editGuide('${id}')" class="bg-sky-500 hover:bg-sky-600 dark:bg-sky-600 dark:hover:bg-sky-700 text-white px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm whitespace-nowrap font-semibold shadow-sm transition">Editar</button>
-        <button onclick="window.deleteGuide('${id}')" class="bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm whitespace-nowrap font-semibold shadow-sm transition">Eliminar</button>
-      </div>
-    </div>
-  `;
-  return card;
-}
-
-window.showCreateGuideModal = () => {
-  document.getElementById('guide-modal').classList.remove('hidden');
-  document.getElementById('modal-title').textContent = 'Crear Guía';
-  document.getElementById('guide-form').reset();
-  document.getElementById('guide-form').dataset.mode = 'create';
-  delete document.getElementById('guide-form').dataset.guideId;
-  document.getElementById('email').disabled = false;
-  document.getElementById('dni').disabled = false;
-  document.querySelector('#guide-form button[type="submit"]').textContent = 'Crear Guía';
-};
-
-window.editGuide = async (guideId) => {
-  try {
-    const guideDoc = await getDoc(doc(db, 'guides', guideId));
-    if (!guideDoc.exists()) {
-      showToast('Guía no encontrado', 'error');
-      return;
-    }
-    const guide = guideDoc.data();
-    document.getElementById('guide-modal').classList.remove('hidden');
-    document.getElementById('modal-title').textContent = 'Editar Guía';
-    document.getElementById('nombre').value = guide.nombre || '';
-    document.getElementById('email').value = guide.email || '';
-    document.getElementById('telefono').value = guide.telefono || '';
-    document.getElementById('direccion').value = guide.direccion || '';
-    document.getElementById('dni').value = guide.dni || '';
-    document.getElementById('cuenta_bancaria').value = guide.cuenta_bancaria || '';
-    document.getElementById('email').disabled = true;
-    document.getElementById('dni').disabled = true;
-    document.getElementById('guide-form').dataset.mode = 'edit';
-    document.getElementById('guide-form').dataset.guideId = guideId;
-    document.querySelector('#guide-form button[type="submit"]').textContent = 'Guardar Cambios';
-  } catch (error) {
-    console.error('Error loading guide:', error);
-    showToast('Error al cargar guía', 'error');
-  }
-};
-
-window.closeGuideModal = () => {
-  document.getElementById('guide-modal').classList.add('hidden');
-  document.getElementById('guide-form').reset();
-};
-
-document.getElementById('guide-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const submitBtn = e.target.querySelector('button[type="submit"]');
-  const originalText = submitBtn.textContent;
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Guardando...';
-
-  try {
-    const formData = {
-      nombre: document.getElementById('nombre').value.trim(),
-      email: document.getElementById('email').value.trim().toLowerCase(),
-      telefono: document.getElementById('telefono').value.trim(),
-      direccion: document.getElementById('direccion').value.trim(),
-      dni: document.getElementById('dni').value.trim().toUpperCase(),
-      cuenta_bancaria: document.getElementById('cuenta_bancaria').value.trim(),
-      estado: 'activo',
-      updatedAt: serverTimestamp()
-    };
-
-    const mode = e.target.dataset.mode;
-
-    if (mode === 'create') {
-      const existingQuery = query(collection(db, 'guides'), where('email', '==', formData.email));
-      const existingDocs = await getDocs(existingQuery);
-
-      if (!existingDocs.empty) {
-        const existingDoc = existingDocs.docs[0];
-        const existingGuide = existingDoc.data();
-
-        if (existingGuide.estado === 'activo') {
-          showToast('Error: Ya existe un guía con ese email (activo)', 'error');
-          submitBtn.disabled = false;
-          submitBtn.textContent = originalText;
-          return;
-        } else {
-          formData.reactivatedAt = serverTimestamp();
-          await updateDoc(doc(db, 'guides', existingDoc.id), formData);
-          showToast('Guía reactivado correctamente', 'success');
-          closeGuideModal();
-          submitBtn.disabled = false;
-          submitBtn.textContent = originalText;
-          return;
-        }
-      }
-
-      formData.createdAt = serverTimestamp();
-      await addDoc(collection(db, 'guides'), formData);
-      showToast('Guía creado correctamente', 'success');
-
-    } else if (mode === 'edit') {
-      const guideId = e.target.dataset.guideId;
-      await updateDoc(doc(db, 'guides', guideId), formData);
-      showToast('Guía actualizado correctamente', 'success');
-    }
-
-    closeGuideModal();
-
-  } catch (error) {
-    console.error('Error saving guide:', error);
-    showToast(error.message || 'Error al guardar guía', 'error');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = originalText;
-  }
-});
-
-window.deleteGuide = async (guideId) => {
-  if (!confirm('¿Eliminar este guía? Se marcará como inactivo.')) return;
-  try {
-    await updateDoc(doc(db, 'guides', guideId), {
-      estado: 'inactivo',
-      updatedAt: serverTimestamp()
-    });
-    showToast('Guía eliminado correctamente', 'success');
-  } catch (error) {
-    console.error('Error deleting guide:', error);
-    showToast('Error al eliminar guía', 'error');
-  }
-};
 
 function initCalendar() {
   const monthFilter = document.getElementById('month-filter');

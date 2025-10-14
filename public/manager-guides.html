@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Guías - Tours Calendar</title>
+  
+  <meta name="theme-color" content="#0ea5e9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  
+  <link rel="stylesheet" href="/css/styles.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    }
+  </script>
+  <script>
+    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    
+    function toggleDarkMode() {
+      document.documentElement.classList.toggle('dark');
+      localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    }
+  </script>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 transition-colors">
+  
+  <!-- HEADER -->
+  <header class="bg-gradient-to-r from-sky-500 to-cyan-600 dark:from-sky-700 dark:to-cyan-800 text-white p-4 shadow-lg">
+    <div class="container mx-auto flex justify-between items-center flex-wrap gap-2">
+      <div>
+        <h1 class="text-lg sm:text-2xl font-bold">Tours Calendar</h1>
+        <p class="text-xs opacity-90">Gestión de Guías</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="toggleDarkMode()" class="bg-white/20 hover:bg-white/30 backdrop-blur p-2 rounded-lg transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+          </svg>
+        </button>
+        <button id="logout-btn" class="bg-white/20 hover:bg-white/30 backdrop-blur px-3 py-1.5 rounded-lg text-sm font-medium transition">
+          Salir
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAVIGATION -->
+  <nav class="bg-white dark:bg-gray-800 shadow-md border-b border-gray-200 dark:border-gray-700">
+    <div class="container mx-auto px-4">
+      <div class="flex gap-1 overflow-x-auto">
+        <a href="/manager.html" class="px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-sky-600 dark:hover:text-sky-400 hover:border-b-2 hover:border-sky-600 transition whitespace-nowrap">
+          📅 Calendario
+        </a>
+        <a href="/manager-guides.html" class="px-4 py-3 text-sm font-medium text-sky-600 dark:text-sky-400 border-b-2 border-sky-600 dark:border-sky-400 whitespace-nowrap">
+          👤 Guías
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container mx-auto p-4">
+    
+    <!-- GUIDES SECTION -->
+    <section class="mb-6 sm:mb-8">
+      <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">Lista de Guías</h2>
+        <button onclick="showCreateGuideModal()" class="bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-800 text-white px-4 py-2 rounded-xl text-sm sm:text-base font-semibold shadow-lg transition">
+          + Crear Guía
+        </button>
+      </div>
+      
+      <div id="guides-list" class="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3"></div>
+    </section>
+
+  </main>
+
+  <!-- GUIDE MODAL -->
+  <div id="guide-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 max-w-md w-full shadow-2xl">
+      <h3 id="modal-title" class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800 dark:text-gray-200">Crear Guía</h3>
+      
+      <form id="guide-form" class="space-y-3 sm:space-y-4">
+        <div>
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Nombre *</label>
+          <input type="text" id="nombre" required class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400 transition">
+        </div>
+
+        <div>
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Email *</label>
+          <input type="email" id="email" required class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400 transition">
+        </div>
+
+        <div>
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Teléfono</label>
+          <input type="tel" id="telefono" class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400 transition">
+        </div>
+
+        <div>
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Dirección</label>
+          <input type="text" id="direccion" class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400 transition">
+        </div>
+
+        <div>
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">DNI *</label>
+          <input type="text" id="dni" required maxlength="9" class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400 transition" placeholder="12345678A">
+        </div>
+
+        <div>
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Cuenta Bancaria</label>
+          <input type="text" id="cuenta_bancaria" class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400 transition" placeholder="ES91...">
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="submit" class="bg-sky-600 hover:bg-sky-700 dark:bg-sky-700 dark:hover:bg-sky-800 text-white px-4 py-2 rounded-xl flex-1 text-sm font-semibold shadow-sm transition">
+            Crear Guía
+          </button>
+          <button type="button" onclick="closeGuideModal()" class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-xl text-sm font-semibold transition">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-xl shadow-lg max-w-xs sm:max-w-md z-50">
+    <p id="toast-message" class="text-xs sm:text-base"></p>
+  </div>
+
+  <script type="module" src="/js/manager-guides.js"></script>
+</body>
+</html>
