@@ -12,8 +12,8 @@ const firebaseConfig = {
 };
 
 export const appsScriptConfig = {
-  url: 'https://script.google.com/macros/s/AKfycbxjxRAXD9_6xOye9TdcmYMpWThfWGa5Kr7BXMHhxDv7IoAbtyepN0kge_AR4p3ujhcdzg/exec',
-  apiKey: 'tu-api-key-segura-123'
+  url: 'https://script.google.com/macros/s/AKfycby-Uvlqb29MTmVW5gJDuxtFPqlZXms5ir5QHHj5oRX4tf4F99gnxufi4Qluv49uNQYBdg/exec',
+  apiKey: 'sfs-calendar-2024-secure-key'  // ← Correcto
 };
 
 const app = initializeApp(firebaseConfig);
