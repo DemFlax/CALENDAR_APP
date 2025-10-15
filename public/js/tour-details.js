@@ -1,10 +1,15 @@
-import { auth } from './firebase-config.js';
+import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { collection, addDoc, serverTimestamp, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { getTourGuestDetails } from './calendar-api.js';
 
 let eventData = null;
 let guests = [];
 let currentUser = null;
+let userRole = null;
+let guideId = null;
+let vendorsList = [];
+let shiftId = null;
 
 async function init() {
   onAuthStateChanged(auth, async (user) => {
@@ -13,6 +18,11 @@ async function init() {
       return;
     }
     currentUser = user;
+    
+    const token = await user.getIdTokenResult();
+    userRole = token.claims.role;
+    guideId = token.claims.guideId;
+    
     await loadTourData();
   });
 }
@@ -23,6 +33,7 @@ async function loadTourData() {
   const title = params.get('title');
   const date = params.get('date');
   const time = params.get('time');
+  const slot = params.get('slot');
   
   console.log('EventID from URL:', eventId);
   console.log('Full URL:', window.location.href);
@@ -30,6 +41,10 @@ async function loadTourData() {
   if (!eventId) {
     showError('URL inválida', 'Falta el ID del evento', false);
     return;
+  }
+  
+  if (date && slot) {
+    shiftId = `${date}_${slot}`;
   }
   
   if (title) document.getElementById('tourTitle').textContent = decodeURIComponent(title);
@@ -64,6 +79,11 @@ async function loadTourDetails(eventId) {
     } else {
       renderGuests();
       hideLoading();
+      
+      // Render vendor costs form ONLY if user is guide
+      if (userRole === 'guide') {
+        await renderVendorCostsForm();
+      }
     }
     
   } catch (error) {
@@ -282,5 +302,302 @@ function showCopyFeedback() {
 }
 
 window.copyPhoneNumber = copyPhoneNumber;
+
+// ============================================
+// VENDOR COSTS FUNCTIONALITY (NEW CODE)
+// ============================================
+
+async function renderVendorCostsForm() {
+  const section = document.getElementById('vendorCostsSection');
+  section.classList.remove('hidden');
+  
+  // Load vendors list
+  await loadVendorsList();
+  
+  // Calculate total PAX
+  const totalPax = guests.reduce((sum, guest) => sum + (guest.pax || 0), 0);
+  document.getElementById('numPaxInput').value = totalPax;
+  
+  // Toggle expand/collapse
+  const header = document.getElementById('vendorCostsHeader');
+  const body = document.getElementById('vendorCostsBody');
+  const chevron = document.getElementById('vendorCostsChevron');
+  
+  header.addEventListener('click', () => {
+    const isHidden = body.classList.contains('hidden');
+    body.classList.toggle('hidden');
+    chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+  });
+  
+  // Add first vendor by default
+  addVendorRow();
+  
+  // Add vendor button
+  document.getElementById('addVendorBtn').addEventListener('click', () => {
+    const container = document.getElementById('vendorsContainer');
+    if (container.children.length < 5) {
+      addVendorRow();
+    } else {
+      showVendorToast('Máximo 5 vendors por tour', 'warning');
+    }
+  });
+  
+  // Form submit
+  document.getElementById('vendorCostsForm').addEventListener('submit', handleVendorCostsSubmit);
+}
+
+async function loadVendorsList() {
+  try {
+    const vendorsQuery = query(
+      collection(db, 'vendors'),
+      where('estado', '==', 'activo')
+    );
+    const snapshot = await getDocs(vendorsQuery);
+    
+    vendorsList = [];
+    snapshot.forEach(doc => {
+      vendorsList.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    // Sort by orden
+    vendorsList.sort((a, b) => (a.orden || 0) - (b.orden || 0));
+    
+  } catch (error) {
+    console.error('Error loading vendors:', error);
+    vendorsList = [];
+  }
+}
+
+function addVendorRow() {
+  const container = document.getElementById('vendorsContainer');
+  const index = container.children.length;
+  
+  const row = document.createElement('div');
+  row.className = 'border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3';
+  row.dataset.vendorIndex = index;
+  
+  row.innerHTML = `
+    <div class="flex items-center justify-between">
+      <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Vendor ${index + 1}</span>
+      ${index > 0 ? `
+        <button type="button" onclick="removeVendorRow(${index})" class="text-red-500 hover:text-red-700 text-sm font-medium">
+          Eliminar
+        </button>
+      ` : ''}
+    </div>
+    
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Vendor</label>
+      <select 
+        required
+        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm"
+        data-vendor-select="${index}"
+      >
+        <option value="">Seleccionar...</option>
+        ${vendorsList.map(v => `<option value="${v.id}">${v.nombre}</option>`).join('')}
+      </select>
+    </div>
+    
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Importe (€)</label>
+      <input 
+        type="number" 
+        step="0.01" 
+        min="0.01" 
+        max="999.99" 
+        required
+        placeholder="0.00"
+        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm"
+        data-vendor-amount="${index}"
+      />
+    </div>
+    
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Foto Ticket</label>
+      <input 
+        type="file" 
+        accept="image/*"
+        class="w-full text-sm text-gray-600 dark:text-gray-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 dark:file:bg-emerald-900 dark:file:text-emerald-300"
+        data-vendor-photo="${index}"
+        onchange="handlePhotoChange(${index})"
+      />
+      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Opcional. Si no aportas foto, justifica abajo.</p>
+    </div>
+    
+    <div id="justificationArea${index}" class="hidden">
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Justificación (sin foto)</label>
+      <textarea 
+        rows="2"
+        placeholder="Explica por qué no hay foto del ticket..."
+        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm"
+        data-vendor-justification="${index}"
+      ></textarea>
+    </div>
+  `;
+  
+  container.appendChild(row);
+}
+
+function removeVendorRow(index) {
+  const row = document.querySelector(`[data-vendor-index="${index}"]`);
+  if (row) {
+    row.remove();
+    // Renumber remaining rows
+    const container = document.getElementById('vendorsContainer');
+    Array.from(container.children).forEach((child, newIndex) => {
+      child.querySelector('span').textContent = `Vendor ${newIndex + 1}`;
+    });
+  }
+}
+
+function handlePhotoChange(index) {
+  const photoInput = document.querySelector(`[data-vendor-photo="${index}"]`);
+  const justificationArea = document.getElementById(`justificationArea${index}`);
+  
+  if (photoInput.files.length > 0) {
+    justificationArea.classList.add('hidden');
+    const textarea = justificationArea.querySelector('textarea');
+    textarea.removeAttribute('required');
+  } else {
+    justificationArea.classList.remove('hidden');
+    const textarea = justificationArea.querySelector('textarea');
+    textarea.setAttribute('required', 'required');
+  }
+}
+
+async function handleVendorCostsSubmit(e) {
+  e.preventDefault();
+  
+  if (!shiftId) {
+    showVendorToast('No se pudo identificar el shift. Falta información en URL.', 'error');
+    return;
+  }
+  
+  const submitBtn = e.target.querySelector('[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Guardando...';
+  
+  try {
+    const container = document.getElementById('vendorsContainer');
+    const vendorRows = Array.from(container.children);
+    
+    const vendorsData = [];
+    
+    for (let i = 0; i < vendorRows.length; i++) {
+      const vendorSelect = document.querySelector(`[data-vendor-select="${i}"]`);
+      const amountInput = document.querySelector(`[data-vendor-amount="${i}"]`);
+      const photoInput = document.querySelector(`[data-vendor-photo="${i}"]`);
+      const justificationInput = document.querySelector(`[data-vendor-justification="${i}"]`);
+      
+      if (!vendorSelect || !vendorSelect.value) continue;
+      
+      const vendor = vendorsList.find(v => v.id === vendorSelect.value);
+      if (!vendor) continue;
+      
+      const vendorItem = {
+        vendorId: vendor.id,
+        vendorName: vendor.nombre,
+        importe: parseFloat(amountInput.value),
+        ticketPhoto: null,
+        justification: null
+      };
+      
+      // Handle photo upload (convert to base64)
+      if (photoInput.files.length > 0) {
+        const file = photoInput.files[0];
+        const base64 = await fileToBase64(file);
+        vendorItem.ticketPhoto = base64;
+      } else if (justificationInput && justificationInput.value.trim()) {
+        vendorItem.justification = justificationInput.value.trim();
+      }
+      
+      vendorsData.push(vendorItem);
+    }
+    
+    if (vendorsData.length === 0) {
+      throw new Error('Debes añadir al menos un vendor');
+    }
+    
+    // Get guide name
+    const guideName = currentUser.displayName || currentUser.email;
+    
+    // Get fecha and slot from shiftId
+    const [fecha, slot] = shiftId.split('_');
+    
+    // Calculate total
+    const totalVendors = vendorsData.reduce((sum, v) => sum + v.importe, 0);
+    
+    // Prepare document
+    const vendorCostDoc = {
+      shiftId: shiftId,
+      guideId: guideId,
+      guideName: guideName,
+      fecha: fecha,
+      slot: slot,
+      tourDescription: eventData.summary,
+      numPax: parseInt(document.getElementById('numPaxInput').value),
+      vendors: vendorsData,
+      totalVendors: parseFloat(totalVendors.toFixed(2)),
+      salarioCalculado: 0, // TODO: Calculate from salary table
+      editedByManager: false,
+      editHistory: [],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    // Save to Firestore
+    await addDoc(collection(db, 'vendor_costs'), vendorCostDoc);
+    
+    showVendorToast('✓ Costes guardados correctamente', 'success');
+    
+    // Reset form
+    e.target.reset();
+    const vendorsContainer = document.getElementById('vendorsContainer');
+    vendorsContainer.innerHTML = '';
+    addVendorRow();
+    
+    // Collapse form
+    document.getElementById('vendorCostsBody').classList.add('hidden');
+    document.getElementById('vendorCostsChevron').style.transform = 'rotate(0deg)';
+    
+  } catch (error) {
+    console.error('Error saving vendor costs:', error);
+    showVendorToast('Error al guardar: ' + error.message, 'error');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Guardar Costes';
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function showVendorToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  const bgColor = type === 'success' ? 'bg-green-500' : 
+                  type === 'error' ? 'bg-red-500' : 
+                  type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500';
+  
+  toast.className = `fixed bottom-4 right-4 ${bgColor} text-white px-4 py-3 rounded-lg shadow-lg z-50 max-w-sm`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
+}
+
+// Make functions global for onclick handlers
+window.removeVendorRow = removeVendorRow;
+window.handlePhotoChange = handlePhotoChange;
 
 document.addEventListener('DOMContentLoaded', init);
