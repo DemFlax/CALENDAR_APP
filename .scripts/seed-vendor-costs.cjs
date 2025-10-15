@@ -59,4 +59,43 @@ async function seedVendors() {
     }
     
     await batch.commit();
-    console.log(`✅ ${INITIAL
+    console.log(`✅ ${INITIAL_VENDORS.length} vendors creados`);
+  } catch (error) {
+    console.error('❌ Error seeding vendors:', error);
+    throw error;
+  }
+}
+
+async function seedSalaryTable() {
+  try {
+    console.log('💰 Seeding salary table...');
+    const configRef = db.collection('config').doc('salary_table');
+    const existingDoc = await configRef.get();
+    
+    if (existingDoc.exists) {
+      console.log('⏭️  Salary table ya existe');
+      return;
+    }
+    
+    await configRef.set(SALARY_TABLE);
+    console.log('✅ Salary table creada');
+  } catch (error) {
+    console.error('❌ Error seeding salary table:', error);
+    throw error;
+  }
+}
+
+async function main() {
+  try {
+    console.log('🚀 Starting Vendor Costs seed...\n');
+    await seedVendors();
+    await seedSalaryTable();
+    console.log('\n✨ Seed completado exitosamente');
+  } catch (error) {
+    console.error('\n💥 Seed falló:', error);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+main();
