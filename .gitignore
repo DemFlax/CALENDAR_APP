@@ -28,3 +28,11 @@ Thumbs.db
 # Firebase Functions Environment Variables
 functions/.env
 functions/.env.*
+# Secrets
+*.key
+*.pem
+*service-account*.json
+serviceAccountKey.json  # ← AÑADIR ESTA LÍNEA
+.secrets/
+migrate-*.js
+migrate-*.cjs
