@@ -1,15 +1,31 @@
+import { auth } from './firebase-config.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { getTourGuestDetails } from './calendar-api.js';
 
 let eventData = null;
 let guests = [];
-let incompleteGuestsCount = 0;
+let currentUser = null;
 
 async function init() {
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      window.location.href = '/login.html';
+      return;
+    }
+    currentUser = user;
+    await loadTourData();
+  });
+}
+
+async function loadTourData() {
   const params = new URLSearchParams(window.location.search);
   const eventId = params.get('eventId');
   const title = params.get('title');
   const date = params.get('date');
   const time = params.get('time');
+  
+  console.log('EventID from URL:', eventId);
+  console.log('Full URL:', window.location.href);
   
   if (!eventId) {
     showError('URL inválida', 'Falta el ID del evento', false);
@@ -30,18 +46,18 @@ async function loadTourDetails(eventId) {
   showLoading();
   
   try {
+    console.log('Calling getTourGuestDetails with eventId:', eventId);
     eventData = await getTourGuestDetails(eventId);
+    console.log('Received eventData:', eventData);
+    
+    if (!eventData) {
+      throw new Error('No data received from API');
+    }
     
     document.getElementById('tourTitle').textContent = eventData.summary;
+    document.getElementById('tourTime').textContent = eventData.startTime;
     
-    const startDate = new Date(eventData.start.dateTime);
-    document.getElementById('tourDate').textContent = formatDate(startDate.toISOString().split('T')[0]);
-    document.getElementById('tourTime').textContent = startDate.toLocaleTimeString('es-ES', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-    
-    guests = parseDescription(eventData.description);
+    guests = eventData.guests || [];
     
     if (guests.length === 0) {
       showEmptyState();
@@ -56,94 +72,11 @@ async function loadTourDetails(eventId) {
   }
 }
 
-function parseDescription(description) {
-  if (!description || description.trim().length === 0) {
-    return [];
-  }
-  
-  const bloques = description.split(/[-]{4,}/);
-  const guests = [];
-  
-  for (const bloque of bloques) {
-    const lineas = bloque.split('\n')
-      .map(l => l.trim())
-      .filter(l => l.length > 0);
-    
-    if (lineas.length < 3) continue;
-    
-    const guest = {
-      nombre: null,
-      pax: null,
-      telefono: null,
-      notas: null,
-      valido: false,
-      errores: 0
-    };
-    
-    for (const linea of lineas) {
-      const matchPax = linea.match(/(\d+)\s+adults?/i);
-      if (matchPax) {
-        guest.pax = parseInt(matchPax[1], 10);
-        break;
-      }
-    }
-    
-    for (let i = 0; i < lineas.length; i++) {
-      const linea = lineas[i];
-      if (linea.match(/\w+,\s+\d{1,2}\s+\w+\s+\d{4}\s+\d{2}:\d{2}/)) {
-        if (i + 1 < lineas.length) {
-          guest.nombre = lineas[i + 1];
-        }
-        break;
-      }
-    }
-    
-    for (const linea of lineas) {
-      const matchTel = linea.match(/([A-Z]{2}\+[\d\s\(\)\-]+\d)/);
-      if (matchTel) {
-        guest.telefono = matchTel[1].trim();
-        break;
-      }
-    }
-    
-    for (const linea of lineas) {
-      if (linea.includes('Special Requirements/Notes:')) {
-        guest.notas = linea.replace('Special Requirements/Notes:', '').trim();
-        if (guest.notas.toLowerCase() === 'na' || guest.notas === '') {
-          guest.notas = null;
-        }
-        break;
-      }
-    }
-    
-    const camposRequeridos = [guest.nombre, guest.pax, guest.telefono];
-    guest.errores = camposRequeridos.filter(campo => campo === null).length;
-    
-    guest.valido = guest.nombre && (guest.pax !== null || guest.telefono !== null);
-    
-    if (guest.valido || guest.errores <= 1) {
-      guests.push(guest);
-    }
-  }
-  
-  return guests;
-}
-
 function renderGuests() {
   const container = document.getElementById('guestsContainer');
   container.innerHTML = '';
   
-  let validGuests = 0;
-  incompleteGuestsCount = 0;
-  
   guests.forEach(guest => {
-    if (guest.errores > 1) {
-      incompleteGuestsCount++;
-      return;
-    }
-    
-    validGuests++;
-    
     const card = document.createElement('div');
     card.className = 'bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-lg p-4 sm:p-5 border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow';
     
@@ -193,13 +126,7 @@ function renderGuests() {
     container.appendChild(card);
   });
   
-  document.getElementById('guestCount').textContent = validGuests;
-  
-  if (incompleteGuestsCount > 0) {
-    document.getElementById('incompleteCount').textContent = incompleteGuestsCount;
-    document.getElementById('incompleteGuestsWarning').classList.remove('hidden');
-    document.getElementById('viewInCalendarFromWarning').addEventListener('click', openInCalendar);
-  }
+  document.getElementById('guestCount').textContent = guests.length;
 }
 
 function handleError(error) {
@@ -216,7 +143,7 @@ function handleError(error) {
       errorMessage.textContent = 'Tu sesión ha expirado. Redirigiendo al login...';
       retryBtn.classList.add('hidden');
       calendarBtn.classList.add('hidden');
-      setTimeout(() => window.location.href = '/index.html', 3000);
+      setTimeout(() => window.location.href = '/login.html', 3000);
       break;
       
     case 'NOT_FOUND':
@@ -309,7 +236,7 @@ function formatDate(dateStr) {
 }
 
 function goBack() {
-  window.location.href = '/guide.html';
+  window.history.back();
 }
 
 function copyPhoneNumber(phone) {
@@ -317,10 +244,8 @@ function copyPhoneNumber(phone) {
   const button = event.target.closest('button');
   const icon = button.querySelector('svg');
   
-  // Guardar icono original
   const originalIcon = icon.innerHTML;
   
-  // Cambiar a icono check
   icon.innerHTML = `
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
       d="M5 13l4 4L19 7"/>
@@ -331,7 +256,6 @@ function copyPhoneNumber(phone) {
   navigator.clipboard.writeText(cleanPhone).then(() => {
     showCopyFeedback();
     
-    // Restaurar después de 1.5s
     setTimeout(() => {
       icon.innerHTML = originalIcon;
       icon.classList.remove('text-green-600', 'dark:text-green-400');

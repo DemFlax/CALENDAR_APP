@@ -1,5 +1,4 @@
 import { appsScriptConfig } from './firebase-config.js';
-
 const { url: APPS_SCRIPT_URL, apiKey: API_KEY } = appsScriptConfig;
 
 export async function validateTour(fecha, slot) {
@@ -56,52 +55,44 @@ export async function removeGuideFromCalendarEvent(eventId, guideEmail) {
   }
 }
 
-/**
- * Obtiene detalles completos de un tour desde Google Calendar
- * @param {string} eventId - ID del evento de Calendar
- * @param {Object} options - Opciones de configuración
- * @param {number} options.timeout - Timeout en ms (default: 10000)
- * @returns {Promise<Object>} Datos del evento
- * @throws {Error} Si falla la petición o timeout
- */
 export async function getTourGuestDetails(eventId, options = {}) {
   const timeout = options.timeout || 10000;
-  
+ 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+ 
   try {
     const url = `${APPS_SCRIPT_URL}?endpoint=getEventDetails&eventId=${eventId}&apiKey=${API_KEY}`;
-    
+   
     const response = await fetch(url, {
       signal: controller.signal
     });
-    
+   
     clearTimeout(timeoutId);
-    
+   
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    
+   
     const data = await response.json();
-    
+   
     if (data.error) {
       const error = new Error(data.message);
       error.code = data.code;
       throw error;
     }
-    
-    return data.event;
-    
+   
+    return data;
+   
   } catch (error) {
     clearTimeout(timeoutId);
-    
+   
     if (error.name === 'AbortError') {
       const timeoutError = new Error('Request timeout');
       timeoutError.code = 'TIMEOUT';
       throw timeoutError;
     }
-    
+   
     console.error('Error fetching tour details:', error);
     throw error;
   }
