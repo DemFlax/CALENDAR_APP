@@ -329,16 +329,24 @@ async function renderVendorCostsForm() {
     chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
   });
   
-  // Add first vendor by default
-  addVendorRow();
+  // Add 4 fixed vendors
+  const fixedVendors = ['El Escarpín', 'Casa Ciriaco', 'La Revolcona', 'El Abuelo'];
+  fixedVendors.forEach(vendorName => {
+    addVendorRow(vendorName, true);
+  });
   
-  // Add vendor button
+  // Add vendor button (5 additional vendors available)
   document.getElementById('addVendorBtn').addEventListener('click', () => {
     const container = document.getElementById('vendorsContainer');
-    if (container.children.length < 5) {
-      addVendorRow();
+    const additionalVendors = ['La Campana', 'Los Ferreros', 'El Anciano Rey de los Vinos', 'Cervecería Santa Ana', 'Chocolat Madrid'];
+    
+    // Count non-fixed vendors
+    const nonFixedCount = Array.from(container.children).filter(child => child.dataset.isFixed === 'false').length;
+    
+    if (nonFixedCount < additionalVendors.length) {
+      addVendorRowAdditional(additionalVendors);
     } else {
-      showVendorToast('Máximo 5 vendors por tour', 'warning');
+      showVendorToast('Todos los vendors adicionales ya están añadidos', 'warning');
     }
   });
   
@@ -371,64 +379,132 @@ async function loadVendorsList() {
   }
 }
 
-function addVendorRow() {
+function addVendorRow(preselectedName = null, isFixed = false) {
   const container = document.getElementById('vendorsContainer');
   const index = container.children.length;
   
+  // Find vendor by name if preselected
+  let selectedVendorId = '';
+  if (preselectedName) {
+    const vendor = vendorsList.find(v => v.nombre === preselectedName);
+    selectedVendorId = vendor ? vendor.id : '';
+  }
+  
   const row = document.createElement('div');
-  row.className = 'border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3';
+  row.className = 'border border-gray-300 dark:border-gray-600 rounded-lg p-4 space-y-3 bg-gray-50 dark:bg-gray-800';
   row.dataset.vendorIndex = index;
+  row.dataset.isFixed = isFixed;
   
   row.innerHTML = `
-    <div class="flex items-center justify-between">
-      <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Vendor ${index + 1}</span>
-      ${index > 0 ? `
-        <button type="button" onclick="removeVendorRow(${index})" class="text-red-500 hover:text-red-700 text-sm font-medium">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-base font-bold text-gray-900 dark:text-gray-100">${preselectedName || `Vendor Adicional`}</span>
+      ${!isFixed ? `
+        <button type="button" onclick="removeVendorRow(${index})" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-semibold">
           Eliminar
         </button>
       ` : ''}
     </div>
     
-    <div>
-      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Vendor</label>
-      <select 
-        required
-        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm"
-        data-vendor-select="${index}"
-      >
-        <option value="">Seleccionar...</option>
-        ${vendorsList.map(v => `<option value="${v.id}">${v.nombre}</option>`).join('')}
-      </select>
-    </div>
+    <input type="hidden" data-vendor-select="${index}" value="${selectedVendorId}">
     
     <div>
-      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Importe (€)</label>
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Importe (€)</label>
       <input 
         type="number" 
         step="0.01" 
-        min="0.01" 
-        max="999.99" 
-        required
+        min="0" 
+        max="999.99"
         placeholder="0.00"
-        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm"
+        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm font-medium"
         data-vendor-amount="${index}"
       />
     </div>
     
     <div>
-      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Foto Ticket</label>
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Foto Ticket</label>
       <input 
         type="file" 
-        accept="image/*"
-        class="w-full text-sm text-gray-600 dark:text-gray-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 dark:file:bg-emerald-900 dark:file:text-emerald-300"
+        accept="image/*,application/pdf"
+        class="w-full text-sm text-gray-800 dark:text-gray-200 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 dark:file:bg-emerald-700 dark:hover:file:bg-emerald-600"
         data-vendor-photo="${index}"
         onchange="handlePhotoChange(${index})"
       />
-      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Opcional. Si no aportas foto, justifica abajo.</p>
+      <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Opcional. Sin foto, justifica abajo.</p>
     </div>
     
     <div id="justificationArea${index}" class="hidden">
-      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Justificación (sin foto)</label>
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Justificación (sin foto)</label>
+      <textarea 
+        rows="2"
+        placeholder="Explica por qué no hay foto del ticket..."
+        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm"
+        data-vendor-justification="${index}"
+      ></textarea>
+    </div>
+  `;
+  
+  container.appendChild(row);
+}
+
+function addVendorRowAdditional(availableVendors) {
+  const container = document.getElementById('vendorsContainer');
+  const index = container.children.length;
+  
+  const row = document.createElement('div');
+  row.className = 'border border-gray-300 dark:border-gray-600 rounded-lg p-4 space-y-3 bg-gray-50 dark:bg-gray-800';
+  row.dataset.vendorIndex = index;
+  row.dataset.isFixed = 'false';
+  
+  row.innerHTML = `
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-base font-bold text-gray-900 dark:text-gray-100">Vendor Adicional</span>
+      <button type="button" onclick="removeVendorRow(${index})" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-semibold">
+        Eliminar
+      </button>
+    </div>
+    
+    <div>
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Seleccionar Vendor</label>
+      <select 
+        required
+        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm font-medium"
+        data-vendor-select="${index}"
+      >
+        <option value="">Elegir...</option>
+        ${availableVendors.map(name => {
+          const vendor = vendorsList.find(v => v.nombre === name);
+          return vendor ? `<option value="${vendor.id}">${vendor.nombre}</option>` : '';
+        }).join('')}
+      </select>
+    </div>
+    
+    <div>
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Importe (€)</label>
+      <input 
+        type="number" 
+        step="0.01" 
+        min="0" 
+        max="999.99"
+        placeholder="0.00"
+        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm font-medium"
+        data-vendor-amount="${index}"
+      />
+    </div>
+    
+    <div>
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Foto Ticket</label>
+      <input 
+        type="file" 
+        accept="image/*,application/pdf"
+        class="w-full text-sm text-gray-800 dark:text-gray-200 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 dark:file:bg-emerald-700 dark:hover:file:bg-emerald-600"
+        data-vendor-photo="${index}"
+        onchange="handlePhotoChange(${index})"
+      />
+      <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Opcional. Sin foto, justifica abajo.</p>
+    </div>
+    
+    <div id="justificationArea${index}" class="hidden">
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Justificación (sin foto)</label>
       <textarea 
         rows="2"
         placeholder="Explica por qué no hay foto del ticket..."
@@ -443,13 +519,8 @@ function addVendorRow() {
 
 function removeVendorRow(index) {
   const row = document.querySelector(`[data-vendor-index="${index}"]`);
-  if (row) {
+  if (row && row.dataset.isFixed === 'false') {
     row.remove();
-    // Renumber remaining rows
-    const container = document.getElementById('vendorsContainer');
-    Array.from(container.children).forEach((child, newIndex) => {
-      child.querySelector('span').textContent = `Vendor ${newIndex + 1}`;
-    });
   }
 }
 
@@ -472,7 +543,7 @@ async function handleVendorCostsSubmit(e) {
   e.preventDefault();
   
   if (!shiftId) {
-    showVendorToast('No se pudo identificar el shift. Falta información en URL.', 'error');
+    showVendorToast('No se pudo identificar el turno. Falta información en la URL.', 'error');
     return;
   }
   
@@ -487,20 +558,33 @@ async function handleVendorCostsSubmit(e) {
     const vendorsData = [];
     
     for (let i = 0; i < vendorRows.length; i++) {
-      const vendorSelect = document.querySelector(`[data-vendor-select="${i}"]`);
+      const vendorInput = document.querySelector(`[data-vendor-select="${i}"]`);
       const amountInput = document.querySelector(`[data-vendor-amount="${i}"]`);
       const photoInput = document.querySelector(`[data-vendor-photo="${i}"]`);
       const justificationInput = document.querySelector(`[data-vendor-justification="${i}"]`);
       
-      if (!vendorSelect || !vendorSelect.value) continue;
+      let vendorId = '';
       
-      const vendor = vendorsList.find(v => v.id === vendorSelect.value);
+      // Hidden input (fixed vendors) or select (additional vendors)
+      if (vendorInput.tagName === 'INPUT') {
+        vendorId = vendorInput.value;
+      } else if (vendorInput.tagName === 'SELECT') {
+        vendorId = vendorInput.value;
+      }
+      
+      if (!vendorId) continue;
+      
+      // Skip if no amount (optional vendor)
+      const amount = parseFloat(amountInput.value);
+      if (!amount || amount === 0) continue;
+      
+      const vendor = vendorsList.find(v => v.id === vendorId);
       if (!vendor) continue;
       
       const vendorItem = {
         vendorId: vendor.id,
         vendorName: vendor.nombre,
-        importe: parseFloat(amountInput.value),
+        importe: amount,
         ticketPhoto: null,
         justification: null
       };
@@ -518,7 +602,7 @@ async function handleVendorCostsSubmit(e) {
     }
     
     if (vendorsData.length === 0) {
-      throw new Error('Debes añadir al menos un vendor');
+      throw new Error('Debes registrar al menos un vendor con importe');
     }
     
     // Get guide name
@@ -529,6 +613,9 @@ async function handleVendorCostsSubmit(e) {
     
     // Calculate total
     const totalVendors = vendorsData.reduce((sum, v) => sum + v.importe, 0);
+    
+    // Get feedback
+    const feedback = document.getElementById('postTourFeedback').value.trim() || null;
     
     // Prepare document
     const vendorCostDoc = {
@@ -541,6 +628,7 @@ async function handleVendorCostsSubmit(e) {
       numPax: parseInt(document.getElementById('numPaxInput').value),
       vendors: vendorsData,
       totalVendors: parseFloat(totalVendors.toFixed(2)),
+      postTourFeedback: feedback,
       salarioCalculado: 0, // TODO: Calculate from salary table
       editedByManager: false,
       editHistory: [],
@@ -551,13 +639,18 @@ async function handleVendorCostsSubmit(e) {
     // Save to Firestore
     await addDoc(collection(db, 'vendor_costs'), vendorCostDoc);
     
-    showVendorToast('✓ Costes guardados correctamente', 'success');
+    showVendorToast('Costes guardados correctamente', 'success');
     
     // Reset form
     e.target.reset();
     const vendorsContainer = document.getElementById('vendorsContainer');
     vendorsContainer.innerHTML = '';
-    addVendorRow();
+    
+    // Re-add fixed vendors
+    const fixedVendors = ['El Escarpín', 'Casa Ciriaco', 'La Revolcona', 'El Abuelo'];
+    fixedVendors.forEach(vendorName => {
+      addVendorRow(vendorName, true);
+    });
     
     // Collapse form
     document.getElementById('vendorCostsBody').classList.add('hidden');
@@ -583,18 +676,64 @@ function fileToBase64(file) {
 
 function showVendorToast(message, type = 'info') {
   const toast = document.createElement('div');
-  const bgColor = type === 'success' ? 'bg-green-500' : 
-                  type === 'error' ? 'bg-red-500' : 
-                  type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500';
   
-  toast.className = `fixed bottom-4 right-4 ${bgColor} text-white px-4 py-3 rounded-lg shadow-lg z-50 max-w-sm`;
-  toast.textContent = message;
+  let bgColor, icon;
+  if (type === 'success') {
+    bgColor = 'bg-emerald-600 dark:bg-emerald-700';
+    icon = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+    </svg>`;
+  } else if (type === 'error') {
+    bgColor = 'bg-red-600 dark:bg-red-700';
+    icon = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+    </svg>`;
+  } else if (type === 'warning') {
+    bgColor = 'bg-yellow-600 dark:bg-yellow-700';
+    icon = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>`;
+  } else {
+    bgColor = 'bg-blue-600 dark:bg-blue-700';
+    icon = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>`;
+  }
+  
+  toast.className = `fixed bottom-6 right-6 ${bgColor} text-white px-5 py-4 rounded-xl shadow-2xl z-50 max-w-md flex items-center gap-3 transform transition-all duration-300 ease-out`;
+  toast.style.animation = 'slideIn 0.3s ease-out';
+  
+  toast.innerHTML = `
+    <div class="flex-shrink-0">
+      ${icon}
+    </div>
+    <p class="font-semibold text-sm sm:text-base">${message}</p>
+  `;
+  
   document.body.appendChild(toast);
   
   setTimeout(() => {
-    toast.remove();
-  }, 3000);
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100%)';
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
 }
+
+// Add CSS animation
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+`;
+document.head.appendChild(styleSheet);
 
 // Make functions global for onclick handlers
 window.removeVendorRow = removeVendorRow;

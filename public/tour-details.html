@@ -170,10 +170,10 @@
               />
             </div>
 
-            <!-- VENDORS LIST -->
+            <!-- VENDORS FIJOS -->
             <div>
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Vendors (4-5 registros)
+                Vendors (4 fijos + 1 opcional)
               </label>
               <div id="vendorsContainer" class="space-y-3"></div>
               <button 
@@ -184,8 +184,21 @@
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
-                Añadir vendor
+                Añadir vendor adicional
               </button>
+            </div>
+
+            <!-- POST-TOUR FEEDBACK -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Post-Tour Feedback
+              </label>
+              <textarea 
+                id="postTourFeedback"
+                rows="3"
+                placeholder="Comentarios sobre el tour, incidencias, observaciones..."
+                class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm"
+              ></textarea>
             </div>
 
             <!-- SUBMIT -->

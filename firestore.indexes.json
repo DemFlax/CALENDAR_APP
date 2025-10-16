@@ -50,20 +50,6 @@
       ]
     },
     {
-      "collectionGroup": "vendor_costs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "shiftId", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "vendor_costs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "editedByManager", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "guide_invoices",
       "queryScope": "COLLECTION",
       "fields": [
