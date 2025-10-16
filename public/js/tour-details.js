@@ -547,123 +547,27 @@ async function handleVendorCostsSubmit(e) {
     return;
   }
   
-  const submitBtn = e.target.querySelector('[type="submit"]');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Guardando...';
+  // 👇 AÑADIR AQUÍ (después de validar shiftId)
+  // Validar que han pasado 2.5 horas desde el tour
+  const params = new URLSearchParams(window.location.search);
+  const fecha = params.get('date');
+  const time = params.get('time');
   
-  try {
-    const container = document.getElementById('vendorsContainer');
-    const vendorRows = Array.from(container.children);
+  if (fecha && time) {
+    const [hours, minutes] = time.split(':');
+    const eventDateTime = new Date(`${fecha}T${hours}:${minutes}:00`);
+    const now = new Date();
+    const minTime = new Date(eventDateTime.getTime() + (2.5 * 60 * 60 * 1000));
     
-    const vendorsData = [];
-    
-    for (let i = 0; i < vendorRows.length; i++) {
-      const vendorInput = document.querySelector(`[data-vendor-select="${i}"]`);
-      const amountInput = document.querySelector(`[data-vendor-amount="${i}"]`);
-      const photoInput = document.querySelector(`[data-vendor-photo="${i}"]`);
-      const justificationInput = document.querySelector(`[data-vendor-justification="${i}"]`);
-      
-      let vendorId = '';
-      
-      // Hidden input (fixed vendors) or select (additional vendors)
-      if (vendorInput.tagName === 'INPUT') {
-        vendorId = vendorInput.value;
-      } else if (vendorInput.tagName === 'SELECT') {
-        vendorId = vendorInput.value;
-      }
-      
-      if (!vendorId) continue;
-      
-      // Skip if no amount (optional vendor)
-      const amount = parseFloat(amountInput.value);
-      if (!amount || amount === 0) continue;
-      
-      const vendor = vendorsList.find(v => v.id === vendorId);
-      if (!vendor) continue;
-      
-      const vendorItem = {
-        vendorId: vendor.id,
-        vendorName: vendor.nombre,
-        importe: amount,
-        ticketPhoto: null,
-        justification: null
-      };
-      
-      // Handle photo upload (convert to base64)
-      if (photoInput.files.length > 0) {
-        const file = photoInput.files[0];
-        const base64 = await fileToBase64(file);
-        vendorItem.ticketPhoto = base64;
-      } else if (justificationInput && justificationInput.value.trim()) {
-        vendorItem.justification = justificationInput.value.trim();
-      }
-      
-      vendorsData.push(vendorItem);
+    if (now < minTime) {
+      const hoursLeft = Math.ceil((minTime - now) / (1000 * 60 * 60));
+      showVendorToast(`Solo puedes registrar costes 2.5 horas después del tour. Quedan ${hoursLeft}h aproximadamente.`, 'error');
+      return;
     }
-    
-    if (vendorsData.length === 0) {
-      throw new Error('Debes registrar al menos un vendor con importe');
-    }
-    
-    // Get guide name
-    const guideName = currentUser.displayName || currentUser.email;
-    
-    // Get fecha and slot from shiftId
-    const [fecha, slot] = shiftId.split('_');
-    
-    // Calculate total
-    const totalVendors = vendorsData.reduce((sum, v) => sum + v.importe, 0);
-    
-    // Get feedback
-    const feedback = document.getElementById('postTourFeedback').value.trim() || null;
-    
-    // Prepare document
-    const vendorCostDoc = {
-      shiftId: shiftId,
-      guideId: guideId,
-      guideName: guideName,
-      fecha: fecha,
-      slot: slot,
-      tourDescription: eventData.summary,
-      numPax: parseInt(document.getElementById('numPaxInput').value),
-      vendors: vendorsData,
-      totalVendors: parseFloat(totalVendors.toFixed(2)),
-      postTourFeedback: feedback,
-      salarioCalculado: 0, // TODO: Calculate from salary table
-      editedByManager: false,
-      editHistory: [],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-    
-    // Save to Firestore
-    await addDoc(collection(db, 'vendor_costs'), vendorCostDoc);
-    
-    showVendorToast('Costes guardados correctamente', 'success');
-    
-    // Reset form
-    e.target.reset();
-    const vendorsContainer = document.getElementById('vendorsContainer');
-    vendorsContainer.innerHTML = '';
-    
-    // Re-add fixed vendors
-    const fixedVendors = ['El Escarpín', 'Casa Ciriaco', 'La Revolcona', 'El Abuelo'];
-    fixedVendors.forEach(vendorName => {
-      addVendorRow(vendorName, true);
-    });
-    
-    // Collapse form
-    document.getElementById('vendorCostsBody').classList.add('hidden');
-    document.getElementById('vendorCostsChevron').style.transform = 'rotate(0deg)';
-    
-  } catch (error) {
-    console.error('Error saving vendor costs:', error);
-    showVendorToast('Error al guardar: ' + error.message, 'error');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Guardar Costes';
   }
-}
+  
+  const submitBtn = e.target.querySelector('[type="submit"]');
+  // ... resto del código
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
