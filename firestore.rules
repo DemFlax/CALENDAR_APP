@@ -50,7 +50,7 @@ service cloud.firestore {
     // ========================================
     
     match /vendors/{vendorId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update: if isManager();
       allow delete: if false;
     }

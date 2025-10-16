@@ -16,60 +16,66 @@
   <link rel="stylesheet" href="/css/styles.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = {
-      darkMode: 'class',
-    }
-  </script>
-  <script>
-    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    
-    function toggleDarkMode() {
-      document.documentElement.classList.toggle('dark');
-      localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-    }
+    tailwind.config = { darkMode: 'class' }
   </script>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 transition-colors">
+<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
   
-  <!-- HEADER -->
-  <header class="bg-gradient-to-r from-sky-500 to-cyan-600 dark:from-sky-700 dark:to-cyan-800 text-white p-4 shadow-lg">
-    <div class="container mx-auto flex justify-between items-center flex-wrap gap-2">
-      <div>
-        <h1 class="text-lg sm:text-2xl font-bold">Tours Calendar</h1>
-        <p class="text-xs opacity-90">Manager Dashboard</p>
+  <!-- NAV -->
+  <nav class="bg-gradient-to-r from-sky-600 to-blue-600 dark:from-gray-800 dark:to-gray-900 text-white shadow-xl">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 class="text-2xl font-bold">Tours Calendar</h1>
+          <p class="text-sky-100 dark:text-gray-400 text-sm">Manager Dashboard</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button id="theme-toggle" class="p-2.5 bg-sky-700/50 hover:bg-sky-800/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 rounded-lg transition-colors">
+            <svg id="theme-icon-moon" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+            </svg>
+            <svg id="theme-icon-sun" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+            </svg>
+          </button>
+          <button id="logout-btn" class="px-4 py-2.5 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">Salir</button>
+        </div>
       </div>
-      <div class="flex gap-2">
-        <button onclick="toggleDarkMode()" class="bg-white/20 hover:bg-white/30 backdrop-blur p-2 rounded-lg transition">
+      
+      <!-- TABS -->
+      <div class="mt-6 flex flex-wrap gap-2">
+        <a href="/manager.html" class="flex items-center gap-2 px-4 py-2.5 bg-white/20 rounded-lg font-semibold">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
           </svg>
-        </button>
-        <button id="logout-btn" class="bg-white/20 hover:bg-white/30 backdrop-blur px-3 py-1.5 rounded-lg text-sm font-medium transition">
-          Salir
-        </button>
+          <span class="font-medium">Calendario</span>
+        </a>
+        
+        <a href="/manager-assignments.html" class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+          </svg>
+          <span class="font-medium">Asignaciones</span>
+        </a>
+        
+        <a href="/manager-guides.html" class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+          </svg>
+          <span class="font-medium">Guías</span>
+        </a>
+        
+        <a href="/manager-vendors.html" class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+          </svg>
+          <span class="font-medium">Vendors</span>
+        </a>
       </div>
     </div>
-  </header>
-
-  <!-- NAVIGATION -->
-  <nav class="bg-white dark:bg-gray-800 shadow-md border-b...">
-  <div class="container mx-auto px-4">
-    <div class="flex gap-1 overflow-x-auto">
-      <a href="/manager.html" ...>📅 Calendario</a>
-      <a href="/manager-assignments.html" ...>📋 Asignaciones</a>
-      <a href="/manager-guides.html" ...>👤 Guías</a>
-      <!-- AÑADIR AQUÍ: -->
-      <a href="/manager-vendors.html" class="px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-sky-600 whitespace-nowrap">🏪 Vendors</a>
-    </div>
-  </div>
-</nav>
+  </nav>
 
   <main class="container mx-auto p-4">
-
     <section class="mt-4 sm:mt-6">
       <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800 dark:text-gray-200">Calendario de Turnos</h2>
       
@@ -83,7 +89,25 @@
               </svg>
               Mes
             </label>
-            <input type="month" id="month-filter" class="w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-700 dark:text-white dark:border-gray-600 [color-scheme:dark]">
+            <div class="grid grid-cols-2 gap-2">
+              <select id="month-select" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-700 dark:text-white">
+                <option value="01">Enero</option>
+                <option value="02">Febrero</option>
+                <option value="03">Marzo</option>
+                <option value="04">Abril</option>
+                <option value="05">Mayo</option>
+                <option value="06">Junio</option>
+                <option value="07">Julio</option>
+                <option value="08">Agosto</option>
+                <option value="09">Septiembre</option>
+                <option value="10">Octubre</option>
+                <option value="11">Noviembre</option>
+                <option value="12">Diciembre</option>
+              </select>
+              <select id="year-select" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-700 dark:text-white">
+                <!-- Populated by JS -->
+              </select>
+            </div>
           </div>
           
           <div>
@@ -133,6 +157,10 @@
           .then(reg => console.log('SW registered'))
           .catch(err => console.error('SW registration failed', err));
       });
+    }
+    
+    if (localStorage.getItem('darkMode') === 'true') {
+      document.documentElement.classList.add('dark');
     }
   </script>
 

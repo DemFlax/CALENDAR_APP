@@ -13,10 +13,22 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
+// Auto dark mode detection
+if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  document.documentElement.classList.add('dark');
+}
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  if (e.matches) {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+});
+
 let currentUser = null;
 let guidesUnsubscribe = null;
 
-// AUTH CHECK
 onAuthStateChanged(auth, (user) => {
   if (user) {
     currentUser = user;
@@ -26,7 +38,6 @@ onAuthStateChanged(auth, (user) => {
   }
 });
 
-// LOAD GUIDES
 function loadGuides() {
   const guidesQuery = query(collection(db, 'guides'), where('estado', '==', 'activo'));
   if (guidesUnsubscribe) guidesUnsubscribe();
@@ -47,6 +58,7 @@ function loadGuides() {
           </button>
         </div>
       `;
+      updateGuidesCount();
       return;
     }
     
@@ -54,10 +66,11 @@ function loadGuides() {
       const guide = docSnap.data();
       guidesList.appendChild(createGuideCard(docSnap.id, guide));
     });
+    
+    updateGuidesCount();
   });
 }
 
-// CREATE GUIDE CARD
 function createGuideCard(id, guide) {
   const card = document.createElement('div');
   card.className = 'guide-card bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-2xl shadow-lg hover:shadow-xl transition border border-gray-200 dark:border-gray-700';
@@ -85,28 +98,39 @@ function createGuideCard(id, guide) {
   return card;
 }
 
-// SHOW CREATE MODAL
 window.showCreateGuideModal = () => {
-  document.getElementById('guide-modal').classList.remove('hidden');
+  const modal = document.getElementById('guide-modal');
+  const form = document.getElementById('guide-form');
+  
+  modal.classList.remove('hidden');
+  form.reset();
+  
   document.getElementById('modal-title').textContent = 'Crear Guía';
-  document.getElementById('guide-form').reset();
-  document.getElementById('guide-form').dataset.mode = 'create';
-  delete document.getElementById('guide-form').dataset.guideId;
   document.getElementById('email').disabled = false;
   document.getElementById('dni').disabled = false;
-  document.querySelector('#guide-form button[type="submit"]').textContent = 'Crear Guía';
+  form.dataset.mode = 'create';
+  delete form.dataset.guideId;
+  
+  const submitBtn = form.querySelector('button[type="submit"]');
+  submitBtn.textContent = 'Crear Guía';
 };
 
-// EDIT GUIDE
 window.editGuide = async (guideId) => {
+  const modal = document.getElementById('guide-modal');
+  modal.classList.remove('hidden');
+  
+  await new Promise(resolve => setTimeout(resolve, 0));
+  
   try {
     const guideDoc = await getDoc(doc(db, 'guides', guideId));
     if (!guideDoc.exists()) {
       showToast('Guía no encontrado', 'error');
       return;
     }
+    
     const guide = guideDoc.data();
-    document.getElementById('guide-modal').classList.remove('hidden');
+    const form = document.getElementById('guide-form');
+    
     document.getElementById('modal-title').textContent = 'Editar Guía';
     document.getElementById('nombre').value = guide.nombre || '';
     document.getElementById('email').value = guide.email || '';
@@ -114,24 +138,26 @@ window.editGuide = async (guideId) => {
     document.getElementById('direccion').value = guide.direccion || '';
     document.getElementById('dni').value = guide.dni || '';
     document.getElementById('cuenta_bancaria').value = guide.cuenta_bancaria || '';
+    
     document.getElementById('email').disabled = true;
     document.getElementById('dni').disabled = true;
-    document.getElementById('guide-form').dataset.mode = 'edit';
-    document.getElementById('guide-form').dataset.guideId = guideId;
-    document.querySelector('#guide-form button[type="submit"]').textContent = 'Guardar Cambios';
+    
+    form.dataset.mode = 'edit';
+    form.dataset.guideId = guideId;
+    
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.textContent = 'Guardar Cambios';
   } catch (error) {
     console.error('Error loading guide:', error);
     showToast('Error al cargar guía', 'error');
   }
 };
 
-// CLOSE MODAL
 window.closeGuideModal = () => {
   document.getElementById('guide-modal').classList.add('hidden');
   document.getElementById('guide-form').reset();
 };
 
-// FORM SUBMIT
 document.getElementById('guide-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -170,7 +196,7 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
           formData.reactivatedAt = serverTimestamp();
           await updateDoc(doc(db, 'guides', existingDoc.id), formData);
           showToast('Guía reactivado correctamente', 'success');
-          closeGuideModal();
+          window.closeGuideModal();
           submitBtn.disabled = false;
           submitBtn.textContent = originalText;
           return;
@@ -187,7 +213,7 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
       showToast('Guía actualizado correctamente', 'success');
     }
 
-    closeGuideModal();
+    window.closeGuideModal();
 
   } catch (error) {
     console.error('Error saving guide:', error);
@@ -198,7 +224,6 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
   }
 });
 
-// DELETE GUIDE
 window.deleteGuide = async (guideId) => {
   if (!confirm('¿Eliminar este guía? Se marcará como inactivo.')) return;
   try {
@@ -213,7 +238,6 @@ window.deleteGuide = async (guideId) => {
   }
 };
 
-// SHOW TOAST
 function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
   const toastMessage = document.getElementById('toast-message');
@@ -227,7 +251,6 @@ function showToast(message, type = 'info') {
   setTimeout(() => toast.classList.add('hidden'), 3000);
 }
 
-// LOGOUT
 document.getElementById('logout-btn').addEventListener('click', async () => {
   try {
     await signOut(auth);
@@ -236,3 +259,9 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
     console.error('Error signing out:', error);
   }
 });
+
+function updateGuidesCount() {
+  const count = document.getElementById('guides-list').children.length;
+  const countEl = document.getElementById('guides-count');
+  if (countEl) countEl.textContent = count;
+}

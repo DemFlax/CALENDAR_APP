@@ -13,6 +13,19 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
+// Auto dark mode detection
+if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  document.documentElement.classList.add('dark');
+}
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  if (e.matches) {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+});
+
 let currentUser = null;
 let guidesUnsubscribe = null;
 let shiftsUnsubscribes = [];
@@ -27,13 +40,12 @@ onAuthStateChanged(auth, (user) => {
   if (user) {
     currentUser = user;
     loadGuides();
-    initCalendar();
+    initFilters();
   } else {
     window.location.href = '/login.html';
   }
 });
 
-// SIMPLIFIED: Only loads guides for filter dropdown
 function loadGuides() {
   const guidesQuery = query(collection(db, 'guides'), where('estado', '==', 'activo'));
   if (guidesUnsubscribe) guidesUnsubscribe();
@@ -56,32 +68,47 @@ function updateGuideFilter() {
   });
 }
 
-function initCalendar() {
-  const monthFilter = document.getElementById('month-filter');
+function initFilters() {
+  const monthSelect = document.getElementById('month-select');
+  const yearSelect = document.getElementById('year-select');
   const estadoFilter = document.getElementById('estado-filter');
   const guideFilter = document.getElementById('guide-filter');
+  
+  const currentYear = new Date().getFullYear();
+  for (let y = currentYear - 1; y <= currentYear + 1; y++) {
+    yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+  }
+  
   const today = new Date();
-  monthFilter.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  monthFilter.addEventListener('change', () => {
+  monthSelect.value = String(today.getMonth() + 1).padStart(2, '0');
+  yearSelect.value = currentYear;
+  
+  monthSelect.addEventListener('change', () => {
+    openDate = null;
+    loadCalendar();
+  });
+  yearSelect.addEventListener('change', () => {
     openDate = null;
     loadCalendar();
   });
   estadoFilter.addEventListener('change', loadCalendar);
   if (guideFilter) guideFilter.addEventListener('change', loadCalendar);
+  
   loadCalendar();
 }
 
 async function loadCalendar() {
-  const monthInput = document.getElementById('month-filter');
+  const monthSelect = document.getElementById('month-select');
+  const yearSelect = document.getElementById('year-select');
   const estadoFilter = document.getElementById('estado-filter').value;
   const guideFilter = document.getElementById('guide-filter');
   const selectedGuideId = guideFilter ? guideFilter.value : '';
 
-  if (!monthInput.value) {
-    const today = new Date();
-    monthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  }
-  const [year, month] = monthInput.value.split('-');
+  const month = monthSelect.value;
+  const year = yearSelect.value;
+  
+  if (!month || !year) return;
+
   const startDate = `${year}-${month}-01`;
   const endDate = `${year}-${month}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
 

@@ -1,0 +1,148 @@
+[1mdiff --git a/public/manager-vendors.html b/public/manager-vendors.html[m
+[1mindex 155668d..454464d 100644[m
+[1m--- a/public/manager-vendors.html[m
+[1m+++ b/public/manager-vendors.html[m
+[36m@@ -1,240 +1,95 @@[m
+[31m-import { auth, db } from './firebase-config.js';[m
+[31m-import {[m
+[31m-  collection,[m
+[31m-  addDoc,[m
+[31m-  updateDoc,[m
+[31m-  doc,[m
+[31m-  getDocs,[m
+[31m-  query,[m
+[31m-  where,[m
+[31m-  onSnapshot,[m
+[31m-  serverTimestamp,[m
+[31m-  writeBatch[m
+[31m-} from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';[m
+[31m-import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';[m
+[31m-[m
+[31m-let currentUser = null;[m
+[31m-let vendorsUnsubscribe = null;[m
+[31m-let editingVendorId = null;[m
+[31m-let draggedVendor = null;[m
+[31m-[m
+[31m-onAuthStateChanged(auth, (user) => {[m
+[31m-  if (user) {[m
+[31m-    currentUser = user;[m
+[31m-    loadVendors();[m
+[31m-  } else {[m
+[31m-    window.location.href = '/login.html';[m
+[31m-  }[m
+[31m-});[m
+[31m-[m
+[31m-document.getElementById('logout-btn').addEventListener('click', async () => {[m
+[31m-  await signOut(auth);[m
+[31m-});[m
+[31m-[m
+[31m-function loadVendors() {[m
+[31m-  const vendorsQuery = query(collection(db, 'vendors'), where('estado', '==', 'activo'));[m
+[31m-  if (vendorsUnsubscribe) vendorsUnsubscribe();[m
+[31m-  [m
+[31m-  vendorsUnsubscribe = onSnapshot(vendorsQuery, (snapshot) => {[m
+[31m-    const vendorsList = document.getElementById('vendors-list');[m
+[31m-    vendorsList.innerHTML = '';[m
+[31m-    [m
+[31m-    if (snapshot.empty) {[m
+[31m-      vendorsList.innerHTML = '<div class="col-span-full text-center py-12"><p class="text-gray-500 dark:text-gray-400">No hay vendors registrados</p><button onclick="showCreateVendorModal()" class="mt-4 bg-emerald-600 text-white px-4 py-2 rounded-lg">Crear primer vendor</button></div>';[m
+[31m-      return;[m
+[32m+[m[32m<!DOCTYPE html>[m[41m[m
+[32m+[m[32m<html lang="es">[m[41m[m
+[32m+[m[32m<head>[m[41m[m
+[32m+[m[32m  <meta charset="UTF-8">[m[41m[m
+[32m+[m[32m  <meta name="viewport" content="width=device-width, initial-scale=1.0">[m[41m[m
+[32m+[m[32m  <title>Gestión de Vendors - Tours Calendar</title>[m[41m[m
+[32m+[m[32m  <meta name="theme-color" content="#0ea5e9">[m[41m[m
+[32m+[m[32m  <link rel="stylesheet" href="/css/styles.css">[m[41m[m
+[32m+[m[32m  <script src="https://cdn.tailwindcss.com"></script>[m[41m[m
+[32m+[m[32m  <script>[m[41m[m
+[32m+[m[32m    tailwind.config = { darkMode: 'class' }[m[41m[m
+[32m+[m[32m    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {[m[41m[m
+[32m+[m[32m      document.documentElement.classList.add('dark');[m[41m[m
+     }[m
+[31m-    [m
+[31m-    const vendors = snapshot.docs[m
+[31m-      .map(doc => ({ id: doc.id, ...doc.data() }))[m
+[31m-      .sort((a, b) => a.orden - b.orden);[m
+[31m-    [m
+[31m-    vendors.forEach(vendor => {[m
+[31m-      vendorsList.appendChild(createVendorCard(vendor));[m
+[31m-    });[m
+[31m-  });[m
+[31m-}[m
+[31m-[m
+[31m-function createVendorCard(vendor) {[m
+[31m-  const card = document.createElement('div');[m
+[31m-  card.className = 'bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-lg hover:shadow-xl transition border border-gray-200 dark:border-gray-700';[m
+[31m-  card.draggable = true;[m
+[31m-  card.dataset.vendorId = vendor.id;[m
+[31m-  [m
+[31m-  card.addEventListener('dragstart', handleDragStart);[m
+[31m-  card.addEventListener('dragover', handleDragOver);[m
+[31m-  card.addEventListener('drop', handleDrop);[m
+[31m-  card.addEventListener('dragend', handleDragEnd);[m
+[32m+[m[32m    function toggleDarkMode() {[m[41m[m
+[32m+[m[32m      document.documentElement.classList.toggle('dark');[m[41m[m
+[32m+[m[32m      localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';[m[41m[m
+[32m+[m[32m    }[m[41m[m
+[32m+[m[32m  </script>[m[41m[m
+[32m+[m[32m</head>[m[41m[m
+[32m+[m[32m<body class="bg-gray-50 dark:bg-gray-900">[m[41m[m
+   [m
+[31m-  card.innerHTML = `[m
+[31m-    <div class="flex justify-between items-start gap-3">[m
+[31m-      <div class="flex items-center gap-2 flex-1 min-w-0">[m
+[31m-        <svg class="w-5 h-5 text-gray-400 cursor-move flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">[m
+[31m-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>[m
+[31m-        </svg>[m
+[31m-        <h3 class="font-bold text-lg truncate text-gray-900 dark:text-white">${vendor.nombre}</h3>[m
+[32m+[m[32m  <header class="bg-gradient-to-r from-sky-500 to-cyan-600 dark:from-sky-700 dark:to-cyan-800 text-white p-4 shadow-lg">[m[41m[m
+[32m+[m[32m    <div class="container mx-auto flex justify-between items-center">[m[41m[m
+[32m+[m[32m      <div>[m[41m[m
+[32m+[m[32m        <h1 class="text-2xl font-bold">Tours Calendar</h1>[m[41m[m
+[32m+[m[32m        <p class="text-xs opacity-90">Gestión de Vendors</p>[m[41m[m
+       </div>[m
+[31m-      <div class="flex gap-1 flex-shrink-0">[m
+[31m-        <button onclick="editVendor('${vendor.id}')" class="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400" title="Editar">[m
+[31m-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">[m
+[31m-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>[m
+[31m-          </svg>[m
+[31m-        </button>[m
+[31m-        <button onclick="deactivateVendor('${vendor.id}', '${vendor.nombre}')" class="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-red-600 dark:text-red-400" title="Desactivar">[m
+[31m-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">[m
+[31m-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>[m
+[32m+[m[32m      <div class="flex gap-2">[m[41m[m
+[32m+[m[32m        <button onclick="toggleDarkMode()" class="bg-white/20 hover:bg-white/30 p-2 rounded-lg">[m[41m[m
+[32m+[m[32m          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">[m[41m[m
+[32m+[m[32m            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>[m[41m[m
+           </svg>[m
+         </button>[m
+[32m+[m[32m        <button id="logout-btn" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-sm">Salir</button>[m[41m[m
+       </div>[m
+     </div>[m
+[31m-    <div class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-400">[m
+[31m-      ${vendor.cif ? `<p>🆔 ${vendor.cif}</p>` : ''}[m
+[31m-      ${vendor.direccion ? `<p>📍 ${vendor.direccion}</p>` : ''}[m
+[31m-      ${vendor.email ? `<p>📧 ${vendor.email}</p>` : ''}[m
+[31m-      <p class="text-xs text-gray-500 dark:text-gray-500 mt-2">Orden: ${vendor.orden}</p>[m
+[31m-    </div>[m
+[31m-  `;[m
+[31m-  [m
+[31m-  return card;[m
+[31m-}[m
+[31m-[m
+[31m-// DRAG & DROP[m
+[31m-function handleDragStart(e) {[m
+[31m-  draggedVendor = this.dataset.vendorId;[m
+[31m-  this.style.opacity = '0.4';[m
+[31m-}[m
+[31m-[m
+[31m-function handleDragOver(e) {[m
+[31m-  if (e.preventDefault) e.preventDefault();[m
+[31m-  e.dataTransfer.dropEffect = 'move';[m
+[31m-  return false;[m
+[31m-}[m
+[31m-[m
+[31m-function handleDrop(e) {[m
+[31m-  if (e.stopPropag

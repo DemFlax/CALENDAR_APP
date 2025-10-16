@@ -12,9 +12,23 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
+// Auto dark mode detection
+if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  document.documentElement.classList.add('dark');
+}
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  if (e.matches) {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+});
+
 // i18n
 const i18n = {
   es: {
+    // ... resto del código i18n sin cambios
     pageTitle: 'Calendario Tours - Guía',
     upcomingAssignments: 'Mis Próximas Asignaciones',
     calendarTitle: 'Calendario de Turnos',

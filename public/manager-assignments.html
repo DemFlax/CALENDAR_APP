@@ -4,65 +4,59 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Asignaciones - Tours Calendar</title>
-  
   <meta name="theme-color" content="#0ea5e9">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  
   <link rel="stylesheet" href="/css/styles.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = {
-      darkMode: 'class',
-    }
-  </script>
-  <script>
-    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    
-    function toggleDarkMode() {
-      document.documentElement.classList.toggle('dark');
-      localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-    }
+    tailwind.config = { darkMode: 'class' }
   </script>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 transition-colors">
+<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
   
-  <!-- HEADER -->
-  <header class="bg-gradient-to-r from-sky-500 to-cyan-600 dark:from-sky-700 dark:to-cyan-800 text-white p-4 shadow-lg">
-    <div class="container mx-auto flex justify-between items-center flex-wrap gap-2">
-      <div>
-        <h1 class="text-lg sm:text-2xl font-bold">Tours Calendar</h1>
-        <p class="text-xs opacity-90">Asignaciones de Tours</p>
-      </div>
-      <div class="flex gap-2">
-        <button onclick="toggleDarkMode()" class="bg-white/20 hover:bg-white/30 backdrop-blur p-2 rounded-lg transition">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
-          </svg>
-        </button>
-        <button id="logout-btn" class="bg-white/20 hover:bg-white/30 backdrop-blur px-3 py-1.5 rounded-lg text-sm font-medium transition">
-          Salir
-        </button>
-      </div>
-    </div>
-  </header>
+  <!-- NAV -->
+  <nav class="bg-gradient-to-r from-sky-600 to-blue-600 dark:from-gray-800 dark:to-gray-900 text-white shadow-xl">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 class="text-2xl font-bold">Tours Calendar</h1>
+          <p class="text-sky-100 dark:text-gray-400 text-sm">Manager Dashboard</p>
+        </div>
+        <div class="flex items-center gap-3">
 
-  <!-- NAVIGATION -->
-  <nav class="bg-white dark:bg-gray-800 shadow-md border-b border-gray-200 dark:border-gray-700">
-    <div class="container mx-auto px-4">
-      <div class="flex gap-1 overflow-x-auto">
-        <a href="/manager.html" class="px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-sky-600 dark:hover:text-sky-400 hover:border-b-2 hover:border-sky-600 transition whitespace-nowrap">
-          📅 Calendario
+          <button id="logout-btn" class="px-4 py-2.5 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">Salir</button>
+        </div>
+      </div>
+      
+      <!-- TABS -->
+      <div class="mt-6 flex flex-wrap gap-2">
+        <a href="/manager.html" class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
+          <span class="font-medium">Calendario</span>
         </a>
-        <a href="/manager-assignments.html" class="px-4 py-3 text-sm font-medium text-sky-600 dark:text-sky-400 border-b-2 border-sky-600 dark:border-sky-400 whitespace-nowrap">
-          📋 Asignaciones
+        
+        <a href="/manager-assignments.html" class="flex items-center gap-2 px-4 py-2.5 bg-white/20 rounded-lg font-semibold">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+          </svg>
+          <span class="font-medium">Asignaciones</span>
         </a>
-        <a href="/manager-guides.html" class="px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-sky-600 dark:hover:text-sky-400 hover:border-b-2 hover:border-sky-600 transition whitespace-nowrap">
-          👤 Guías
+        
+        <a href="/manager-guides.html" class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+          </svg>
+          <span class="font-medium">Guías</span>
+        </a>
+        
+        <a href="/manager-vendors.html" class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+          </svg>
+          <span class="font-medium">Vendors</span>
         </a>
       </div>
     </div>
@@ -75,15 +69,30 @@
       <h2 class="text-lg sm:text-xl font-bold text-gray-800 dark:text-gray-200 mb-4">Filtros</h2>
       
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-            </svg>
-            Mes
-          </label>
-          <input type="month" id="month-filter" class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400 transition">
-        </div>
+        <div class="grid grid-cols-2 gap-3">
+  <div>
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Mes</label>
+    <select id="month-select" class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500">
+      <option value="01">Enero</option>
+      <option value="02">Febrero</option>
+      <option value="03">Marzo</option>
+      <option value="04">Abril</option>
+      <option value="05">Mayo</option>
+      <option value="06">Junio</option>
+      <option value="07">Julio</option>
+      <option value="08">Agosto</option>
+      <option value="09">Septiembre</option>
+      <option value="10">Octubre</option>
+      <option value="11">Noviembre</option>
+      <option value="12">Diciembre</option>
+    </select>
+  </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Año</label>
+    <select id="year-select" class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500">
+    </select>
+  </div>
+</div>
         
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
