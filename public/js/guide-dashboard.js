@@ -28,8 +28,7 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)
 // i18n
 const i18n = {
   es: {
-    // ... resto del código i18n sin cambios
-    pageTitle: 'Calendario Tours - Guía',
+    pageTitle: 'Calendario Tours',
     upcomingAssignments: 'Mis Próximas Asignaciones',
     calendarTitle: 'Calendario de Turnos',
     allStates: '📋 Todos',
@@ -55,7 +54,7 @@ const i18n = {
     toastError: 'Error'
   },
   en: {
-    pageTitle: 'Tours Calendar - Guide',
+    pageTitle: 'Tours Calendar',
     upcomingAssignments: 'My Upcoming Assignments',
     calendarTitle: 'Shifts Calendar',
     allStates: '📋 All',
@@ -81,12 +80,19 @@ const i18n = {
     toastError: 'Error'
   }
 };
+
+const monthNames = {
+  es: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
+  en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+};
+
 let lang = localStorage.getItem('lang') || 'es';
 function t(key) { return i18n[lang][key] || key; }
 
 let currentUser = null;
 let currentGuideId = null;
 let shiftsUnsubscribe = null;
+let guideName = '';
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
@@ -109,9 +115,10 @@ onAuthStateChanged(auth, async (user) => {
       return;
     }
 
-    document.getElementById('guide-name').textContent = guideDoc.data().nombre;
+    guideName = guideDoc.data().nombre;
     updateUILanguage();
     initLanguageToggle();
+    initAssignmentsDropdown();
     loadUpcomingAssignments();
     initCalendar();
   } else {
@@ -120,9 +127,16 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 function updateUILanguage() {
-  document.getElementById('page-title').textContent = t('pageTitle');
+  document.getElementById('page-title').textContent = `${t('pageTitle')} - ${guideName}`;
   document.getElementById('upcoming-title').textContent = t('upcomingAssignments');
   document.getElementById('calendar-title').textContent = t('calendarTitle');
+  
+  // Update month selector
+  const monthSelect = document.getElementById('month-select');
+  const currentMonth = monthSelect.value;
+  monthSelect.innerHTML = monthNames[lang].map((name, idx) => 
+    `<option value="${idx + 1}" ${parseInt(currentMonth) === idx + 1 ? 'selected' : ''}>${name}</option>`
+  ).join('');
   
   const estadoFilter = document.getElementById('estado-filter');
   estadoFilter.options[0].text = t('allStates');
@@ -141,6 +155,18 @@ function initLanguageToggle() {
     updateUILanguage();
     loadUpcomingAssignments();
     loadCalendar();
+  });
+}
+
+function initAssignmentsDropdown() {
+  const toggle = document.getElementById('assignments-toggle');
+  const content = document.getElementById('next-assignments');
+  const chevron = document.getElementById('assignments-chevron');
+  
+  toggle.addEventListener('click', () => {
+    const isHidden = content.classList.contains('hidden');
+    content.classList.toggle('hidden');
+    chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
   });
 }
 
@@ -196,9 +222,6 @@ async function loadUpcomingAssignments() {
   });
 }
 
-/**
- * Convierte slot a hora aproximada
- */
 function getTimeFromSlot(slot) {
   const slotTimes = {
     'MAÑANA': '12:00',
@@ -209,9 +232,6 @@ function getTimeFromSlot(slot) {
   return slotTimes[slot] || '12:00';
 }
 
-/**
- * Navega a página de detalles del tour
- */
 function navigateToTourDetails(eventId, tourName, fecha, time, slot) {
   if (!eventId) {
     showToast('Información del tour no disponible', 'error');
@@ -230,19 +250,46 @@ function navigateToTourDetails(eventId, tourName, fecha, time, slot) {
 }
 
 function initCalendar() {
-  const monthFilter = document.getElementById('month-filter');
+  const monthSelect = document.getElementById('month-select');
+  const yearSelect = document.getElementById('year-select');
   const estadoFilter = document.getElementById('estado-filter');
+  
   const today = new Date();
-  monthFilter.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  monthFilter.addEventListener('change', loadCalendar);
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
+  
+  // Populate year selector (3 years back, current, 2 years forward)
+  for (let year = currentYear - 3; year <= currentYear + 2; year++) {
+    const option = document.createElement('option');
+    option.value = year;
+    option.textContent = year;
+    if (year === currentYear) option.selected = true;
+    yearSelect.appendChild(option);
+  }
+  
+  // Set current month
+  monthSelect.value = currentMonth;
+  
+  // Update month names based on language
+  monthSelect.innerHTML = monthNames[lang].map((name, idx) => 
+    `<option value="${idx + 1}" ${idx + 1 === currentMonth ? 'selected' : ''}>${name}</option>`
+  ).join('');
+  
+  monthSelect.addEventListener('change', loadCalendar);
+  yearSelect.addEventListener('change', loadCalendar);
   estadoFilter.addEventListener('change', loadCalendar);
+  
   loadCalendar();
 }
 
 function loadCalendar() {
-  const monthInput = document.getElementById('month-filter');
+  const monthSelect = document.getElementById('month-select');
+  const yearSelect = document.getElementById('year-select');
   const estadoFilter = document.getElementById('estado-filter').value;
-  const [year, month] = monthInput.value.split('-');
+  
+  const year = yearSelect.value;
+  const month = String(monthSelect.value).padStart(2, '0');
+  
   const startDate = `${year}-${month}-01`;
   const endDate = `${year}-${month}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
 

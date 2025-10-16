@@ -13,12 +13,6 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   
-  <script>
-    // CRITICAL: Forzar light mode antes de Tailwind
-    if (localStorage.getItem('darkMode') !== 'true') {
-      document.documentElement.classList.remove('dark');
-    }
-  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -29,33 +23,56 @@
 </head>
 <body class="bg-gray-50 dark:bg-gray-900">
   <nav class="bg-blue-600 dark:bg-gray-800 text-white p-3 shadow-md">
-  <div class="container mx-auto flex justify-between items-center">
-    <h1 id="page-title" class="text-base sm:text-xl font-bold">Calendario Tours - Guía</h1>
-    <div class="flex items-center gap-2 sm:gap-3">
-      <button id="dark-mode-toggle" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-lg sm:text-sm">🌙</button>
-      <button id="lang-toggle" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm font-bold">EN</button>
-      <span id="guide-name" class="hidden sm:inline text-sm font-medium"></span>
-      <button id="logout-btn" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm font-medium">Salir</button>
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 id="page-title" class="text-base sm:text-xl font-bold">Calendario Tours</h1>
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button id="lang-toggle" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm font-bold">EN</button>
+        <button id="logout-btn" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm font-medium">Salir</button>
+      </div>
     </div>
-  </div>
-</nav>
+  </nav>
+
   <main class="container mx-auto p-3 sm:p-6 max-w-7xl">
-    <!-- Próximas Asignaciones -->
+    <!-- Próximas Asignaciones - Dropdown -->
     <section class="mb-6 sm:mb-8">
-      <h2 id="upcoming-title" class="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 dark:text-white">Mis Próximas Asignaciones</h2>
-      <div id="next-assignments" class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
-        <p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">Cargando...</p>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+        <button 
+          id="assignments-toggle" 
+          class="w-full flex items-center justify-between p-4 sm:p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors rounded-t-lg"
+        >
+          <h2 id="upcoming-title" class="text-xl sm:text-2xl font-bold dark:text-white">Mis Próximas Asignaciones</h2>
+          <svg id="assignments-chevron" class="w-6 h-6 text-gray-600 dark:text-gray-300 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div id="next-assignments" class="px-4 pb-4 sm:px-6 sm:pb-6 hidden">
+          <p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">Cargando...</p>
+        </div>
       </div>
     </section>
+
     <!-- Calendario -->
     <section>
       <div class="mb-3">
         <h2 id="calendar-title" class="text-xl sm:text-2xl font-bold mb-2 dark:text-white">Calendario de Turnos</h2>
-        <div class="grid grid-cols-2 gap-2">
-          <input
-            type="month"
-            id="month-filter"
-            class="border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2.5 text-sm w-full font-medium">
+        <div class="grid grid-cols-3 gap-2">
+          <select id="month-select" class="border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2.5 text-sm w-full font-medium">
+            <option value="1">Enero</option>
+            <option value="2">Febrero</option>
+            <option value="3">Marzo</option>
+            <option value="4">Abril</option>
+            <option value="5">Mayo</option>
+            <option value="6">Junio</option>
+            <option value="7">Julio</option>
+            <option value="8">Agosto</option>
+            <option value="9">Septiembre</option>
+            <option value="10">Octubre</option>
+            <option value="11">Noviembre</option>
+            <option value="12">Diciembre</option>
+          </select>
+          <select id="year-select" class="border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2.5 text-sm w-full font-medium">
+            <!-- Se llena dinámicamente -->
+          </select>
           <select id="estado-filter" class="border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2.5 text-sm w-full font-medium">
             <option value="todos">📋 Todos</option>
             <option value="LIBRE">✅ Libres</option>
@@ -69,6 +86,7 @@
       </div>
     </section>
   </main>
+
   <!-- Toast -->
   <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg text-white text-sm sm:text-base max-w-xs sm:max-w-md z-50">
     <p id="toast-message"></p>
@@ -83,29 +101,6 @@
           .catch(err => console.error('SW registration failed', err));
       });
     }
-  </script>
-  
-  <script>
-    // Dark mode toggle
-    const darkModeToggle = document.getElementById('dark-mode-toggle');
-    const html = document.documentElement;
-    
-    // Cargar preferencia (default: light mode)
-    const savedMode = localStorage.getItem('darkMode');
-    if (savedMode === 'true') {
-      html.classList.add('dark');
-      darkModeToggle.textContent = '☀️';
-    } else {
-      html.classList.remove('dark');
-      darkModeToggle.textContent = '🌙';
-    }
-    
-    darkModeToggle.addEventListener('click', () => {
-      html.classList.toggle('dark');
-      const isDark = html.classList.contains('dark');
-      localStorage.setItem('darkMode', isDark);
-      darkModeToggle.textContent = isDark ? '☀️' : '🌙';
-    });
   </script>
   
   <script type="module" src="/js/guide-dashboard.js"></script>
