@@ -177,7 +177,7 @@ async function loadUpcomingAssignments() {
       const tourName = this.dataset.tourName;
       const fecha = this.dataset.fecha;
       const slot = this.dataset.slot;
-      navigateToTourDetails(eventId, tourName, fecha, getTimeFromSlot(slot));
+      navigateToTourDetails(eventId, tourName, fecha, getTimeFromSlot(slot), slot);
     });
   });
 }
@@ -198,7 +198,7 @@ function getTimeFromSlot(slot) {
 /**
  * Navega a página de detalles del tour
  */
-function navigateToTourDetails(eventId, tourName, fecha, time) {
+function navigateToTourDetails(eventId, tourName, fecha, time, slot) {
   if (!eventId) {
     showToast('Información del tour no disponible', 'error');
     return;
@@ -208,7 +208,8 @@ function navigateToTourDetails(eventId, tourName, fecha, time) {
     eventId: eventId,
     title: tourName,
     date: fecha,
-    time: time
+    time: time,
+    slot: slot
   });
   
   window.location.href = `/tour-details.html?${params.toString()}`;

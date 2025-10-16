@@ -17,6 +17,10 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.token.guideId == guideId;
     }
     
+    // ========================================
+    // COLECCIONES EXISTENTES (NO MODIFICADAS)
+    // ========================================
+    
     match /guides/{guideId} {
       allow read: if isManager() || isOwnerGuide(guideId);
       allow create: if isManager();
@@ -39,6 +43,53 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow read: if isManager();
       allow write: if false;
+    }
+    
+    // ========================================
+    // VENDOR COSTS MODULE - NUEVAS COLECCIONES
+    // ========================================
+    
+    match /vendors/{vendorId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isManager();
+      allow delete: if false;
+    }
+    
+    match /vendor_costs/{vendorCostId} {
+      allow read: if isManager() || 
+                     (isGuide() && resource.data.guideId == request.auth.token.guideId);
+      
+      allow create: if isGuide() && 
+                       request.resource.data.guideId == request.auth.token.guideId;
+      
+      allow update: if isManager() ||
+                       (isGuide() && 
+                        resource.data.guideId == request.auth.token.guideId &&
+                        request.time < resource.data.createdAt + duration.value(1, 'd'));
+      
+      allow delete: if false;
+    }
+    
+    match /guide_invoices/{invoiceId} {
+      allow read: if isManager() || 
+                     (isGuide() && resource.data.guideId == request.auth.token.guideId);
+      
+      allow update: if isGuide() && 
+                       resource.data.guideId == request.auth.token.guideId &&
+                       resource.data.status == "PENDING_APPROVAL" &&
+                       request.resource.data.status == "APPROVED";
+      
+      allow create, delete: if false;
+    }
+    
+    match /vendor_reports/{reportId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+    
+    match /config/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
     }
   }
 }

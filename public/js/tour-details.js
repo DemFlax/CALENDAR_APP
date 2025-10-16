@@ -1,10 +1,15 @@
-import { auth } from './firebase-config.js';
+import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { collection, addDoc, serverTimestamp, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { getTourGuestDetails } from './calendar-api.js';
 
 let eventData = null;
 let guests = [];
 let currentUser = null;
+let userRole = null;
+let guideId = null;
+let vendorsList = [];
+let shiftId = null;
 
 async function init() {
   onAuthStateChanged(auth, async (user) => {
@@ -13,6 +18,11 @@ async function init() {
       return;
     }
     currentUser = user;
+    
+    const token = await user.getIdTokenResult();
+    userRole = token.claims.role;
+    guideId = token.claims.guideId;
+    
     await loadTourData();
   });
 }
@@ -23,6 +33,7 @@ async function loadTourData() {
   const title = params.get('title');
   const date = params.get('date');
   const time = params.get('time');
+  const slot = params.get('slot');
   
   console.log('EventID from URL:', eventId);
   console.log('Full URL:', window.location.href);
@@ -30,6 +41,10 @@ async function loadTourData() {
   if (!eventId) {
     showError('URL inválida', 'Falta el ID del evento', false);
     return;
+  }
+  
+  if (date && slot) {
+    shiftId = `${date}_${slot}`;
   }
   
   if (title) document.getElementById('tourTitle').textContent = decodeURIComponent(title);
@@ -64,6 +79,11 @@ async function loadTourDetails(eventId) {
     } else {
       renderGuests();
       hideLoading();
+      
+      // Render vendor costs form ONLY if user is guide
+      if (userRole === 'guide') {
+        await renderVendorCostsForm();
+      }
     }
     
   } catch (error) {
@@ -282,5 +302,441 @@ function showCopyFeedback() {
 }
 
 window.copyPhoneNumber = copyPhoneNumber;
+
+// ============================================
+// VENDOR COSTS FUNCTIONALITY (NEW CODE)
+// ============================================
+
+async function renderVendorCostsForm() {
+  const section = document.getElementById('vendorCostsSection');
+  section.classList.remove('hidden');
+  
+  // Load vendors list
+  await loadVendorsList();
+  
+  // Calculate total PAX
+  const totalPax = guests.reduce((sum, guest) => sum + (guest.pax || 0), 0);
+  document.getElementById('numPaxInput').value = totalPax;
+  
+  // Toggle expand/collapse
+  const header = document.getElementById('vendorCostsHeader');
+  const body = document.getElementById('vendorCostsBody');
+  const chevron = document.getElementById('vendorCostsChevron');
+  
+  header.addEventListener('click', () => {
+    const isHidden = body.classList.contains('hidden');
+    body.classList.toggle('hidden');
+    chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+  });
+  
+  // Add 4 fixed vendors
+  const fixedVendors = ['El Escarpín', 'Casa Ciriaco', 'La Revolcona', 'El Abuelo'];
+  fixedVendors.forEach(vendorName => {
+    addVendorRow(vendorName, true);
+  });
+  
+  // Add vendor button (5 additional vendors available)
+  document.getElementById('addVendorBtn').addEventListener('click', () => {
+    const container = document.getElementById('vendorsContainer');
+    const additionalVendors = ['La Campana', 'Los Ferreros', 'El Anciano Rey de los Vinos', 'Cervecería Santa Ana', 'Chocolat Madrid'];
+    
+    // Count non-fixed vendors
+    const nonFixedCount = Array.from(container.children).filter(child => child.dataset.isFixed === 'false').length;
+    
+    if (nonFixedCount < additionalVendors.length) {
+      addVendorRowAdditional(additionalVendors);
+    } else {
+      showVendorToast('Todos los vendors adicionales ya están añadidos', 'warning');
+    }
+  });
+  
+  // Form submit
+  document.getElementById('vendorCostsForm').addEventListener('submit', handleVendorCostsSubmit);
+}
+
+async function loadVendorsList() {
+  try {
+    const vendorsQuery = query(
+      collection(db, 'vendors'),
+      where('estado', '==', 'activo')
+    );
+    const snapshot = await getDocs(vendorsQuery);
+    
+    vendorsList = [];
+    snapshot.forEach(doc => {
+      vendorsList.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    // Sort by orden
+    vendorsList.sort((a, b) => (a.orden || 0) - (b.orden || 0));
+    
+  } catch (error) {
+    console.error('Error loading vendors:', error);
+    vendorsList = [];
+  }
+}
+
+function addVendorRow(preselectedName = null, isFixed = false) {
+  const container = document.getElementById('vendorsContainer');
+  const index = container.children.length;
+  
+  // Find vendor by name if preselected
+  let selectedVendorId = '';
+  if (preselectedName) {
+    const vendor = vendorsList.find(v => v.nombre === preselectedName);
+    selectedVendorId = vendor ? vendor.id : '';
+  }
+  
+  const row = document.createElement('div');
+  row.className = 'border border-gray-300 dark:border-gray-600 rounded-lg p-4 space-y-3 bg-gray-50 dark:bg-gray-800';
+  row.dataset.vendorIndex = index;
+  row.dataset.isFixed = isFixed;
+  
+  row.innerHTML = `
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-base font-bold text-gray-900 dark:text-gray-100">${preselectedName || `Vendor Adicional`}</span>
+      ${!isFixed ? `
+        <button type="button" onclick="removeVendorRow(${index})" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-semibold">
+          Eliminar
+        </button>
+      ` : ''}
+    </div>
+    
+    <input type="hidden" data-vendor-select="${index}" value="${selectedVendorId}">
+    
+    <div>
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Importe (€)</label>
+      <input 
+        type="number" 
+        step="0.01" 
+        min="0" 
+        max="999.99"
+        placeholder="0.00"
+        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm font-medium"
+        data-vendor-amount="${index}"
+      />
+    </div>
+    
+    <div>
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Foto Ticket</label>
+      <input 
+        type="file" 
+        accept="image/*,application/pdf"
+        class="w-full text-sm text-gray-800 dark:text-gray-200 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 dark:file:bg-emerald-700 dark:hover:file:bg-emerald-600"
+        data-vendor-photo="${index}"
+        onchange="handlePhotoChange(${index})"
+      />
+      <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Opcional. Sin foto, justifica abajo.</p>
+    </div>
+    
+    <div id="justificationArea${index}" class="hidden">
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Justificación (sin foto)</label>
+      <textarea 
+        rows="2"
+        placeholder="Explica por qué no hay foto del ticket..."
+        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm"
+        data-vendor-justification="${index}"
+      ></textarea>
+    </div>
+  `;
+  
+  container.appendChild(row);
+}
+
+function addVendorRowAdditional(availableVendors) {
+  const container = document.getElementById('vendorsContainer');
+  const index = container.children.length;
+  
+  const row = document.createElement('div');
+  row.className = 'border border-gray-300 dark:border-gray-600 rounded-lg p-4 space-y-3 bg-gray-50 dark:bg-gray-800';
+  row.dataset.vendorIndex = index;
+  row.dataset.isFixed = 'false';
+  
+  row.innerHTML = `
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-base font-bold text-gray-900 dark:text-gray-100">Vendor Adicional</span>
+      <button type="button" onclick="removeVendorRow(${index})" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-semibold">
+        Eliminar
+      </button>
+    </div>
+    
+    <div>
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Seleccionar Vendor</label>
+      <select 
+        required
+        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm font-medium"
+        data-vendor-select="${index}"
+      >
+        <option value="">Elegir...</option>
+        ${availableVendors.map(name => {
+          const vendor = vendorsList.find(v => v.nombre === name);
+          return vendor ? `<option value="${vendor.id}">${vendor.nombre}</option>` : '';
+        }).join('')}
+      </select>
+    </div>
+    
+    <div>
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Importe (€)</label>
+      <input 
+        type="number" 
+        step="0.01" 
+        min="0" 
+        max="999.99"
+        placeholder="0.00"
+        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm font-medium"
+        data-vendor-amount="${index}"
+      />
+    </div>
+    
+    <div>
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Foto Ticket</label>
+      <input 
+        type="file" 
+        accept="image/*,application/pdf"
+        class="w-full text-sm text-gray-800 dark:text-gray-200 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 dark:file:bg-emerald-700 dark:hover:file:bg-emerald-600"
+        data-vendor-photo="${index}"
+        onchange="handlePhotoChange(${index})"
+      />
+      <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Opcional. Sin foto, justifica abajo.</p>
+    </div>
+    
+    <div id="justificationArea${index}" class="hidden">
+      <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Justificación (sin foto)</label>
+      <textarea 
+        rows="2"
+        placeholder="Explica por qué no hay foto del ticket..."
+        class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm"
+        data-vendor-justification="${index}"
+      ></textarea>
+    </div>
+  `;
+  
+  container.appendChild(row);
+}
+
+function removeVendorRow(index) {
+  const row = document.querySelector(`[data-vendor-index="${index}"]`);
+  if (row && row.dataset.isFixed === 'false') {
+    row.remove();
+  }
+}
+
+function handlePhotoChange(index) {
+  const photoInput = document.querySelector(`[data-vendor-photo="${index}"]`);
+  const justificationArea = document.getElementById(`justificationArea${index}`);
+  
+  if (photoInput.files.length > 0) {
+    justificationArea.classList.add('hidden');
+    const textarea = justificationArea.querySelector('textarea');
+    textarea.removeAttribute('required');
+  } else {
+    justificationArea.classList.remove('hidden');
+    const textarea = justificationArea.querySelector('textarea');
+    textarea.setAttribute('required', 'required');
+  }
+}
+
+async function handleVendorCostsSubmit(e) {
+  e.preventDefault();
+  
+  if (!shiftId) {
+    showVendorToast('No se pudo identificar el turno. Falta información en la URL.', 'error');
+    return;
+  }
+  
+  const submitBtn = e.target.querySelector('[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Guardando...';
+  
+  try {
+    const container = document.getElementById('vendorsContainer');
+    const vendorRows = Array.from(container.children);
+    
+    const vendorsData = [];
+    
+    for (let i = 0; i < vendorRows.length; i++) {
+      const vendorInput = document.querySelector(`[data-vendor-select="${i}"]`);
+      const amountInput = document.querySelector(`[data-vendor-amount="${i}"]`);
+      const photoInput = document.querySelector(`[data-vendor-photo="${i}"]`);
+      const justificationInput = document.querySelector(`[data-vendor-justification="${i}"]`);
+      
+      let vendorId = '';
+      
+      // Hidden input (fixed vendors) or select (additional vendors)
+      if (vendorInput.tagName === 'INPUT') {
+        vendorId = vendorInput.value;
+      } else if (vendorInput.tagName === 'SELECT') {
+        vendorId = vendorInput.value;
+      }
+      
+      if (!vendorId) continue;
+      
+      // Skip if no amount (optional vendor)
+      const amount = parseFloat(amountInput.value);
+      if (!amount || amount === 0) continue;
+      
+      const vendor = vendorsList.find(v => v.id === vendorId);
+      if (!vendor) continue;
+      
+      const vendorItem = {
+        vendorId: vendor.id,
+        vendorName: vendor.nombre,
+        importe: amount,
+        ticketPhoto: null,
+        justification: null
+      };
+      
+      // Handle photo upload (convert to base64)
+      if (photoInput.files.length > 0) {
+        const file = photoInput.files[0];
+        const base64 = await fileToBase64(file);
+        vendorItem.ticketPhoto = base64;
+      } else if (justificationInput && justificationInput.value.trim()) {
+        vendorItem.justification = justificationInput.value.trim();
+      }
+      
+      vendorsData.push(vendorItem);
+    }
+    
+    if (vendorsData.length === 0) {
+      throw new Error('Debes registrar al menos un vendor con importe');
+    }
+    
+    // Get guide name
+    const guideName = currentUser.displayName || currentUser.email;
+    
+    // Get fecha and slot from shiftId
+    const [fecha, slot] = shiftId.split('_');
+    
+    // Calculate total
+    const totalVendors = vendorsData.reduce((sum, v) => sum + v.importe, 0);
+    
+    // Get feedback
+    const feedback = document.getElementById('postTourFeedback').value.trim() || null;
+    
+    // Prepare document
+    const vendorCostDoc = {
+      shiftId: shiftId,
+      guideId: guideId,
+      guideName: guideName,
+      fecha: fecha,
+      slot: slot,
+      tourDescription: eventData.summary,
+      numPax: parseInt(document.getElementById('numPaxInput').value),
+      vendors: vendorsData,
+      totalVendors: parseFloat(totalVendors.toFixed(2)),
+      postTourFeedback: feedback,
+      salarioCalculado: 0, // TODO: Calculate from salary table
+      editedByManager: false,
+      editHistory: [],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    // Save to Firestore
+    await addDoc(collection(db, 'vendor_costs'), vendorCostDoc);
+    
+    showVendorToast('Costes guardados correctamente', 'success');
+    
+    // Reset form
+    e.target.reset();
+    const vendorsContainer = document.getElementById('vendorsContainer');
+    vendorsContainer.innerHTML = '';
+    
+    // Re-add fixed vendors
+    const fixedVendors = ['El Escarpín', 'Casa Ciriaco', 'La Revolcona', 'El Abuelo'];
+    fixedVendors.forEach(vendorName => {
+      addVendorRow(vendorName, true);
+    });
+    
+    // Collapse form
+    document.getElementById('vendorCostsBody').classList.add('hidden');
+    document.getElementById('vendorCostsChevron').style.transform = 'rotate(0deg)';
+    
+  } catch (error) {
+    console.error('Error saving vendor costs:', error);
+    showVendorToast('Error al guardar: ' + error.message, 'error');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Guardar Costes';
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function showVendorToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  
+  let bgColor, icon;
+  if (type === 'success') {
+    bgColor = 'bg-emerald-600 dark:bg-emerald-700';
+    icon = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+    </svg>`;
+  } else if (type === 'error') {
+    bgColor = 'bg-red-600 dark:bg-red-700';
+    icon = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+    </svg>`;
+  } else if (type === 'warning') {
+    bgColor = 'bg-yellow-600 dark:bg-yellow-700';
+    icon = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>`;
+  } else {
+    bgColor = 'bg-blue-600 dark:bg-blue-700';
+    icon = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>`;
+  }
+  
+  toast.className = `fixed bottom-6 right-6 ${bgColor} text-white px-5 py-4 rounded-xl shadow-2xl z-50 max-w-md flex items-center gap-3 transform transition-all duration-300 ease-out`;
+  toast.style.animation = 'slideIn 0.3s ease-out';
+  
+  toast.innerHTML = `
+    <div class="flex-shrink-0">
+      ${icon}
+    </div>
+    <p class="font-semibold text-sm sm:text-base">${message}</p>
+  `;
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100%)';
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
+}
+
+// Add CSS animation
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+`;
+document.head.appendChild(styleSheet);
+
+// Make functions global for onclick handlers
+window.removeVendorRow = removeVendorRow;
+window.handlePhotoChange = handlePhotoChange;
 
 document.addEventListener('DOMContentLoaded', init);
