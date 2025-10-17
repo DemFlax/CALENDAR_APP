@@ -511,9 +511,12 @@ exports.devSetPassword = onRequest(async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // =========================================
 // VENDOR COSTS MODULE
 // =========================================
 const vendorCosts = require('./src/vendor-costs');
 exports.registerVendorCost = vendorCosts.registerVendorCost;
 exports.calculateSalaryPreview = vendorCosts.calculateSalaryPreview;
+exports.generateGuideInvoices = vendorCosts.generateGuideInvoices;
+exports.approveInvoice = vendorCosts.approveInvoice;
