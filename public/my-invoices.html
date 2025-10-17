@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mis Facturas - Tours Madrid</title>
+
+  <meta name="theme-color" content="#0ea5e9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SFS">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/assets/icon-192.png">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class'
+    }
+  </script>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900">
+  <nav class="bg-blue-600 dark:bg-gray-800 text-white p-3 shadow-md">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 id="page-title" class="text-base sm:text-xl font-bold">Mis Facturas</h1>
+      <div class="flex items-center gap-2 sm:gap-3">
+        <a href="/guide.html" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm font-medium">Calendario</a>
+        <button id="lang-toggle" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm font-bold">EN</button>
+        <button id="logout-btn" class="bg-blue-700 dark:bg-gray-700 hover:bg-blue-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm font-medium">Salir</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container mx-auto p-3 sm:p-6 max-w-7xl">
+    <!-- Facturas Pendientes -->
+    <section class="mb-6">
+      <h2 id="pending-title" class="text-xl sm:text-2xl font-bold mb-4 dark:text-white">Facturas Pendientes de Aprobación</h2>
+      <div id="pending-invoices" class="space-y-3">
+        <p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">Cargando...</p>
+      </div>
+    </section>
+
+    <!-- Historial -->
+    <section>
+      <h2 id="history-title" class="text-xl sm:text-2xl font-bold mb-4 dark:text-white">Historial de Facturas</h2>
+      <div id="history-invoices" class="space-y-3">
+        <p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">Cargando...</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal Detalle Factura -->
+  <div id="invoice-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+      <div class="p-4 sm:p-6 border-b dark:border-gray-700 flex justify-between items-center">
+        <h3 id="modal-title" class="text-xl font-bold dark:text-white">Factura Pro-Forma</h3>
+        <button id="close-modal" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-4 sm:p-6 overflow-y-auto max-h-[70vh]">
+        <!-- Datos Guía -->
+        <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+          <h4 id="guide-info-title" class="font-semibold mb-2 dark:text-white">Información del Guía</h4>
+          <p id="modal-guide-name" class="text-sm dark:text-gray-300"></p>
+          <p id="modal-guide-email" class="text-sm text-gray-600 dark:text-gray-400"></p>
+          <p id="modal-month" class="text-sm font-medium mt-2 dark:text-white"></p>
+        </div>
+
+        <!-- Tabla Tours -->
+        <div class="overflow-x-auto mb-6">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-100 dark:bg-gray-700">
+              <tr>
+                <th id="th-date" class="px-3 py-2 text-left dark:text-white">Fecha</th>
+                <th id="th-slot" class="px-3 py-2 text-left dark:text-white">Turno</th>
+                <th id="th-tour" class="px-3 py-2 text-left dark:text-white">Tour</th>
+                <th id="th-pax" class="px-3 py-2 text-center dark:text-white">PAX</th>
+                <th id="th-salary" class="px-3 py-2 text-right dark:text-white">Salario</th>
+              </tr>
+            </thead>
+            <tbody id="modal-tours-body" class="dark:text-gray-300">
+              <!-- Dinámico -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Total -->
+        <div class="flex justify-between items-center p-4 bg-blue-50 dark:bg-blue-900 rounded-lg mb-6">
+          <span id="total-label" class="text-lg font-bold dark:text-white">TOTAL</span>
+          <span id="modal-total" class="text-2xl font-bold text-blue-600 dark:text-blue-300"></span>
+        </div>
+
+        <!-- Sección Aprobación (solo si PENDING_APPROVAL) -->
+        <div id="approval-section" class="hidden border-t dark:border-gray-700 pt-6">
+          <h4 id="numbering-title" class="font-semibold mb-3 dark:text-white">Numeración de Factura</h4>
+
+          <div class="mb-4">
+            <label class="flex items-center gap-2 mb-2 cursor-pointer">
+              <input type="radio" name="invoice-mode" value="AUTO" class="w-4 h-4" checked>
+              <span id="auto-label" class="dark:text-gray-300">Autogenerar número (SFS-XXX/25)</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="invoice-mode" value="MANUAL" class="w-4 h-4">
+              <span id="manual-label" class="dark:text-gray-300">Introducir número manualmente</span>
+            </label>
+          </div>
+
+          <div id="manual-input-container" class="hidden mb-4">
+            <label id="manual-input-label" class="block text-sm font-medium mb-2 dark:text-gray-300">Número de Factura</label>
+            <input
+              type="text"
+              id="manual-invoice-number"
+              placeholder="2025/003"
+              class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2"
+            >
+            <p id="manual-warning" class="text-xs text-amber-600 dark:text-amber-400 mt-1">⚠️ Atención: Si eliges numeración manual, no podrás volver a usar numeración automática (requisito legal)</p>
+          </div>
+
+          <!-- Sección IRPF -->
+          <div class="mb-6 border-t dark:border-gray-700 pt-4">
+            <h4 id="irpf-title" class="font-semibold mb-3 dark:text-white">Retención IRPF</h4>
+            <div class="mb-3">
+              <label id="irpf-label" class="block text-sm font-medium mb-2 dark:text-gray-300">% IRPF a retener</label>
+              <input
+                type="number"
+                id="irpf-percent"
+                min="0"
+                max="100"
+                step="0.5"
+                value="15"
+                class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2"
+              >
+              <p id="irpf-help" class="text-xs text-gray-500 dark:text-gray-400 mt-1">Introduce tu porcentaje de IRPF (ej: 15)</p>
+            </div>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="save-irpf-default" class="w-4 h-4">
+              <span id="save-irpf-label" class="text-sm dark:text-gray-300">Recordar este % para futuras facturas</span>
+            </label>
+          </div>
+
+          <div class="flex gap-3">
+            <button id="approve-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold">
+              <span id="approve-text">Aprobar Factura</span>
+            </button>
+            <button id="report-error-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-semibold">
+              <span id="report-text">Reportar Error</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Info Factura Aprobada -->
+        <div id="approved-info" class="hidden border-t dark:border-gray-700 pt-6">
+          <div class="bg-green-50 dark:bg-green-900 p-4 rounded-lg">
+            <p class="font-semibold text-green-800 dark:text-green-200 mb-2">✅ <span id="approved-label">Factura Aprobada</span></p>
+            <p id="approved-number" class="text-sm dark:text-green-300"></p>
+            <p id="approved-date" class="text-sm text-gray-600 dark:text-gray-400"></p>
+            <a id="download-pdf" href="#" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:underline mt-2 inline-block">
+              📄 <span id="download-text">Descargar PDF</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg text-white text-sm sm:text-base max-w-xs sm:max-w-md z-50">
+    <p id="toast-message"></p>
+  </div>
+
+  <script type="module" src="/js/guide-invoices.js"></script>
+</body>
+</html>
