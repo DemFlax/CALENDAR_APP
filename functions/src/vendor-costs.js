@@ -7,6 +7,7 @@
 // npm install node-fetch@2.7.0 (ya instalado)
 // =========================================
 
+const functions = require('firebase-functions');
 const {onCall, HttpsError} = require('firebase-functions/v2/https');
 const {onSchedule} = require('firebase-functions/v2/scheduler');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
@@ -24,7 +25,7 @@ const MANAGER_EMAIL = process.env.MANAGER_EMAIL || 'madrid@spainfoodsherpas.com'
 const ACCOUNTING_EMAIL = 'contabilidad@spainfoodsherpas.com';
 const FROM_EMAIL = 'madrid@spainfoodsherpas.com';
 const FROM_NAME = 'Spain Food Sherpas';
-const DRIVE_FOLDER_ID = '1NKpwoOvBPlXKI8dQCI9GlN9hYUrTMRP3'; // 2.0_COSTES_SFS/FACTURAS
+const DRIVE_FOLDER_ID = '1NKpwoOvBPlXKI8dQCI9GlN9hYUrTMRP3';
 
 // =========================================
 // HELPER: Calculate Salary
@@ -68,16 +69,13 @@ async function generateInvoicePDF(invoiceData) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Header con logo (texto simple por ahora)
       doc.fontSize(24).font('Helvetica-Bold').text('SPAIN FOOD SHERPAS', { align: 'center' });
       doc.fontSize(10).font('Helvetica').text('Est. 2013', { align: 'center' });
       doc.moveDown(0.5);
 
-      // Número factura
       doc.fontSize(18).font('Helvetica-Bold').text(`FACTURA N.º ${invoiceData.invoiceNumber}`, { align: 'right' });
       doc.moveDown(2);
 
-      // Emisor
       doc.fontSize(12).font('Helvetica-Bold').text('EMISOR:');
       doc.fontSize(10).font('Helvetica');
       doc.text(invoiceData.guide.nombre);
@@ -87,7 +85,6 @@ async function generateInvoicePDF(invoiceData) {
       }
       doc.moveDown();
 
-      // Receptor
       doc.fontSize(12).font('Helvetica-Bold').text('RECEPTOR:');
       doc.fontSize(10).font('Helvetica');
       doc.text(invoiceData.company.razonSocial);
@@ -95,7 +92,6 @@ async function generateInvoicePDF(invoiceData) {
       doc.text(invoiceData.company.direccion);
       doc.moveDown();
 
-      // Fecha y concepto
       const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                          'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
       const [year, month] = invoiceData.month.split('-');
@@ -105,7 +101,6 @@ async function generateInvoicePDF(invoiceData) {
       doc.fontSize(12).font('Helvetica-Bold').text(`CONCEPTO: Servicios guía turístico - ${monthName} ${year}`);
       doc.moveDown();
 
-      // Tabla tours
       doc.fontSize(11).font('Helvetica-Bold').text('DETALLE TOURS:');
       doc.moveDown(0.3);
 
@@ -113,7 +108,6 @@ async function generateInvoicePDF(invoiceData) {
       const colWidths = { fecha: 80, tour: 200, pax: 50, salario: 80 };
       let y = tableTop;
 
-      // Headers tabla
       doc.fontSize(9).font('Helvetica-Bold');
       doc.text('Fecha', 50, y, { width: colWidths.fecha });
       doc.text('Tour', 130, y, { width: colWidths.tour });
@@ -124,7 +118,6 @@ async function generateInvoicePDF(invoiceData) {
       doc.moveTo(50, y).lineTo(550, y).stroke();
       y += 5;
 
-      // Rows
       doc.font('Helvetica');
       invoiceData.tours.forEach(tour => {
         const dateStr = new Date(tour.fecha).toLocaleDateString('es-ES', {
@@ -144,7 +137,6 @@ async function generateInvoicePDF(invoiceData) {
       doc.moveTo(50, y).lineTo(550, y).stroke();
       y += 15;
 
-      // Totales
       doc.font('Helvetica-Bold').fontSize(10);
       const rightX = 460;
 
@@ -177,7 +169,6 @@ async function generateInvoicePDF(invoiceData) {
       doc.text('TOTAL NETO:', rightX - 100, y);
       doc.text(`${totalNeto.toFixed(2)}€`, rightX, y, { align: 'right' });
 
-      // Footer
       doc.fontSize(8).font('Helvetica');
       doc.text(`Madrid, ${new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}`,
                50, 750, { align: 'center' });
@@ -194,7 +185,7 @@ async function generateInvoicePDF(invoiceData) {
 // HELPER: Upload PDF to Drive via Apps Script
 // =========================================
 async function uploadInvoicePDF(pdfBuffer, invoiceData) {
-  const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
+  const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || functions.config().apps_script?.url;
 
   if (!APPS_SCRIPT_URL) {
     throw new Error('APPS_SCRIPT_URL not configured');
@@ -211,6 +202,7 @@ async function uploadInvoicePDF(pdfBuffer, invoiceData) {
         invoiceNumber: invoiceData.invoiceNumber,
         month: invoiceData.month,
         pdfBase64: pdfBuffer.toString('base64'),
+        apiKey: 'sfs-calendar-2024-secure-key',  
         folderParentId: DRIVE_FOLDER_ID
       })
     });
@@ -238,7 +230,6 @@ async function uploadInvoicePDF(pdfBuffer, invoiceData) {
 
 // =========================================
 // FUNCTION: generateGuideInvoices (SCHEDULED)
-// Ejecuta día 1 de cada mes a las 00:00 UTC
 // =========================================
 exports.generateGuideInvoices = onSchedule({
   schedule: '0 0 1 * *',
@@ -250,7 +241,6 @@ exports.generateGuideInvoices = onSchedule({
   try {
     const db = getFirestore();
 
-    // Calcular mes anterior
     const today = new Date();
     const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const year = lastMonth.getFullYear();
@@ -263,7 +253,6 @@ exports.generateGuideInvoices = onSchedule({
 
     logger.info('Procesando mes', { invoiceMonth, startDate, endDate });
 
-    // Obtener guías activos
     const guidesSnap = await db.collection('guides')
       .where('estado', '==', 'activo')
       .get();
@@ -281,7 +270,6 @@ exports.generateGuideInvoices = onSchedule({
       const guide = guideDoc.data();
 
       try {
-        // Query vendor_costs del mes
         const costsSnap = await db.collection('vendor_costs')
           .where('guideId', '==', guideId)
           .where('fecha', '>=', startDate)
@@ -293,7 +281,6 @@ exports.generateGuideInvoices = onSchedule({
           continue;
         }
 
-        // Agregar datos
         let totalSalary = 0;
         const tours = [];
 
@@ -310,11 +297,9 @@ exports.generateGuideInvoices = onSchedule({
           });
         });
 
-        // Calcular totales
         const baseImponible = totalSalary / 1.21;
         const iva = baseImponible * 0.21;
 
-        // Crear documento invoice PENDING_APPROVAL
         const invoiceRef = await db.collection('guide_invoices').add({
           guideId,
           guideName: guide.nombre,
@@ -342,7 +327,6 @@ exports.generateGuideInvoices = onSchedule({
           totalSalary
         });
 
-        // Enviar email notificación
         sgMail.setApiKey(sendgridKey.value());
         await sgMail.send({
           to: guide.email,
@@ -386,11 +370,15 @@ exports.generateGuideInvoices = onSchedule({
 });
 
 exports.approveInvoice = onCall({
+  cors: true,
   secrets: [sendgridKey]
 }, async (request) => {
+  logger.info('=== approveInvoice STARTED ===', { 
+    data: request.data,
+    authUid: request.auth?.uid 
+  });
   const { data, auth } = request;
 
-  // 1. Auth check
   if (!auth || auth.token.role !== 'guide') {
     throw new HttpsError('unauthenticated', 'Must be authenticated guide');
   }
@@ -398,7 +386,6 @@ exports.approveInvoice = onCall({
   const guideId = auth.token.guideId;
   const db = getFirestore();
 
-  // 2. Validate fields
   if (!data.invoiceId) {
     throw new HttpsError('invalid-argument', 'invoiceId required');
   }
@@ -412,7 +399,7 @@ exports.approveInvoice = onCall({
   }
 
   try {
-    // 3. Get invoice
+    logger.info('Step 1: Getting invoice');
     const invoiceSnap = await db.collection('guide_invoices').doc(data.invoiceId).get();
 
     if (!invoiceSnap.exists) {
@@ -429,16 +416,15 @@ exports.approveInvoice = onCall({
       throw new HttpsError('failed-precondition', 'Invoice already processed');
     }
 
-    // 4. Get guide
+    logger.info('Step 2: Getting guide data');
     const guideSnap = await db.collection('guides').doc(guideId).get();
     const guide = guideSnap.data();
 
     let invoiceNumber;
     let invoiceMode;
 
-    // 5. Determinar número factura
+    logger.info('Step 3: Determining invoice number');
     if (data.useAutoNumber) {
-      // Validar puede usar auto
       if (guide.invoiceMode === 'MANUAL') {
         throw new HttpsError(
           'failed-precondition',
@@ -446,20 +432,17 @@ exports.approveInvoice = onCall({
         );
       }
 
-      // Generar número
       const nextNumber = (guide.lastInvoiceNumber || 0) + 1;
       const year = new Date().getFullYear().toString().slice(-2);
       invoiceNumber = `SFS-${String(nextNumber).padStart(3, '0')}/${year}`;
       invoiceMode = 'AUTO';
 
-      // Actualizar guide
       await db.collection('guides').doc(guideId).update({
         invoiceMode: 'AUTO',
         lastInvoiceNumber: FieldValue.increment(1)
       });
 
     } else {
-      // Validar unicidad número manual
       const existingSnap = await db.collection('guide_invoices')
         .where('guideId', '==', guideId)
         .where('invoiceNumber', '==', data.invoiceNumber)
@@ -473,7 +456,6 @@ exports.approveInvoice = onCall({
       invoiceNumber = data.invoiceNumber;
       invoiceMode = 'MANUAL';
 
-      // Primera factura manual → bloquear auto
       if (!guide.invoiceMode) {
         await db.collection('guides').doc(guideId).update({
           invoiceMode: 'MANUAL'
@@ -481,25 +463,24 @@ exports.approveInvoice = onCall({
       }
     }
 
-    // 6. Calcular IRPF y total neto
+    logger.info('Step 4: Calculating totals', { invoiceNumber });
     const irpfAmount = invoice.totalSalary * (data.irpfPercent / 100);
     const totalNeto = invoice.totalSalary - irpfAmount;
 
-    // 7. Guardar preferencia IRPF si se marcó
     if (data.saveIrpfDefault) {
       await db.collection('guides').doc(guideId).update({
         defaultIrpfPercent: data.irpfPercent
       });
     }
 
-    // 8. Get company data
+    logger.info('Step 5: Getting company data');
     const companySnap = await db.collection('config').doc('company_data').get();
     if (!companySnap.exists) {
       throw new HttpsError('failed-precondition', 'Company data not configured');
     }
     const company = companySnap.data();
 
-    // 9. Generate PDF
+    logger.info('Step 6: Generating PDF');
     const pdfBuffer = await generateInvoicePDF({
       invoiceNumber,
       guide: {
@@ -519,7 +500,9 @@ exports.approveInvoice = onCall({
       totalNeto: parseFloat(totalNeto.toFixed(2))
     });
 
-    // 10. Upload PDF to Drive
+    logger.info('PDF generated', { size: pdfBuffer.length });
+
+    logger.info('Step 7: Uploading to Drive');
     const uploadResult = await uploadInvoicePDF(pdfBuffer, {
       guideId,
       guideName: guide.nombre,
@@ -527,7 +510,9 @@ exports.approveInvoice = onCall({
       month: invoice.month
     });
 
-    // 11. Update invoice
+    logger.info('PDF uploaded to Drive', uploadResult);
+
+    logger.info('Step 8: Updating invoice document');
     await db.collection('guide_invoices').doc(data.invoiceId).update({
       status: 'APPROVED',
       invoiceNumber,
@@ -541,11 +526,10 @@ exports.approveInvoice = onCall({
       updatedAt: FieldValue.serverTimestamp()
     });
 
-    // 12. Send confirmation emails
+    logger.info('Step 9: Sending emails');
     sgMail.setApiKey(sendgridKey.value());
 
     const emailPromises = [
-      // Email guía con PDF adjunto
       sgMail.send({
         to: guide.email,
         from: { email: FROM_EMAIL, name: FROM_NAME },
@@ -574,7 +558,6 @@ exports.approveInvoice = onCall({
         }]
       }),
 
-      // Email manager
       sgMail.send({
         to: MANAGER_EMAIL,
         from: { email: FROM_EMAIL, name: FROM_NAME },
@@ -591,7 +574,6 @@ exports.approveInvoice = onCall({
         `
       }),
 
-      // Email contabilidad con PDF
       sgMail.send({
         to: ACCOUNTING_EMAIL,
         from: { email: FROM_EMAIL, name: FROM_NAME },
@@ -615,8 +597,9 @@ exports.approveInvoice = onCall({
     ];
 
     await Promise.all(emailPromises);
+    logger.info('Emails sent successfully');
 
-    logger.info('Factura aprobada exitosamente', {
+    logger.info('=== approveInvoice COMPLETED ===', {
       invoiceId: data.invoiceId,
       invoiceNumber,
       guideId,
@@ -631,10 +614,11 @@ exports.approveInvoice = onCall({
     };
 
   } catch (error) {
-    logger.error('Error aprobando factura', {
+    logger.error('=== approveInvoice FAILED ===', {
       invoiceId: data.invoiceId,
       guideId,
-      error: error.message
+      error: error.message,
+      stack: error.stack
     });
 
     if (error instanceof HttpsError) {
@@ -645,11 +629,9 @@ exports.approveInvoice = onCall({
   }
 });
 
-
 exports.registerVendorCost = onCall(async (request) => {
   const { data, auth } = request;
   
-  // 1. Auth check
   if (!auth || auth.token.role !== 'guide') {
     throw new HttpsError('unauthenticated', 'Must be authenticated guide');
   }
@@ -657,18 +639,15 @@ exports.registerVendorCost = onCall(async (request) => {
   const guideId = auth.token.guideId;
   const db = getFirestore();
   
-  // 2. Validate required fields
   if (!data.shiftId || !data.numPax || !Array.isArray(data.vendors) || data.vendors.length === 0) {
     throw new HttpsError('invalid-argument', 'Missing required fields');
   }
   
-  // 3. Validate numPax range
   if (data.numPax < 1 || data.numPax > 20) {
     throw new HttpsError('invalid-argument', 'numPax must be between 1 and 20');
   }
   
   try {
-    // 4. Validate shift exists and is assigned to guide
     const shiftSnap = await db
       .collection('guides')
       .doc(guideId)
@@ -686,7 +665,6 @@ exports.registerVendorCost = onCall(async (request) => {
       throw new HttpsError('failed-precondition', 'Shift not assigned');
     }
     
-    // 5. Validate shift date (max 7 days retroactive)
     const shiftDate = new Date(shift.fecha);
     const today = new Date();
     const diffDays = Math.floor((today - shiftDate) / (1000 * 60 * 60 * 24));
@@ -695,7 +673,6 @@ exports.registerVendorCost = onCall(async (request) => {
       throw new HttpsError('failed-precondition', 'Cannot register vendor costs older than 7 days');
     }
     
-    // 6. Check for duplicates
     const existingSnap = await db
       .collection('vendor_costs')
       .where('shiftId', '==', data.shiftId)
@@ -707,7 +684,6 @@ exports.registerVendorCost = onCall(async (request) => {
       throw new HttpsError('already-exists', 'Vendor cost already registered for this shift');
     }
     
-    // 7. Validate all vendors exist and are active
     const vendorIds = data.vendors.map(v => v.vendorId);
     const vendorsSnap = await db
       .collection('vendors')
@@ -723,17 +699,12 @@ exports.registerVendorCost = onCall(async (request) => {
       throw new HttpsError('failed-precondition', `Vendor ${inactiveVendor.data().nombre} is inactive`);
     }
     
-    // 8. Get guide data
     const guideSnap = await db.collection('guides').doc(guideId).get();
     const guide = guideSnap.data();
     
-    // 9. Calculate salary
     const salarioCalculado = await calculateSalary(data.numPax);
-    
-    // 10. Calculate total vendors
     const totalVendors = data.vendors.reduce((sum, v) => sum + v.importe, 0);
     
-    // 11. Create vendor cost document
     const vendorCostRef = await db.collection('vendor_costs').add({
       shiftId: data.shiftId,
       guideId,
@@ -746,7 +717,7 @@ exports.registerVendorCost = onCall(async (request) => {
         vendorId: v.vendorId,
         vendorName: vendorsSnap.docs[idx].data().nombre,
         importe: v.importe,
-        driveFileId: null // TODO: Apps Script integration
+        driveFileId: null
       })),
       totalVendors,
       salarioCalculado,
@@ -785,9 +756,6 @@ exports.registerVendorCost = onCall(async (request) => {
   }
 });
 
-// =========================================
-// FUNCTION: reportInvoiceError (CALLABLE)
-// =========================================
 exports.reportInvoiceError = onCall({
   cors: true,
   secrets: [sendgridKey]
@@ -822,17 +790,14 @@ exports.reportInvoiceError = onCall({
       throw new HttpsError('failed-precondition', 'Invoice already processed');
     }
 
-    // Update status
     await db.collection('guide_invoices').doc(data.invoiceId).update({
       status: 'ERROR_REPORTED',
       updatedAt: FieldValue.serverTimestamp()
     });
 
-    // Get guide data
     const guideSnap = await db.collection('guides').doc(guideId).get();
     const guide = guideSnap.data();
 
-    // Send email to manager
     sgMail.setApiKey(sendgridKey.value());
     await sgMail.send({
       to: MANAGER_EMAIL,
@@ -874,9 +839,7 @@ exports.reportInvoiceError = onCall({
     throw new HttpsError('internal', 'Failed to report error');
   }
 });
-// =========================================
-// FUNCTION: calculateSalaryPreview (CALLABLE)
-// =========================================
+
 exports.calculateSalaryPreview = onCall(async (request) => {
   const { data, auth } = request;
   
