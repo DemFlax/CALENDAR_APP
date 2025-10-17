@@ -48,6 +48,10 @@ const i18n = {
     manualLabel: 'Introducir número manualmente',
     manualInputLabel: 'Número de Factura',
     manualWarning: '⚠️ Atención: Si eliges numeración manual, no podrás volver a usar numeración automática (requisito legal)',
+    irpfTitle: 'Retención IRPF',
+    irpfLabel: '% IRPF a retener',
+    irpfHelp: 'Introduce tu porcentaje de IRPF (ej: 15)',
+    saveIrpfDefault: 'Recordar este % para futuras facturas',
     approveBtn: 'Aprobar Factura',
     reportBtn: 'Reportar Error',
     approvedLabel: 'Factura Aprobada',
@@ -55,8 +59,13 @@ const i18n = {
     invoiceNumber: 'Nº Factura',
     approvedOn: 'Aprobada el',
     toastApproved: 'Factura aprobada correctamente',
-    toastError: 'Error al aprobar factura',
+    toastApproving: 'Aprobando factura...',
+    toastReporting: 'Reportando error...',
     toastReported: 'Error reportado al manager',
+    toastInvoiceNumberRequired: 'Debes introducir un número de factura',
+    toastIrpfRequired: 'Debes introducir el % de IRPF',
+    toastIrpfInvalid: 'El % de IRPF debe estar entre 0 y 100',
+    toastError: 'Error al procesar la solicitud',
     morning: 'Mañana',
     afternoon: 'Tarde',
     calendar: 'Calendario',
@@ -88,6 +97,10 @@ const i18n = {
     manualLabel: 'Enter number manually',
     manualInputLabel: 'Invoice Number',
     manualWarning: '⚠️ Warning: If you choose manual numbering, you cannot go back to automatic (legal requirement)',
+    irpfTitle: 'IRPF Withholding',
+    irpfLabel: 'IRPF % to withhold',
+    irpfHelp: 'Enter your IRPF percentage (e.g., 15)',
+    saveIrpfDefault: 'Remember this % for future invoices',
     approveBtn: 'Approve Invoice',
     reportBtn: 'Report Error',
     approvedLabel: 'Invoice Approved',
@@ -95,8 +108,13 @@ const i18n = {
     invoiceNumber: 'Invoice #',
     approvedOn: 'Approved on',
     toastApproved: 'Invoice approved successfully',
-    toastError: 'Error approving invoice',
+    toastApproving: 'Approving invoice...',
+    toastReporting: 'Reporting error...',
     toastReported: 'Error reported to manager',
+    toastInvoiceNumberRequired: 'You must enter an invoice number',
+    toastIrpfRequired: 'You must enter the IRPF %',
+    toastIrpfInvalid: 'IRPF % must be between 0 and 100',
+    toastError: 'Error processing request',
     morning: 'Morning',
     afternoon: 'Afternoon',
     calendar: 'Calendar',
@@ -118,6 +136,7 @@ let guideName = '';
 let pendingUnsubscribe = null;
 let historyUnsubscribe = null;
 let currentInvoice = null;
+let defaultIrpf = 15;
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
@@ -141,6 +160,8 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     guideName = guideDoc.data().nombre;
+    defaultIrpf = guideDoc.data().defaultIrpfPercent || 15;
+    
     updateUILanguage();
     initLanguageToggle();
     loadInvoices();
@@ -166,6 +187,10 @@ function updateUILanguage() {
   document.getElementById('manual-label').textContent = t('manualLabel');
   document.getElementById('manual-input-label').textContent = t('manualInputLabel');
   document.getElementById('manual-warning').textContent = t('manualWarning');
+  document.getElementById('irpf-title').textContent = t('irpfTitle');
+  document.getElementById('irpf-label').textContent = t('irpfLabel');
+  document.getElementById('irpf-help').textContent = t('irpfHelp');
+  document.getElementById('save-irpf-label').textContent = t('saveIrpfDefault');
   document.getElementById('approve-text').textContent = t('approveBtn');
   document.getElementById('report-text').textContent = t('reportBtn');
   document.getElementById('approved-label').textContent = t('approvedLabel');
@@ -187,7 +212,6 @@ function initLanguageToggle() {
 }
 
 function loadInvoices() {
-  // Facturas pendientes
   if (pendingUnsubscribe) pendingUnsubscribe();
   
   const pendingQuery = query(
@@ -201,7 +225,6 @@ function loadInvoices() {
     renderInvoices(snapshot, 'pending-invoices', true);
   });
 
-  // Historial (aprobadas y errores)
   if (historyUnsubscribe) historyUnsubscribe();
   
   const historyQuery = query(
@@ -243,7 +266,7 @@ function renderInvoices(snapshot, containerId, isPending) {
           <div>
             <h3 class="text-lg font-semibold dark:text-white">${monthName} ${year}</h3>
             <p class="text-sm text-gray-600 dark:text-gray-400">${inv.tours.length} tours</p>
-            <p class="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">${inv.totalSalary.toFixed(2)}€</p>
+            <p class="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">${(inv.totalSalary || 0).toFixed(2)}€</p>
           </div>
           <div class="flex flex-col items-start sm:items-end gap-2">
             <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusClass}">${statusText}</span>
@@ -255,7 +278,6 @@ function renderInvoices(snapshot, containerId, isPending) {
     `;
   }).join('');
 
-  // Event listeners
   container.querySelectorAll('[data-invoice-id]').forEach(card => {
     card.querySelector('.view-detail-btn').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -270,7 +292,6 @@ function openInvoiceModal(invoice) {
   currentInvoice = invoice;
   const modal = document.getElementById('invoice-modal');
   
-  // Datos guía
   document.getElementById('modal-guide-name').textContent = invoice.guideName;
   document.getElementById('modal-guide-email').textContent = invoice.guideEmail;
   
@@ -278,7 +299,6 @@ function openInvoiceModal(invoice) {
   const monthName = monthNames[lang][parseInt(month) - 1];
   document.getElementById('modal-month').textContent = `${t('month')}: ${monthName} ${year}`;
 
-  // Tabla tours
   const tbody = document.getElementById('modal-tours-body');
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
   
@@ -286,28 +306,29 @@ function openInvoiceModal(invoice) {
     const dateObj = new Date(tour.fecha + 'T12:00:00');
     const dateStr = dateObj.toLocaleDateString(locale, { day: '2-digit', month: 'short' });
     const slotStr = tour.slot === 'MAÑANA' ? t('morning') : `${t('afternoon')} ${tour.slot}`;
+    const salary = tour.salarioCalculado || 0;
     
     return `
       <tr class="border-b dark:border-gray-700">
         <td class="px-3 py-2">${dateStr}</td>
         <td class="px-3 py-2">${slotStr}</td>
         <td class="px-3 py-2">${tour.tourDescription || '-'}</td>
-        <td class="px-3 py-2 text-center">${tour.numPax}</td>
-        <td class="px-3 py-2 text-right font-semibold">${tour.salario.toFixed(2)}€</td>
+        <td class="px-3 py-2 text-center">${tour.numPax || 0}</td>
+        <td class="px-3 py-2 text-right font-semibold">${salary.toFixed(2)}€</td>
       </tr>
     `;
   }).join('');
 
-  // Total
-  document.getElementById('modal-total').textContent = `${invoice.totalSalary.toFixed(2)}€`;
+  document.getElementById('modal-total').textContent = `${(invoice.totalSalary || 0).toFixed(2)}€`;
 
-  // Secciones según estado
   const approvalSection = document.getElementById('approval-section');
   const approvedInfo = document.getElementById('approved-info');
 
   if (invoice.status === 'PENDING_APPROVAL') {
     approvalSection.classList.remove('hidden');
     approvedInfo.classList.add('hidden');
+    
+    document.getElementById('irpf-percent').value = defaultIrpf;
   } else if (invoice.status === 'APPROVED') {
     approvalSection.classList.add('hidden');
     approvedInfo.classList.remove('hidden');
@@ -327,13 +348,11 @@ function openInvoiceModal(invoice) {
   modal.classList.remove('hidden');
 }
 
-// Modal controls
 document.getElementById('close-modal').addEventListener('click', () => {
   document.getElementById('invoice-modal').classList.add('hidden');
   currentInvoice = null;
 });
 
-// Invoice mode radio
 document.querySelectorAll('input[name="invoice-mode"]').forEach(radio => {
   radio.addEventListener('change', (e) => {
     const manualContainer = document.getElementById('manual-input-container');
@@ -345,17 +364,28 @@ document.querySelectorAll('input[name="invoice-mode"]').forEach(radio => {
   });
 });
 
-// Approve invoice
 document.getElementById('approve-btn').addEventListener('click', async () => {
   if (!currentInvoice) return;
 
   const mode = document.querySelector('input[name="invoice-mode"]:checked').value;
+  const irpfPercent = parseFloat(document.getElementById('irpf-percent').value);
+  const saveIrpfDefault = document.getElementById('save-irpf-default').checked;
   let invoiceNumber = null;
+
+  if (isNaN(irpfPercent)) {
+    showToast(t('toastIrpfRequired'), 'error');
+    return;
+  }
+
+  if (irpfPercent < 0 || irpfPercent > 100) {
+    showToast(t('toastIrpfInvalid'), 'error');
+    return;
+  }
 
   if (mode === 'MANUAL') {
     invoiceNumber = document.getElementById('manual-invoice-number').value.trim();
     if (!invoiceNumber) {
-      showToast('Debes introducir un número de factura', 'error');
+      showToast(t('toastInvoiceNumberRequired'), 'error');
       return;
     }
   }
@@ -364,14 +394,18 @@ document.getElementById('approve-btn').addEventListener('click', async () => {
   approveBtn.disabled = true;
   approveBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
+  showToast(t('toastApproving'), 'info');
+
   try {
-    const functions = getFunctions();
+    const functions = getFunctions(undefined, 'us-central1');
     const approveInvoice = httpsCallable(functions, 'approveInvoice');
     
     await approveInvoice({
       invoiceId: currentInvoice.id,
-      mode: mode,
-      invoiceNumber: invoiceNumber
+      useAutoNumber: mode === 'AUTO',
+      invoiceNumber: mode === 'MANUAL' ? invoiceNumber : null,
+      irpfPercent: irpfPercent,
+      saveIrpfDefault: saveIrpfDefault
     });
 
     showToast(t('toastApproved'), 'success');
@@ -379,14 +413,14 @@ document.getElementById('approve-btn').addEventListener('click', async () => {
     currentInvoice = null;
   } catch (error) {
     console.error('Error approving invoice:', error);
-    showToast(error.message || t('toastError'), 'error');
+    const errorMessage = error.message || t('toastError');
+    showToast(errorMessage, 'error');
   } finally {
     approveBtn.disabled = false;
     approveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
   }
 });
 
-// Report error
 document.getElementById('report-error-btn').addEventListener('click', async () => {
   if (!currentInvoice) return;
 
@@ -394,8 +428,10 @@ document.getElementById('report-error-btn').addEventListener('click', async () =
   reportBtn.disabled = true;
   reportBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
+  showToast(t('toastReporting'), 'info');
+
   try {
-    const functions = getFunctions();
+    const functions = getFunctions(undefined, 'us-central1');
     const reportInvoiceError = httpsCallable(functions, 'reportInvoiceError');
     
     await reportInvoiceError({
@@ -407,7 +443,8 @@ document.getElementById('report-error-btn').addEventListener('click', async () =
     currentInvoice = null;
   } catch (error) {
     console.error('Error reporting:', error);
-    showToast(error.message || t('toastError'), 'error');
+    const errorMessage = error.message || t('toastError');
+    showToast(errorMessage, 'error');
   } finally {
     reportBtn.disabled = false;
     reportBtn.classList.remove('opacity-50', 'cursor-not-allowed');

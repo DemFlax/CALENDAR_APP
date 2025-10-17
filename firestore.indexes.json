@@ -74,6 +74,15 @@
       ]
     },
     {
+      "collectionGroup": "guide_invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "guideId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "vendor_reports",
       "queryScope": "COLLECTION",
       "fields": [

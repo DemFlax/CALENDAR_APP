@@ -135,7 +135,8 @@ async function generateInvoicePDF(invoiceData) {
         doc.text(dateStr, 50, y, { width: colWidths.fecha });
         doc.text(tour.tourDescription.substring(0, 35), 130, y, { width: colWidths.tour });
         doc.text(tour.numPax.toString(), 330, y, { width: colWidths.pax });
-        doc.text(`${tour.salarioCalculado.toFixed(2)}€`, 380, y, { width: colWidths.salario, align: 'right' });
+        const salary = tour.salarioCalculado || 0;
+        doc.text(`${salary.toFixed(2)}€`, 380, y, { width: colWidths.salario, align: 'right' });
         y += 20;
       });
       
@@ -146,29 +147,35 @@ async function generateInvoicePDF(invoiceData) {
       // Totales
       doc.font('Helvetica-Bold').fontSize(10);
       const rightX = 460;
-      
+
+      const totalSalary = invoiceData.totalSalary || 0;
+      const baseImponible = invoiceData.baseImponible || 0;
+      const iva = invoiceData.iva || 0;
+      const irpfAmount = invoiceData.irpfAmount || 0;
+      const totalNeto = invoiceData.totalNeto || 0;
+
       doc.text('TOTAL BRUTO:', rightX - 100, y);
-      doc.text(`${invoiceData.totalSalary.toFixed(2)}€`, rightX, y, { align: 'right' });
+      doc.text(`${totalSalary.toFixed(2)}€`, rightX, y, { align: 'right' });
       y += 20;
-      
+
       doc.text('BASE IMPONIBLE:', rightX - 100, y);
-      doc.text(`${invoiceData.baseImponible.toFixed(2)}€`, rightX, y, { align: 'right' });
+      doc.text(`${baseImponible.toFixed(2)}€`, rightX, y, { align: 'right' });
       y += 20;
-      
+
       doc.text('IVA (21%):', rightX - 100, y);
-      doc.text(`${invoiceData.iva.toFixed(2)}€`, rightX, y, { align: 'right' });
+      doc.text(`${iva.toFixed(2)}€`, rightX, y, { align: 'right' });
       y += 20;
-      
+
       doc.text(`IRPF (${invoiceData.irpfPercent}%):`, rightX - 100, y);
-      doc.text(`-${invoiceData.irpfAmount.toFixed(2)}€`, rightX, y, { align: 'right' });
+      doc.text(`-${irpfAmount.toFixed(2)}€`, rightX, y, { align: 'right' });
       y += 25;
-      
+
       doc.moveTo(rightX - 100, y).lineTo(550, y).stroke();
       y += 10;
-      
+
       doc.fontSize(12);
       doc.text('TOTAL NETO:', rightX - 100, y);
-      doc.text(`${invoiceData.totalNeto.toFixed(2)}€`, rightX, y, { align: 'right' });
+      doc.text(`${totalNeto.toFixed(2)}€`, rightX, y, { align: 'right' });
       
       // Footer
       doc.fontSize(8).font('Helvetica');
@@ -378,9 +385,6 @@ exports.generateGuideInvoices = onSchedule({
   }
 });
 
-// =========================================
-// FUNCTION: approveInvoice (CALLABLE)
-// =========================================
 exports.approveInvoice = onCall({
   secrets: [sendgridKey]
 }, async (request) => {
@@ -641,9 +645,7 @@ exports.approveInvoice = onCall({
   }
 });
 
-// =========================================
-// FUNCTION: registerVendorCost (CALLABLE)
-// =========================================
+
 exports.registerVendorCost = onCall(async (request) => {
   const { data, auth } = request;
   
@@ -871,6 +873,9 @@ exports.reportInvoiceError = onCall({
     throw new HttpsError('internal', 'Failed to report error');
   }
 });
+// =========================================
+// FUNCTION: calculateSalaryPreview (CALLABLE)
+// =========================================
 exports.calculateSalaryPreview = onCall(async (request) => {
   const { data, auth } = request;
   
