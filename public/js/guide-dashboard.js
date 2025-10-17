@@ -51,7 +51,8 @@ const i18n = {
     toastUnblocked: 'Turno desbloqueado',
     toastAfternoonBlocked: 'Tarde bloqueada',
     toastAfternoonUnblocked: 'Tarde desbloqueada',
-    toastError: 'Error'
+    toastError: 'Error',
+    invoices: 'Facturas'
   },
   en: {
     pageTitle: 'Tours Calendar',
@@ -77,7 +78,8 @@ const i18n = {
     toastUnblocked: 'Shift unblocked',
     toastAfternoonBlocked: 'Afternoon blocked',
     toastAfternoonUnblocked: 'Afternoon unblocked',
-    toastError: 'Error'
+    toastError: 'Error',
+    invoices: 'Invoices'
   }
 };
 
@@ -130,6 +132,9 @@ function updateUILanguage() {
   document.getElementById('page-title').textContent = `${t('pageTitle')} - ${guideName}`;
   document.getElementById('upcoming-title').textContent = t('upcomingAssignments');
   document.getElementById('calendar-title').textContent = t('calendarTitle');
+  
+  // Update invoices link
+  document.querySelector('a[href="/my-invoices.html"]').textContent = t('invoices');
   
   // Update month selector
   const monthSelect = document.getElementById('month-select');
