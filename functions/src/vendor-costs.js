@@ -784,8 +784,93 @@ exports.registerVendorCost = onCall(async (request) => {
 });
 
 // =========================================
-// FUNCTION: calculateSalaryPreview (CALLABLE)
+// FUNCTION: reportInvoiceError (CALLABLE)
 // =========================================
+exports.reportInvoiceError = onCall({
+  secrets: [sendgridKey]
+}, async (request) => {
+  const { data, auth } = request;
+  
+  if (!auth || auth.token.role !== 'guide') {
+    throw new HttpsError('unauthenticated', 'Must be authenticated guide');
+  }
+  
+  const guideId = auth.token.guideId;
+  const db = getFirestore();
+  
+  if (!data.invoiceId) {
+    throw new HttpsError('invalid-argument', 'invoiceId required');
+  }
+  
+  try {
+    const invoiceSnap = await db.collection('guide_invoices').doc(data.invoiceId).get();
+    
+    if (!invoiceSnap.exists) {
+      throw new HttpsError('not-found', 'Invoice not found');
+    }
+    
+    const invoice = invoiceSnap.data();
+    
+    if (invoice.guideId !== guideId) {
+      throw new HttpsError('permission-denied', 'Not your invoice');
+    }
+    
+    if (invoice.status !== 'PENDING_APPROVAL') {
+      throw new HttpsError('failed-precondition', 'Invoice already processed');
+    }
+    
+    // Update status
+    await db.collection('guide_invoices').doc(data.invoiceId).update({
+      status: 'ERROR_REPORTED',
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    
+    // Get guide data
+    const guideSnap = await db.collection('guides').doc(guideId).get();
+    const guide = guideSnap.data();
+    
+    // Send email to manager
+    sgMail.setApiKey(sendgridKey.value());
+    await sgMail.send({
+      to: MANAGER_EMAIL,
+      from: { email: FROM_EMAIL, name: FROM_NAME },
+      subject: `⚠️ Error reportado en factura: ${guide.nombre} - ${invoice.month}`,
+      html: `
+        <div style="font-family: Arial, sans-serif;">
+          <h3>Error reportado en factura</h3>
+          <p><strong>Guía:</strong> ${guide.nombre}</p>
+          <p><strong>Email:</strong> ${guide.email}</p>
+          <p><strong>Mes:</strong> ${invoice.month}</p>
+          <p><strong>Total:</strong> ${invoice.totalSalary.toFixed(2)}€</p>
+          <p><strong>Tours:</strong> ${invoice.tours.length}</p>
+          <hr>
+          <p>El guía ha reportado un error en su factura. Por favor, revisa los datos y contacta con el guía.</p>
+        </div>
+      `
+    });
+    
+    logger.info('Invoice error reported', {
+      invoiceId: data.invoiceId,
+      guideId,
+      guideName: guide.nombre
+    });
+    
+    return { success: true };
+    
+  } catch (error) {
+    logger.error('Error reporting invoice error', {
+      invoiceId: data.invoiceId,
+      guideId,
+      error: error.message
+    });
+    
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    
+    throw new HttpsError('internal', 'Failed to report error');
+  }
+});
 exports.calculateSalaryPreview = onCall(async (request) => {
   const { data, auth } = request;
   
