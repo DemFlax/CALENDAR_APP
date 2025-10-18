@@ -520,3 +520,4 @@ exports.registerVendorCost = vendorCosts.registerVendorCost;
 exports.calculateSalaryPreview = vendorCosts.calculateSalaryPreview;
 exports.generateGuideInvoices = vendorCosts.generateGuideInvoices;
 exports.approveInvoice = vendorCosts.approveInvoice;
+exports.reportInvoiceError = vendorCosts.reportInvoiceError;

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sfs-calendar-v1';
+const CACHE_NAME = 'sfs-calendar-v2';  // ← CAMBIAR DE v1 A v2
 const OFFLINE_PAGE = '/login.html';
 
 // Archivos críticos para cache

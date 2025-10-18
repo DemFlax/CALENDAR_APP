@@ -1,8 +1,8 @@
-import { auth } from './firebase-config.js';
+import { auth, appsScriptConfig } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxRbDkivGGReX6mKHsJb90U4k3t0O1ukr2Gena_6Jq_1JpUc2ElvwQ7g3UxsLSyxD5ggA/exec';
-const API_KEY = 'sfs-calendar-2024-secure-key';
+const APPS_SCRIPT_URL = appsScriptConfig.url;
+const API_KEY = appsScriptConfig.apiKey;
 
 // Auto dark mode detection
 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -21,8 +21,6 @@ let currentUser = null;
 let cachedAssignments = [];
 let openAssignmentId = null;
 
-// ... resto del archivo sin cambios EXCEPTO eliminar estas líneas al final:
-
 onAuthStateChanged(auth, (user) => {
   if (user) {
     currentUser = user;
@@ -37,26 +35,26 @@ function initFilters() {
   const monthSelect = document.getElementById('month-select');
   const yearSelect = document.getElementById('year-select');
   const guideFilter = document.getElementById('guide-filter');
-  
+ 
   const currentYear = new Date().getFullYear();
   for (let y = currentYear - 1; y <= currentYear + 1; y++) {
     yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
   }
-  
+ 
   const today = new Date();
   monthSelect.value = String(today.getMonth() + 1).padStart(2, '0');
   yearSelect.value = currentYear;
-  
+ 
   monthSelect.addEventListener('change', () => {
     openAssignmentId = null;
     loadAssignments();
   });
-  
+ 
   yearSelect.addEventListener('change', () => {
     openAssignmentId = null;
     loadAssignments();
   });
-  
+ 
   guideFilter.addEventListener('change', () => {
     openAssignmentId = null;
     renderFilteredAssignments();
@@ -65,32 +63,32 @@ function initFilters() {
 
 async function loadAssignments() {
   showLoading();
-  
+ 
   const month = document.getElementById('month-select').value;
   const year = document.getElementById('year-select').value;
-  
+ 
   if (!month || !year) return;
-  
+ 
   const startDate = `${year}-${month}-01`;
   const endDate = `${year}-${month}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
-  
+ 
   try {
     const url = `${APPS_SCRIPT_URL}?endpoint=getAssignedTours&startDate=${startDate}&endDate=${endDate}&apiKey=${API_KEY}`;
-    
+   
     const response = await fetch(url, {
       method: 'GET',
       headers: { 'Accept': 'application/json' }
     });
-    
+   
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    
+   
     const data = await response.json();
     if (data.error) throw new Error(data.message || 'Error desconocido');
-    
+   
     cachedAssignments = data.assignments || [];
     updateGuideFilter(cachedAssignments);
     renderFilteredAssignments();
-    
+   
   } catch (error) {
     console.error('Error loading assignments:', error);
     hideLoading();
@@ -103,59 +101,59 @@ async function loadAssignments() {
 function updateGuideFilter(assignments) {
   const guideFilter = document.getElementById('guide-filter');
   const currentValue = guideFilter.value;
-  
+ 
   const guidesMap = new Map();
   assignments.forEach(a => {
     if (!guidesMap.has(a.guideEmail)) {
       guidesMap.set(a.guideEmail, a.guideName);
     }
   });
-  
+ 
   guideFilter.innerHTML = '<option value="">Todos los guías</option>';
-  
+ 
   Array.from(guidesMap.entries())
     .sort((a, b) => a[1].localeCompare(b[1]))
     .forEach(([email, name]) => {
       guideFilter.innerHTML += `<option value="${email}">${name}</option>`;
     });
-  
+ 
   if (currentValue) guideFilter.value = currentValue;
 }
 
 function renderFilteredAssignments() {
   hideLoading();
-  
+ 
   const selectedGuideEmail = document.getElementById('guide-filter').value;
   let filtered = cachedAssignments;
-  
+ 
   if (selectedGuideEmail) {
     filtered = cachedAssignments.filter(a => a.guideEmail === selectedGuideEmail);
   }
-  
+ 
   renderAssignments(filtered);
 }
 
 function renderAssignments(assignments) {
   const container = document.getElementById('assignments-container');
   const countSpan = document.getElementById('assignments-count');
-  
+ 
   if (assignments.length === 0) {
     document.getElementById('empty-state').classList.remove('hidden');
     container.innerHTML = '';
     countSpan.textContent = '0';
     return;
   }
-  
+ 
   document.getElementById('empty-state').classList.add('hidden');
   container.innerHTML = '';
   countSpan.textContent = assignments.length;
-  
+ 
   assignments.sort((a, b) => {
     const dateCompare = a.fecha.localeCompare(b.fecha);
     if (dateCompare !== 0) return dateCompare;
     return (a.startTime || '').localeCompare(b.startTime || '');
   });
-  
+ 
   assignments.forEach(assignment => {
     container.appendChild(createAssignmentCard(assignment));
   });
@@ -167,16 +165,16 @@ function createAssignmentCard(assignment) {
   const day = dateObj.getDate();
   const monthName = dateObj.toLocaleDateString('es-ES', { month: 'short' });
   const year = dateObj.getFullYear();
-  
+ 
   const assignmentId = `${assignment.guideEmail}_${assignment.fecha}_${assignment.slot}`;
   const isOpen = openAssignmentId === assignmentId;
-  
+ 
   const card = document.createElement('div');
   card.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700';
-  
+ 
   const header = document.createElement('div');
   header.className = 'p-4 cursor-pointer hover:bg-sky-50 dark:hover:bg-sky-900/20 transition';
-  
+ 
   header.innerHTML = `
     <div class="flex items-center justify-between gap-3">
       <div class="flex-1 min-w-0">
@@ -213,13 +211,13 @@ function createAssignmentCard(assignment) {
       </div>
     </div>
   `;
-  
+ 
   header.addEventListener('click', () => toggleAssignment(assignmentId));
   card.appendChild(header);
-  
+ 
   const body = document.createElement('div');
   body.className = `overflow-hidden transition-all duration-300 ${isOpen ? 'max-h-[2000px]' : 'max-h-0'}`;
-  
+ 
   if (!assignment.guests || assignment.guests.length === 0) {
     body.innerHTML = `
       <div class="p-4 border-t border-gray-200 dark:border-gray-700">
@@ -269,7 +267,7 @@ function createAssignmentCard(assignment) {
         </div>
       </div>
     `).join('');
-    
+   
     body.innerHTML = `
       <div class="p-4 border-t border-gray-200 dark:border-gray-700">
         <h4 class="text-base font-bold text-gray-900 dark:text-white mb-4">
@@ -281,7 +279,7 @@ function createAssignmentCard(assignment) {
       </div>
     `;
   }
-  
+ 
   card.appendChild(body);
   return card;
 }
@@ -300,11 +298,11 @@ window.copyPhoneNumber = (phone, event) => {
   const button = event.target.closest('button');
   const icon = button.querySelector('svg');
   const originalIcon = icon.innerHTML;
-  
+ 
   icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>`;
   icon.classList.add('text-green-600', 'dark:text-green-400');
   button.classList.add('scale-110', 'bg-green-100', 'dark:bg-green-900/30');
-  
+ 
   navigator.clipboard.writeText(cleanPhone).then(() => {
     showToast('Teléfono copiado', 'success');
     setTimeout(() => {
@@ -343,15 +341,6 @@ function showToast(message, type = 'info') {
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3000);
 }
-
-document.getElementById('logout-btn').addEventListener('click', async () => {
-  try {
-    await signOut(auth);
-    window.location.href = '/login.html';
-  } catch (error) {
-    console.error('Error signing out:', error);
-  }
-});
 
 document.getElementById('logout-btn').addEventListener('click', async () => {
   try {

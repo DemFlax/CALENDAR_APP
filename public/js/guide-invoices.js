@@ -299,25 +299,25 @@ function openInvoiceModal(invoice) {
   const monthName = monthNames[lang][parseInt(month) - 1];
   document.getElementById('modal-month').textContent = `${t('month')}: ${monthName} ${year}`;
 
-  const tbody = document.getElementById('modal-tours-body');
-  const locale = lang === 'es' ? 'es-ES' : 'en-US';
+ const tbody = document.getElementById('modal-tours-body');
+const locale = lang === 'es' ? 'es-ES' : 'en-US';
 
-  tbody.innerHTML = invoice.tours.map(tour => {
-    const dateObj = new Date(tour.fecha + 'T12:00:00');
-    const dateStr = dateObj.toLocaleDateString(locale, { day: '2-digit', month: 'short' });
-    const slotStr = tour.slot === 'MAÑANA' ? t('morning') : `${t('afternoon')} ${tour.slot}`;
-    const salary = tour.salarioCalculado || 0;
+tbody.innerHTML = invoice.tours.map(tour => {
+  const dateObj = new Date(tour.fecha + 'T12:00:00');
+  const dateStr = dateObj.toLocaleDateString(locale, { day: '2-digit', month: 'short' });
+  const slotStr = tour.slot === 'MAÑANA' ? t('morning') : `${t('afternoon')} ${tour.slot}`;
+  const salary = tour.salario || tour.salarioCalculado || 0;
 
-    return `
-      <tr class="border-b dark:border-gray-700">
-        <td class="px-3 py-2">${dateStr}</td>
-        <td class="px-3 py-2">${slotStr}</td>
-        <td class="px-3 py-2">${tour.tourDescription || '-'}</td>
-        <td class="px-3 py-2 text-center">${tour.numPax || 0}</td>
-        <td class="px-3 py-2 text-right font-semibold">${salary.toFixed(2)}€</td>
-      </tr>
-    `;
-  }).join('');
+  return `
+    <tr class="border-b dark:border-gray-700">
+      <td class="px-3 py-2">${dateStr}</td>
+      <td class="px-3 py-2">${slotStr}</td>
+      <td class="px-3 py-2">${tour.tourDescription || '-'}</td>
+      <td class="px-3 py-2 text-center">${tour.numPax || 0}</td>
+      <td class="px-3 py-2 text-right font-semibold">${salary.toFixed(2)}€</td>
+    </tr>
+  `;
+}).join('');
 
   document.getElementById('modal-total').textContent = `${(invoice.totalSalary || 0).toFixed(2)}€`;
 

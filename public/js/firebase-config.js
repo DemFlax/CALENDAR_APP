@@ -12,7 +12,7 @@ const firebaseConfig = {
 };
 
 export const appsScriptConfig = {
-  url: 'https://script.google.com/macros/s/AKfycbxShaMF9Cg5GhvYHECwLUqcJw2qnyP9TRBT6GykZT3G30a4T4cuWCU8R-Ff-StY8ROhbg/exec',
+  url: 'https://script.google.com/macros/s/AKfycbybUHs6CR9oK6M6vO55puFHtQZwCcEW48TsJmm_ksP-NU0ARFU40JXTeuzBmCZCT_dFpQ/exec',
   apiKey: 'sfs-calendar-2024-secure-key'
 };
 
@@ -24,3 +24,4 @@ if (location.hostname === 'localhost') {
   connectAuthEmulator(auth, 'http://localhost:9099');
   connectFirestoreEmulator(db, 'localhost', 8082);
 }
+export default firebaseConfig;
