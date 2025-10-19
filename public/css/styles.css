@@ -79,6 +79,8 @@ body {
   background-color: #1e293b !important;
   color: #cbd5e1 !important;
   border-color: #334155 !important;
+  font-weight: 600 !important;
+  padding: 12px 8px !important;
 }
 
 .dark .guide-calendar-table tbody tr {
@@ -92,23 +94,56 @@ body {
 .dark .guide-calendar-table tbody td {
   border-color: #334155 !important;
   color: #f1f5f9 !important;
+  padding: 8px !important;
 }
 
 .dark .guide-calendar-table tbody tr:hover {
   background-color: #1e293b !important;
 }
 
-/* ========== BUTTONS - GUIDE CALENDAR ========== */
+/* ========== GUIDE CALENDAR BUTTONS ========== */
+.calendar-btn {
+  min-height: 44px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+  touch-action: manipulation;
+}
+
 .dark button[class*="bg-green"] {
-  background-color: #10b981 !important;
+  background-color: #059669 !important;
+  color: white !important;
+}
+
+.dark button[class*="bg-green"]:hover {
+  background-color: #047857 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
 }
 
 .dark button[class*="bg-blue"] {
-  background-color: #3b82f6 !important;
+  background-color: #2563eb !important;
+  color: white !important;
+}
+
+.dark button[class*="bg-blue"]:hover {
+  background-color: #1d4ed8 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
 }
 
 .dark button[class*="bg-gray"] {
-  background-color: #6b7280 !important;
+  background-color: #475569 !important;
+  color: white !important;
+}
+
+.dark button[class*="bg-gray"]:hover {
+  background-color: #334155 !important;
 }
 
 /* ========== MANAGER CALENDAR ========== */
@@ -292,28 +327,30 @@ body {
   
   .guide-calendar-table th:first-child,
   .guide-calendar-table td:first-child {
-    width: 35%;
+    width: 30%;
+    font-size: 0.7rem !important;
   }
   
   .guide-calendar-table th:nth-child(2),
   .guide-calendar-table td:nth-child(2),
   .guide-calendar-table th:nth-child(3),
   .guide-calendar-table td:nth-child(3) {
-    width: 32.5%;
+    width: 35%;
   }
   
   .guide-calendar-table th,
   .guide-calendar-table td {
-    padding: 0.5rem 0.25rem !important;
-    font-size: 0.7rem !important;
+    padding: 8px 4px !important;
+    font-size: 0.75rem !important;
     word-wrap: break-word;
   }
   
   .calendar-btn {
-    padding: 0.4rem 0.2rem !important;
-    font-size: 0.65rem !important;
+    padding: 8px 6px !important;
+    font-size: 0.75rem !important;
+    min-height: 44px !important;
     white-space: normal;
-    line-height: 1.2;
+    line-height: 1.3;
   }
 }
 
