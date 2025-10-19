@@ -380,7 +380,7 @@ function addVendorRow(preselectedName = null, isFixed = false) {
       <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Foto Ticket</label>
       <input 
         type="file" 
-        accept="image/*,application/pdf"
+        accept="image/*"
         class="w-full text-sm text-gray-800 dark:text-gray-200 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 dark:file:bg-emerald-700 dark:hover:file:bg-emerald-600"
         data-vendor-photo="${index}"
         onchange="handlePhotoChange(${index})"
@@ -451,7 +451,7 @@ function addVendorRowAdditional(availableVendors) {
       <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Foto Ticket</label>
       <input 
         type="file" 
-        accept="image/*,application/pdf"
+        accept="image/*"
         class="w-full text-sm text-gray-800 dark:text-gray-200 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 dark:file:bg-emerald-700 dark:hover:file:bg-emerald-600"
         data-vendor-photo="${index}"
         onchange="handlePhotoChange(${index})"
@@ -471,6 +471,61 @@ function addVendorRowAdditional(availableVendors) {
   `;
   
   container.appendChild(row);
+}
+
+// ============================================
+// IMAGE COMPRESSION FUNCTION
+// ============================================
+async function compressImage(file, maxWidth = 1920, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      const img = new Image();
+      
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        // Redimensionar si excede maxWidth
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convertir a blob
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Error comprimiendo imagen'));
+              return;
+            }
+            
+            // Convertir blob a base64
+            const blobReader = new FileReader();
+            blobReader.onload = () => resolve(blobReader.result);
+            blobReader.onerror = reject;
+            blobReader.readAsDataURL(blob);
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      
+      img.onerror = () => reject(new Error('Error cargando imagen'));
+      img.src = e.target.result;
+    };
+    
+    reader.onerror = () => reject(new Error('Error leyendo archivo'));
+    reader.readAsDataURL(file);
+  });
 }
 
 async function handleVendorCostsSubmit(e, fecha, slot) {
@@ -495,7 +550,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
   
   const submitBtn = e.target.querySelector('[type="submit"]');
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Guardando...';
+  submitBtn.textContent = 'Procesando imágenes...';
   
   try {
     const container = document.getElementById('vendorsContainer');
@@ -535,11 +590,19 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
         justification: null
       };
       
-      // Handle photo upload (convert to base64)
+      // Handle photo upload (compress and convert to base64)
       if (photoInput.files.length > 0) {
+        submitBtn.textContent = `Comprimiendo imagen ${i + 1}/${vendorRows.length}...`;
+        
         const file = photoInput.files[0];
-        const base64 = await fileToBase64(file);
-        vendorItem.ticketPhoto = base64;
+        const compressedBase64 = await compressImage(file);
+        vendorItem.ticketPhoto = compressedBase64;
+        
+        console.log(`Imagen ${i + 1} comprimida:`, {
+          original: Math.round(file.size / 1024) + 'KB',
+          compressed: Math.round(compressedBase64.length * 0.75 / 1024) + 'KB'
+        });
+        
       } else if (justificationInput && justificationInput.value.trim()) {
         vendorItem.justification = justificationInput.value.trim();
       }
@@ -550,6 +613,8 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     if (vendorsData.length === 0) {
       throw new Error('Debes registrar al menos un vendor con importe');
     }
+    
+    submitBtn.textContent = 'Guardando...';
     
     // Get guide name
     const guideName = currentUser.displayName || currentUser.email;
@@ -692,15 +757,6 @@ function formatDate(dateStr) {
 
 function goBack() {
   window.history.back();
-}
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 function showVendorToast(message, type = 'info') {
