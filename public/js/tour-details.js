@@ -1,7 +1,6 @@
-import { auth, db } from './firebase-config.js';
+import { auth, db, appsScriptConfig } from './firebase-config.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { collection, addDoc, serverTimestamp, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import { getTourGuestDetails } from './calendar-api.js';
 
 // Auto dark mode detection
 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -17,13 +16,14 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)
 });
 
 let eventData = null;
-let guests = [];
-// ... resto del código sin cambios
 let currentUser = null;
 let userRole = null;
 let guideId = null;
 let vendorsList = [];
-let shiftId = null;
+
+// TOUR NAVIGATION STATE
+let allTours = [];
+let currentTourIndex = 0;
 
 async function init() {
   onAuthStateChanged(auth, async (user) => {
@@ -37,66 +37,125 @@ async function init() {
     userRole = token.claims.role;
     guideId = token.claims.guideId;
     
-    await loadTourData();
+    await loadAllTours();
+    
+    // Setup navigation buttons
+    document.getElementById('prevTourBtn').addEventListener('click', () => navigateTour(-1));
+    document.getElementById('nextTourBtn').addEventListener('click', () => navigateTour(1));
+    document.getElementById('backButton').addEventListener('click', goBack);
   });
 }
 
-async function loadTourData() {
-  const params = new URLSearchParams(window.location.search);
-  const eventId = params.get('eventId');
-  const title = params.get('title');
-  const date = params.get('date');
-  const time = params.get('time');
-  const slot = params.get('slot');
-  
-  console.log('EventID from URL:', eventId);
-  console.log('Full URL:', window.location.href);
-  
-  if (!eventId) {
-    showError('URL inválida', 'Falta el ID del evento', false);
-    return;
-  }
-  
-  if (date && slot) {
-    shiftId = `${date}_${slot}`;
-  }
-  
-  if (title) document.getElementById('tourTitle').textContent = decodeURIComponent(title);
-  if (date) document.getElementById('tourDate').textContent = formatDate(date);
-  if (time) document.getElementById('tourTime').textContent = time;
-  
-  document.getElementById('backButton').addEventListener('click', goBack);
-  document.getElementById('retryButton').addEventListener('click', () => loadTourDetails(eventId));
-  
-  await loadTourDetails(eventId);
-}
-
-async function loadTourDetails(eventId) {
+async function loadAllTours() {
   showLoading();
   
   try {
-    console.log('Calling getTourGuestDetails with eventId:', eventId);
-    eventData = await getTourGuestDetails(eventId);
-    console.log('Received eventData:', eventData);
+    // Get guide's email
+    const guideEmail = currentUser.email;
+    
+    // Date range: 30 days ago to 30 days ahead
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - 30);
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + 30);
+    
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
+    
+    // Call Apps Script to get all assigned tours
+    const url = `${appsScriptConfig.url}?endpoint=getAssignedTours&startDate=${startDateStr}&endDate=${endDateStr}&guideEmail=${encodeURIComponent(guideEmail)}&apiKey=${appsScriptConfig.apiKey}`;
+    
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const data = await response.json();
+    if (data.error) throw new Error(data.message || 'Error cargando tours');
+    
+    allTours = data.assignments || [];
+    
+    // Sort by date DESC (most recent first)
+    allTours.sort((a, b) => {
+      const dateCompare = b.fecha.localeCompare(a.fecha);
+      if (dateCompare !== 0) return dateCompare;
+      return (b.startTime || '').localeCompare(a.startTime || '');
+    });
+    
+    if (allTours.length === 0) {
+      showError('Sin asignaciones', 'No tienes tours asignados en los últimos/próximos 30 días', false);
+      return;
+    }
+    
+    // Find initial tour from URL params
+    const params = new URLSearchParams(window.location.search);
+    const urlEventId = params.get('eventId');
+    
+    if (urlEventId) {
+      const index = allTours.findIndex(t => t.eventId === urlEventId);
+      currentTourIndex = index >= 0 ? index : 0;
+    } else {
+      currentTourIndex = 0;
+    }
+    
+    // Load first tour
+    await loadCurrentTour();
+    
+  } catch (error) {
+    console.error('Error loading tours:', error);
+    showError('Error de conexión', 'No se pudo cargar la lista de tours', true);
+  }
+}
+
+function navigateTour(direction) {
+  const newIndex = currentTourIndex + direction;
+  
+  if (newIndex < 0 || newIndex >= allTours.length) return;
+  
+  currentTourIndex = newIndex;
+  loadCurrentTour();
+}
+
+async function loadCurrentTour() {
+  if (allTours.length === 0) return;
+  
+  const tour = allTours[currentTourIndex];
+  
+  // Update UI indicators
+  document.getElementById('currentTourIndex').textContent = currentTourIndex + 1;
+  document.getElementById('totalTours').textContent = allTours.length;
+  
+  // Update navigation buttons
+  document.getElementById('prevTourBtn').disabled = currentTourIndex === 0;
+  document.getElementById('nextTourBtn').disabled = currentTourIndex === allTours.length - 1;
+  
+  // Update header
+  document.getElementById('tourTitle').textContent = tour.tourName;
+  document.getElementById('tourDate').textContent = formatDate(tour.fecha);
+  document.getElementById('tourTime').textContent = tour.startTime;
+  
+  // Load tour details
+  showLoading();
+  
+  try {
+    console.log('Loading tour details for eventId:', tour.eventId);
+    eventData = await getTourGuestDetails(tour.eventId);
+    console.log('Event data received:', eventData);
     
     if (!eventData) {
       throw new Error('No data received from API');
     }
     
-    document.getElementById('tourTitle').textContent = eventData.summary;
-    document.getElementById('tourTime').textContent = eventData.startTime;
-    
-    guests = eventData.guests || [];
+    const guests = eventData.guests || [];
     
     if (guests.length === 0) {
       showEmptyState();
     } else {
-      renderGuests();
+      renderGuests(guests);
       hideLoading();
       
       // Render vendor costs form ONLY if user is guide
       if (userRole === 'guide') {
-        await renderVendorCostsForm();
+        await renderVendorCostsForm(tour.fecha, tour.slot, guests);
       }
     }
     
@@ -106,7 +165,39 @@ async function loadTourDetails(eventId) {
   }
 }
 
-function renderGuests() {
+async function getTourGuestDetails(eventId) {
+  const url = `${appsScriptConfig.url}?endpoint=getEventDetails&eventId=${eventId}&apiKey=${appsScriptConfig.apiKey}`;
+  
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+    
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const data = await response.json();
+    if (data.error) {
+      const error = new Error(data.message || 'Error');
+      error.code = data.code;
+      throw error;
+    }
+    
+    return data;
+    
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error.name === 'AbortError') {
+      const timeoutError = new Error('Timeout');
+      timeoutError.code = 'TIMEOUT';
+      throw timeoutError;
+    }
+    throw error;
+  }
+}
+
+function renderGuests(guests) {
   const container = document.getElementById('guestsContainer');
   container.innerHTML = '';
   
@@ -163,165 +254,11 @@ function renderGuests() {
   document.getElementById('guestCount').textContent = guests.length;
 }
 
-function handleError(error) {
-  hideLoading();
-  
-  const errorTitle = document.getElementById('errorTitle');
-  const errorMessage = document.getElementById('errorMessage');
-  const retryBtn = document.getElementById('retryButton');
-  const calendarBtn = document.getElementById('viewInCalendarButton');
-  
-  switch(error.code) {
-    case 'UNAUTHORIZED':
-      errorTitle.textContent = 'Sesión expirada';
-      errorMessage.textContent = 'Tu sesión ha expirado. Redirigiendo al login...';
-      retryBtn.classList.add('hidden');
-      calendarBtn.classList.add('hidden');
-      setTimeout(() => window.location.href = '/login.html', 3000);
-      break;
-      
-    case 'NOT_FOUND':
-      errorTitle.textContent = 'Tour no encontrado';
-      errorMessage.textContent = 'El evento no existe o fue eliminado.';
-      retryBtn.classList.add('hidden');
-      calendarBtn.classList.add('hidden');
-      break;
-      
-    case 'TIMEOUT':
-      errorTitle.textContent = 'Conexión lenta';
-      errorMessage.textContent = 'La conexión está tardando más de lo normal.';
-      retryBtn.classList.remove('hidden');
-      calendarBtn.classList.remove('hidden');
-      break;
-      
-    default:
-      errorTitle.textContent = 'Error al cargar detalles';
-      errorMessage.textContent = 'No pudimos conectar con el servidor. Intenta de nuevo.';
-      retryBtn.classList.remove('hidden');
-      calendarBtn.classList.remove('hidden');
-  }
-  
-  calendarBtn.addEventListener('click', openInCalendar);
-  
-  showError();
-}
-
-function openInCalendar() {
-  if (eventData && eventData.htmlLink) {
-    window.open(eventData.htmlLink, '_blank');
-  } else {
-    const params = new URLSearchParams(window.location.search);
-    const eventId = params.get('eventId');
-    window.open(`https://calendar.google.com/calendar/event?eid=${eventId}`, '_blank');
-  }
-}
-
-function showLoading() {
-  document.getElementById('loadingState').classList.remove('hidden');
-  document.getElementById('errorState').classList.add('hidden');
-  document.getElementById('guestsList').classList.add('hidden');
-}
-
-function hideLoading() {
-  document.getElementById('loadingState').classList.add('hidden');
-  document.getElementById('guestsList').classList.remove('hidden');
-}
-
-function showError(title, message, showRetry = true) {
-  document.getElementById('loadingState').classList.add('hidden');
-  document.getElementById('guestsList').classList.add('hidden');
-  document.getElementById('errorState').classList.remove('hidden');
-  
-  if (title) document.getElementById('errorTitle').textContent = title;
-  if (message) document.getElementById('errorMessage').textContent = message;
-  
-  document.getElementById('retryButton').classList.toggle('hidden', !showRetry);
-}
-
-function showEmptyState() {
-  hideLoading();
-  
-  const container = document.getElementById('guestsContainer');
-  container.innerHTML = `
-    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-8 text-center">
-      <svg class="w-16 h-16 text-blue-400 dark:text-blue-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-      </svg>
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Sin información de guests</h3>
-      <p class="text-gray-600 dark:text-gray-300 mb-4">No hay detalles de reservas disponibles para este tour.</p>
-      <button class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-6 py-2 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-semibold shadow-sm transition-colors" onclick="window.openInCalendar()">
-        Ver evento completo en Calendar
-      </button>
-    </div>
-  `;
-  
-  document.getElementById('guestCount').textContent = '0';
-  window.openInCalendar = openInCalendar;
-}
-
-function formatDate(dateStr) {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('es-ES', { 
-    day: '2-digit', 
-    month: '2-digit', 
-    year: 'numeric' 
-  });
-}
-
-function goBack() {
-  window.history.back();
-}
-
-function copyPhoneNumber(phone) {
-  const cleanPhone = phone.replace(/[^\d+]/g, '');
-  const button = event.target.closest('button');
-  const icon = button.querySelector('svg');
-  
-  const originalIcon = icon.innerHTML;
-  
-  icon.innerHTML = `
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-      d="M5 13l4 4L19 7"/>
-  `;
-  icon.classList.add('text-green-600', 'dark:text-green-400');
-  button.classList.add('scale-110', 'bg-green-100', 'dark:bg-green-900/30');
-  
-  navigator.clipboard.writeText(cleanPhone).then(() => {
-    showCopyFeedback();
-    
-    setTimeout(() => {
-      icon.innerHTML = originalIcon;
-      icon.classList.remove('text-green-600', 'dark:text-green-400');
-      button.classList.remove('scale-110', 'bg-green-100', 'dark:bg-green-900/30');
-    }, 1500);
-  }).catch(err => {
-    console.error('Error copying:', err);
-    icon.innerHTML = originalIcon;
-    icon.classList.remove('text-green-600', 'dark:text-green-400');
-    button.classList.remove('scale-110', 'bg-green-100', 'dark:bg-green-900/30');
-    alert('Copiado: ' + cleanPhone);
-  });
-}
-
-function showCopyFeedback() {
-  const toast = document.createElement('div');
-  toast.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
-  toast.textContent = '📋 Teléfono copiado';
-  document.body.appendChild(toast);
-  
-  setTimeout(() => {
-    toast.remove();
-  }, 2000);
-}
-
-window.copyPhoneNumber = copyPhoneNumber;
-
 // ============================================
-// VENDOR COSTS FUNCTIONALITY (NEW CODE)
+// VENDOR COSTS FUNCTIONALITY
 // ============================================
 
-async function renderVendorCostsForm() {
+async function renderVendorCostsForm(fecha, slot, guests) {
   const section = document.getElementById('vendorCostsSection');
   section.classList.remove('hidden');
   
@@ -337,11 +274,17 @@ async function renderVendorCostsForm() {
   const body = document.getElementById('vendorCostsBody');
   const chevron = document.getElementById('vendorCostsChevron');
   
-  header.addEventListener('click', () => {
+  header.onclick = () => {
     const isHidden = body.classList.contains('hidden');
     body.classList.toggle('hidden');
     chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
-  });
+  };
+  
+  // Reset form
+  const form = document.getElementById('vendorCostsForm');
+  form.reset();
+  const container = document.getElementById('vendorsContainer');
+  container.innerHTML = '';
   
   // Add 4 fixed vendors
   const fixedVendors = ['El Escarpín', 'Casa Ciriaco', 'La Revolcona', 'El Abuelo'];
@@ -350,8 +293,7 @@ async function renderVendorCostsForm() {
   });
   
   // Add vendor button (5 additional vendors available)
-  document.getElementById('addVendorBtn').addEventListener('click', () => {
-    const container = document.getElementById('vendorsContainer');
+  document.getElementById('addVendorBtn').onclick = () => {
     const additionalVendors = ['La Campana', 'Los Ferreros', 'El Anciano Rey de los Vinos', 'Cervecería Santa Ana', 'Chocolat Madrid'];
     
     // Count non-fixed vendors
@@ -362,10 +304,10 @@ async function renderVendorCostsForm() {
     } else {
       showVendorToast('Todos los vendors adicionales ya están añadidos', 'warning');
     }
-  });
+  };
   
-  // Form submit
-  document.getElementById('vendorCostsForm').addEventListener('submit', handleVendorCostsSubmit);
+  // Form submit with fecha and slot
+  form.onsubmit = (e) => handleVendorCostsSubmit(e, fecha, slot);
 }
 
 async function loadVendorsList() {
@@ -531,44 +473,16 @@ function addVendorRowAdditional(availableVendors) {
   container.appendChild(row);
 }
 
-function removeVendorRow(index) {
-  const row = document.querySelector(`[data-vendor-index="${index}"]`);
-  if (row && row.dataset.isFixed === 'false') {
-    row.remove();
-  }
-}
-
-function handlePhotoChange(index) {
-  const photoInput = document.querySelector(`[data-vendor-photo="${index}"]`);
-  const justificationArea = document.getElementById(`justificationArea${index}`);
-  
-  if (photoInput.files.length > 0) {
-    justificationArea.classList.add('hidden');
-    const textarea = justificationArea.querySelector('textarea');
-    textarea.removeAttribute('required');
-  } else {
-    justificationArea.classList.remove('hidden');
-    const textarea = justificationArea.querySelector('textarea');
-    textarea.setAttribute('required', 'required');
-  }
-}
-
-async function handleVendorCostsSubmit(e) {
+async function handleVendorCostsSubmit(e, fecha, slot) {
   e.preventDefault();
   
-  if (!shiftId) {
-    showVendorToast('No se pudo identificar el turno. Falta información en la URL.', 'error');
-    return;
-  }
+  const shiftId = `${fecha}_${slot}`;
   
   // Validar que han pasado 2.5 horas desde el tour
-  const params = new URLSearchParams(window.location.search);
-  const fecha = params.get('date');
-  const time = params.get('time');
-  
-  if (fecha && time) {
-    const [hours, minutes] = time.split(':');
-    const eventDateTime = new Date(`${fecha}T${hours}:${minutes}:00`);
+  const tour = allTours[currentTourIndex];
+  if (tour && tour.fecha && tour.startTime) {
+    const [hours, minutes] = tour.startTime.split(':');
+    const eventDateTime = new Date(`${tour.fecha}T${hours}:${minutes}:00`);
     const now = new Date();
     const minTime = new Date(eventDateTime.getTime() + (2.5 * 60 * 60 * 1000));
     
@@ -640,9 +554,6 @@ async function handleVendorCostsSubmit(e) {
     // Get guide name
     const guideName = currentUser.displayName || currentUser.email;
     
-    // Get fecha and slot from shiftId
-    const [fechaFromShift, slot] = shiftId.split('_');
-    
     // Calculate total
     const totalVendors = vendorsData.reduce((sum, v) => sum + v.importe, 0);
     
@@ -654,9 +565,9 @@ async function handleVendorCostsSubmit(e) {
       shiftId: shiftId,
       guideId: guideId,
       guideName: guideName,
-      fecha: fechaFromShift,
+      fecha: fecha,
       slot: slot,
-      tourDescription: eventData.summary,
+      tourDescription: allTours[currentTourIndex].tourName,
       numPax: parseInt(document.getElementById('numPaxInput').value),
       vendors: vendorsData,
       totalVendors: parseFloat(totalVendors.toFixed(2)),
@@ -696,6 +607,93 @@ async function handleVendorCostsSubmit(e) {
     submitBtn.textContent = 'Guardar Costes';
   }
 }
+
+function handleError(error) {
+  hideLoading();
+  
+  const errorTitle = document.getElementById('errorTitle');
+  const errorMessage = document.getElementById('errorMessage');
+  const retryBtn = document.getElementById('retryButton');
+  
+  switch(error.code) {
+    case 'UNAUTHORIZED':
+      errorTitle.textContent = 'Sesión expirada';
+      errorMessage.textContent = 'Tu sesión ha expirado. Redirigiendo al login...';
+      retryBtn.classList.add('hidden');
+      setTimeout(() => window.location.href = '/login.html', 3000);
+      break;
+      
+    case 'NOT_FOUND':
+      errorTitle.textContent = 'Tour no encontrado';
+      errorMessage.textContent = 'El evento no existe o fue eliminado.';
+      retryBtn.classList.add('hidden');
+      break;
+      
+    case 'TIMEOUT':
+      errorTitle.textContent = 'Conexión lenta';
+      errorMessage.textContent = 'La conexión está tardando más de lo normal.';
+      retryBtn.classList.remove('hidden');
+      break;
+      
+    default:
+      errorTitle.textContent = 'Error al cargar detalles';
+      errorMessage.textContent = 'No pudimos conectar con el servidor. Intenta de nuevo.';
+      retryBtn.classList.remove('hidden');
+  }
+  
+  retryBtn.onclick = () => loadCurrentTour();
+  
+  showError();
+}
+
+function showLoading() {
+  document.getElementById('loadingState').classList.remove('hidden');
+  document.getElementById('errorState').classList.add('hidden');
+  document.getElementById('guestsList').classList.add('hidden');
+}
+
+function hideLoading() {
+  document.getElementById('loadingState').classList.add('hidden');
+  document.getElementById('guestsList').classList.remove('hidden');
+}
+
+function showError() {
+  document.getElementById('loadingState').classList.add('hidden');
+  document.getElementById('guestsList').classList.add('hidden');
+  document.getElementById('errorState').classList.remove('hidden');
+}
+
+function showEmptyState() {
+  hideLoading();
+  
+  const container = document.getElementById('guestsContainer');
+  container.innerHTML = `
+    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-8 text-center">
+      <svg class="w-16 h-16 text-blue-400 dark:text-blue-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Sin información de guests</h3>
+      <p class="text-gray-600 dark:text-gray-300 mb-4">No hay detalles de reservas disponibles para este tour.</p>
+    </div>
+  `;
+  
+  document.getElementById('guestCount').textContent = '0';
+}
+
+function formatDate(dateStr) {
+  const date = new Date(dateStr + 'T12:00:00');
+  return date.toLocaleDateString('es-ES', { 
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric' 
+  });
+}
+
+function goBack() {
+  window.history.back();
+}
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -767,7 +765,57 @@ styleSheet.textContent = `
 document.head.appendChild(styleSheet);
 
 // Make functions global for onclick handlers
-window.removeVendorRow = removeVendorRow;
-window.handlePhotoChange = handlePhotoChange;
+window.copyPhoneNumber = (phone) => {
+  const cleanPhone = phone.replace(/[^\d+]/g, '');
+  const button = event.target.closest('button');
+  const icon = button.querySelector('svg');
+  
+  const originalIcon = icon.innerHTML;
+  
+  icon.innerHTML = `
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+      d="M5 13l4 4L19 7"/>
+  `;
+  icon.classList.add('text-green-600', 'dark:text-green-400');
+  button.classList.add('scale-110', 'bg-green-100', 'dark:bg-green-900/30');
+  
+  navigator.clipboard.writeText(cleanPhone).then(() => {
+    showVendorToast('Teléfono copiado', 'success');
+    
+    setTimeout(() => {
+      icon.innerHTML = originalIcon;
+      icon.classList.remove('text-green-600', 'dark:text-green-400');
+      button.classList.remove('scale-110', 'bg-green-100', 'dark:bg-green-900/30');
+    }, 1500);
+  }).catch(err => {
+    console.error('Error copying:', err);
+    icon.innerHTML = originalIcon;
+    icon.classList.remove('text-green-600', 'dark:text-green-400');
+    button.classList.remove('scale-110', 'bg-green-100', 'dark:bg-green-900/30');
+    alert('Copiado: ' + cleanPhone);
+  });
+};
+
+window.removeVendorRow = (index) => {
+  const row = document.querySelector(`[data-vendor-index="${index}"]`);
+  if (row && row.dataset.isFixed === 'false') {
+    row.remove();
+  }
+};
+
+window.handlePhotoChange = (index) => {
+  const photoInput = document.querySelector(`[data-vendor-photo="${index}"]`);
+  const justificationArea = document.getElementById(`justificationArea${index}`);
+  
+  if (photoInput.files.length > 0) {
+    justificationArea.classList.add('hidden');
+    const textarea = justificationArea.querySelector('textarea');
+    textarea.removeAttribute('required');
+  } else {
+    justificationArea.classList.remove('hidden');
+    const textarea = justificationArea.querySelector('textarea');
+    textarea.setAttribute('required', 'required');
+  }
+};
 
 document.addEventListener('DOMContentLoaded', init);

@@ -1,4 +1,4 @@
-import { auth, db } from './firebase-config.js';
+import { auth, db, appsScriptConfig } from './firebase-config.js';
 import {
   collection,
   addDoc,
@@ -13,8 +13,9 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbws9Zl-bzzsJ8Mxnoh2soKx1OafhoTGOcpmizjPEQHVusmjp5BQj4y46eAgGMiUPfYmzA/exec';
-const API_KEY = 'sfs-calendar-2024-secure-key';
+// Usar configuración centralizada
+const APPS_SCRIPT_URL = appsScriptConfig.url;
+const API_KEY = appsScriptConfig.apiKey;
 
 let currentUser = null;
 let vendorsUnsubscribe = null;
