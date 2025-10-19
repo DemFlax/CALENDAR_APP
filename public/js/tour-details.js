@@ -528,6 +528,17 @@ async function compressImage(file, maxWidth = 1920, quality = 0.8) {
   });
 }
 
+// ============================================
+// MONTH FOLDER HELPER
+// ============================================
+function getMonthFolderName(fecha) {
+  const date = new Date(fecha + 'T12:00:00');
+  const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+  const month = months[date.getMonth()];
+  const year = date.getFullYear().toString().slice(-2);
+  return `Tickets-${month}_${year}`;
+}
+
 async function handleVendorCostsSubmit(e, fecha, slot) {
   e.preventDefault();
   
@@ -550,14 +561,16 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
   
   const submitBtn = e.target.querySelector('[type="submit"]');
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Procesando imágenes...';
+  submitBtn.textContent = 'Procesando...';
   
   try {
     const container = document.getElementById('vendorsContainer');
     const vendorRows = Array.from(container.children);
     
-    const vendorsData = [];
+    const vendorsDataForUpload = [];
+    const vendorsForFirestore = [];
     
+    // Recolectar vendors y comprimir imágenes
     for (let i = 0; i < vendorRows.length; i++) {
       const vendorInput = document.querySelector(`[data-vendor-select="${i}"]`);
       const amountInput = document.querySelector(`[data-vendor-amount="${i}"]`);
@@ -566,7 +579,6 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
       
       let vendorId = '';
       
-      // Hidden input (fixed vendors) or select (additional vendors)
       if (vendorInput.tagName === 'INPUT') {
         vendorId = vendorInput.value;
       } else if (vendorInput.tagName === 'SELECT') {
@@ -575,7 +587,6 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
       
       if (!vendorId) continue;
       
-      // Skip if no amount (optional vendor)
       const amount = parseFloat(amountInput.value);
       if (!amount || amount === 0) continue;
       
@@ -585,18 +596,19 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
       const vendorItem = {
         vendorId: vendor.id,
         vendorName: vendor.nombre,
-        importe: amount,
-        ticketPhoto: null,
-        justification: null
+        importe: amount
       };
       
-      // Handle photo upload (compress and convert to base64)
       if (photoInput.files.length > 0) {
-        submitBtn.textContent = `Comprimiendo imagen ${i + 1}/${vendorRows.length}...`;
+        submitBtn.textContent = `Comprimiendo ${i + 1}/${vendorRows.length}...`;
         
         const file = photoInput.files[0];
         const compressedBase64 = await compressImage(file);
-        vendorItem.ticketPhoto = compressedBase64;
+        
+        vendorsDataForUpload.push({
+          ...vendorItem,
+          ticketBase64: compressedBase64
+        });
         
         console.log(`Imagen ${i + 1} comprimida:`, {
           original: Math.round(file.size / 1024) + 'KB',
@@ -605,36 +617,88 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
         
       } else if (justificationInput && justificationInput.value.trim()) {
         vendorItem.justification = justificationInput.value.trim();
+        vendorsForFirestore.push(vendorItem);
       }
-      
-      vendorsData.push(vendorItem);
     }
     
-    if (vendorsData.length === 0) {
+    if (vendorsDataForUpload.length === 0 && vendorsForFirestore.length === 0) {
       throw new Error('Debes registrar al menos un vendor con importe');
+    }
+    
+    // Upload a Drive vía Apps Script
+    let driveUrls = [];
+    if (vendorsDataForUpload.length > 0) {
+      submitBtn.textContent = 'Subiendo a Drive...';
+      
+      const guideName = currentUser.displayName || currentUser.email;
+      const numPax = parseInt(document.getElementById('numPaxInput').value);
+      const monthFolder = getMonthFolderName(fecha);
+      
+      const uploadPayload = {
+        endpoint: 'uploadVendorTickets',
+        apiKey: appsScriptConfig.apiKey,
+        shiftId,
+        guideId,
+        guideName,
+        fecha,
+        slot,
+        numPax,
+        monthFolder,
+        vendorsData: JSON.stringify(vendorsDataForUpload)
+      };
+      
+      const uploadResponse = await fetch(appsScriptConfig.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'  // ✅ Evita preflight
+        },
+        body: JSON.stringify(uploadPayload)
+      });
+      
+      if (!uploadResponse.ok) throw new Error(`Error subiendo a Drive: HTTP ${uploadResponse.status}`);
+      
+      const uploadResult = await uploadResponse.json();
+      if (uploadResult.error) throw new Error(uploadResult.message || 'Error en Apps Script');
+      
+      driveUrls = uploadResult.vendors || [];
     }
     
     submitBtn.textContent = 'Guardando...';
     
-    // Get guide name
-    const guideName = currentUser.displayName || currentUser.email;
+    // Preparar vendors finales para Firestore
+    const finalVendors = [];
+    
+    // Vendors con foto (con URLs de Drive)
+    driveUrls.forEach(uploaded => {
+      const original = vendorsDataForUpload.find(v => v.vendorId === uploaded.vendorId);
+      finalVendors.push({
+        vendorId: original.vendorId,
+        vendorName: original.vendorName,
+        importe: original.importe,
+        ticketUrl: uploaded.driveUrl,
+        driveFileId: uploaded.driveFileId
+      });
+    });
+    
+    // Vendors con justificación (sin foto)
+    vendorsForFirestore.forEach(v => finalVendors.push(v));
     
     // Calculate total
-    const totalVendors = vendorsData.reduce((sum, v) => sum + v.importe, 0);
+    const totalVendors = finalVendors.reduce((sum, v) => sum + v.importe, 0);
     
     // Get feedback
     const feedback = document.getElementById('postTourFeedback').value.trim() || null;
     
-    // Prepare document
+    // Prepare document for Firestore
     const vendorCostDoc = {
-      shiftId: shiftId,
-      guideId: guideId,
-      guideName: guideName,
-      fecha: fecha,
-      slot: slot,
-      tourDescription: allTours[currentTourIndex].tourName,
+      shiftId,
+      guideId,
+      guideName: currentUser.displayName || currentUser.email,
+      fecha,
+      slot,
+      tourDescription: tour.tourName,
       numPax: parseInt(document.getElementById('numPaxInput').value),
-      vendors: vendorsData,
+      vendors: finalVendors,
       totalVendors: parseFloat(totalVendors.toFixed(2)),
       postTourFeedback: feedback,
       salarioCalculado: 0,
