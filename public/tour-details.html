@@ -11,14 +11,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <style>
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-    button, a { min-height: 44px; }
-  </style>
+  <link rel="stylesheet" href="/css/styles.css">
   
   <script>
     if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -30,79 +23,83 @@
   
   <!-- HEADER -->
   <header class="bg-white dark:bg-gray-800 shadow-md fixed top-0 left-0 right-0 z-50 border-b border-gray-200 dark:border-gray-700">
-    <div class="max-w-4xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
-      <div class="flex items-center justify-between">
+  <div class="max-w-4xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
+    <div class="flex items-center justify-between gap-2 sm:gap-3">
+      
+      <button 
+        id="backButton" 
+        class="flex items-center gap-1.5 px-2.5 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors font-medium text-sm"
+      >
+        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+        <span class="hidden sm:inline">Volver</span>
+      </button>
+      
+      <!-- NAVEGACIÓN REDUCIDA -->
+      <div class="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg shadow-sm">
         <button 
-          id="backButton" 
-          class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 flex items-center gap-1 sm:gap-2 font-semibold transition-colors text-sm sm:text-base"
+          id="prevTourBtn" 
+          class="p-1.5 sm:p-2 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors rounded border border-gray-300 dark:border-gray-500"
+          title="Tour anterior"
         >
-          <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-700 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
           </svg>
-          <span>Volver</span>
         </button>
         
-        <!-- NAVEGACIÓN TOURS -->
-        <div class="flex items-center gap-3 sm:gap-4">
-          <button 
-            id="prevTourBtn" 
-            class="p-2.5 sm:p-3 bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 hover:bg-sky-200 dark:hover:bg-sky-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg shadow-sm"
-            title="Tour anterior"
-          >
-            <svg class="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/>
-            </svg>
-          </button>
-          
-          <span class="text-sm sm:text-base font-bold text-gray-700 dark:text-gray-300 px-2">
-            <span id="currentTourIndex">-</span> / <span id="totalTours">-</span>
+        <div class="flex flex-col items-center min-w-[60px] sm:min-w-[70px]">
+          <span class="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 font-medium">Tour</span>
+          <span class="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+            <span id="currentTourIndex">-</span>/<span id="totalTours">-</span>
           </span>
-          
-          <button 
-            id="nextTourBtn" 
-            class="p-2.5 sm:p-3 bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 hover:bg-sky-200 dark:hover:bg-sky-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg shadow-sm"
-            title="Tour siguiente"
-          >
-            <svg class="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
-            </svg>
-          </button>
         </div>
         
-        <!-- BOTÓN SALIR -->
         <button 
-          id="logoutBtn"
-          class="flex items-center gap-2 px-3 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition-colors text-sm font-semibold shadow-sm"
+          id="nextTourBtn" 
+          class="p-1.5 sm:p-2 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors rounded border border-gray-300 dark:border-gray-500"
+          title="Tour siguiente"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-700 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
           </svg>
-          <span class="hidden sm:inline">Salir</span>
         </button>
       </div>
+      
+      <button 
+        id="logoutBtn"
+        class="flex items-center gap-1.5 px-2.5 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition-colors text-sm font-medium"
+      >
+        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/>
+        </svg>
+        <span class="hidden sm:inline">Salir</span>
+      </button>
+      
     </div>
-  </header>
+  </div>
+</header>
   
-  <main class="pt-16 sm:pt-20 pb-4 sm:pb-6 px-3 sm:px-4 max-w-4xl mx-auto">
+  <main class="pt-[68px] sm:pt-20 pb-4 sm:pb-6 px-3 sm:px-4 max-w-4xl mx-auto">
     
     <!-- TOUR HEADER -->
-    <section class="bg-gradient-to-r from-sky-500 to-cyan-600 dark:from-sky-700 dark:to-cyan-800 rounded-xl sm:rounded-2xl shadow-lg p-5 sm:p-6 mb-4 sm:mb-6 text-white">
-      <h2 id="tourTitle" class="text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4 leading-tight"></h2>
+    <section class="bg-gradient-to-r from-sky-500 to-cyan-600 dark:from-sky-700 dark:to-cyan-800 rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6 text-white">
+      <h2 id="tourTitle" class="text-lg sm:text-2xl md:text-3xl font-bold mb-2 sm:mb-4 leading-tight"></h2>
       
       <!-- FECHA Y HORA MÁS VISUALES -->
-      <div class="flex items-center gap-4 sm:gap-6 flex-wrap">
-        <div class="flex items-center gap-2 bg-white/20 dark:bg-black/20 backdrop-blur-sm px-4 py-2.5 rounded-lg">
-          <svg class="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="flex items-center gap-3 sm:gap-6 flex-wrap">
+        <div class="flex items-center gap-2 bg-white/20 dark:bg-black/20 backdrop-blur-sm px-3 py-2 rounded-lg">
+          <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
           </svg>
-          <span id="tourDate" class="font-bold text-base sm:text-lg"></span>
+          <span id="tourDate" class="font-bold text-sm sm:text-lg"></span>
         </div>
         
-        <div class="flex items-center gap-2 bg-white/20 dark:bg-black/20 backdrop-blur-sm px-4 py-2.5 rounded-lg">
-          <svg class="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="flex items-center gap-2 bg-white/20 dark:bg-black/20 backdrop-blur-sm px-3 py-2 rounded-lg">
+          <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
-          <span id="tourTime" class="font-bold text-base sm:text-lg"></span>
+          <span id="tourTime" class="font-bold text-sm sm:text-lg"></span>
         </div>
       </div>
     </section>

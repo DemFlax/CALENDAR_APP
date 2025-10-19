@@ -2,6 +2,136 @@ import { auth, db, appsScriptConfig } from './firebase-config.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { collection, addDoc, serverTimestamp, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
+// ============================================
+// I18N TRANSLATIONS
+// ============================================
+
+const i18n = {
+  es: {
+    backBtn: 'Volver',
+    logoutBtn: 'Salir',
+    tourLabel: 'Tour',
+    loadingDetails: 'Cargando detalles...',
+    errorTitle: 'Error',
+    retryBtn: 'Reintentar',
+    guestListTitle: 'Lista de Invitados',
+    persons: 'personas',
+    person: 'persona',
+    notes: 'Notas',
+    copyPhone: 'Copiar teléfono',
+    phoneCopied: 'Teléfono copiado',
+    viewEvent: 'Ver evento',
+    vendorCostsTitle: 'Registro de Costes',
+    vendorCostsSubtitle: 'Click para registrar tickets',
+    numPaxLabel: 'Número de PAX',
+    numPaxPlaceholder: 'Ej:',
+    vendorsLabel: 'Vendors',
+    feedbackLabel: 'Post-Tour Feedback (opcional)',
+    feedbackPlaceholder: 'Comentarios sobre el tour, incidencias...',
+    saveCostsBtn: 'Guardar Costes',
+    processingBtn: 'Procesando...',
+    compressingBtn: 'Comprimiendo',
+    uploadingBtn: 'Subiendo a Drive...',
+    savingBtn: 'Guardando...',
+    amountLabel: 'Importe (€)',
+    amountPlaceholder: '0.00',
+    photoLabel: 'Foto Ticket',
+    complete: '✓ Completo',
+    incomplete: '⚠ Incompleto',
+    costsSaved: '✅ Costes guardados correctamente',
+    errorSavingCosts: 'Error al guardar costes',
+    errorLogout: 'Error al cerrar sesión',
+    slotUnknown: '⚠️ Horario no estándar detectado. Verifica con el manager.',
+    emptyStateTitle: 'Sin información de guests',
+    emptyStateMessage: 'No hay detalles de reservas para este tour.',
+    errorSessionExpired: 'Sesión expirada',
+    errorSessionExpiredMsg: 'Tu sesión ha expirado. Redirigiendo...',
+    errorNotFound: 'Tour no encontrado',
+    errorNotFoundMsg: 'El evento no existe o fue eliminado.',
+    errorTimeout: 'Conexión lenta',
+    errorTimeoutMsg: 'La conexión está tardando más de lo normal.',
+    errorLoadingDetails: 'Error al cargar detalles',
+    errorLoadingDetailsMsg: 'No pudimos conectar. Intenta de nuevo.',
+    errorNoAssignments: 'Sin asignaciones',
+    errorNoAssignmentsMsg: 'No tienes tours asignados en los últimos/próximos 30 días',
+    errorConnection: 'Error de conexión',
+    errorConnectionMsg: 'No se pudo cargar la lista de tours',
+    errorPaxRequired: 'El número de PAX es obligatorio (1-99)',
+    errorPhotoRequired: 'falta foto del ticket',
+    errorMinVendors: 'Debes registrar al menos un vendor con importe y foto',
+    errorDuplicateFile: 'Ya existe un ticket con ese nombre. Renombra el archivo.',
+    errorTimeRestriction: 'Solo puedes registrar costes 2.5 horas después del tour. Quedan',
+    hoursLabel: 'h.',
+    errorCompressing: 'Error comprimiendo imagen',
+    errorLoadingImage: 'Error cargando imagen',
+    errorReadingFile: 'Error leyendo archivo',
+    copiedAlert: 'Copiado:'
+  },
+  en: {
+    backBtn: 'Back',
+    logoutBtn: 'Logout',
+    tourLabel: 'Tour',
+    loadingDetails: 'Loading details...',
+    errorTitle: 'Error',
+    retryBtn: 'Retry',
+    guestListTitle: 'Guest List',
+    persons: 'persons',
+    person: 'person',
+    notes: 'Notes',
+    copyPhone: 'Copy phone',
+    phoneCopied: 'Phone copied',
+    viewEvent: 'View event',
+    vendorCostsTitle: 'Cost Registration',
+    vendorCostsSubtitle: 'Click to register tickets',
+    numPaxLabel: 'Number of PAX',
+    numPaxPlaceholder: 'Ex:',
+    vendorsLabel: 'Vendors',
+    feedbackLabel: 'Post-Tour Feedback (optional)',
+    feedbackPlaceholder: 'Comments about the tour, incidents...',
+    saveCostsBtn: 'Save Costs',
+    processingBtn: 'Processing...',
+    compressingBtn: 'Compressing',
+    uploadingBtn: 'Uploading to Drive...',
+    savingBtn: 'Saving...',
+    amountLabel: 'Amount (€)',
+    amountPlaceholder: '0.00',
+    photoLabel: 'Ticket Photo',
+    complete: '✓ Complete',
+    incomplete: '⚠ Incomplete',
+    costsSaved: '✅ Costs saved successfully',
+    errorSavingCosts: 'Error saving costs',
+    errorLogout: 'Error logging out',
+    slotUnknown: '⚠️ Non-standard schedule detected. Verify with manager.',
+    emptyStateTitle: 'No guest information',
+    emptyStateMessage: 'No booking details available for this tour.',
+    errorSessionExpired: 'Session expired',
+    errorSessionExpiredMsg: 'Your session has expired. Redirecting...',
+    errorNotFound: 'Tour not found',
+    errorNotFoundMsg: 'The event does not exist or was deleted.',
+    errorTimeout: 'Slow connection',
+    errorTimeoutMsg: 'Connection is taking longer than normal.',
+    errorLoadingDetails: 'Error loading details',
+    errorLoadingDetailsMsg: 'Could not connect. Try again.',
+    errorNoAssignments: 'No assignments',
+    errorNoAssignmentsMsg: 'You have no tours assigned in the last/next 30 days',
+    errorConnection: 'Connection error',
+    errorConnectionMsg: 'Could not load tour list',
+    errorPaxRequired: 'Number of PAX is required (1-99)',
+    errorPhotoRequired: 'ticket photo missing',
+    errorMinVendors: 'You must register at least one vendor with amount and photo',
+    errorDuplicateFile: 'A ticket with that name already exists. Rename the file.',
+    errorTimeRestriction: 'You can only register costs 2.5 hours after the tour.',
+    hoursLabel: 'h left.',
+    errorCompressing: 'Error compressing image',
+    errorLoadingImage: 'Error loading image',
+    errorReadingFile: 'Error reading file',
+    copiedAlert: 'Copied:'
+  }
+};
+
+let lang = localStorage.getItem('lang') || 'es';
+function t(key) { return i18n[lang][key] || key; }
+
 // Auto dark mode
 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
   document.documentElement.classList.add('dark');
@@ -24,9 +154,9 @@ let allTours = [];
 let currentTourIndex = 0;
 
 // VENDOR COSTS STATE
-let vendorCards = {}; // { vendorId: { amount: '', photo: File|null, photoPreview: '', photoName: '' } }
-let uploadedFileNames = new Set(); // Control duplicados
-let currentOpenCard = null; // vendorId o null
+let vendorCards = {};
+let uploadedFileNames = new Set();
+let currentOpenCard = null;
 
 async function init() {
   onAuthStateChanged(auth, async (user) => {
@@ -40,6 +170,8 @@ async function init() {
     userRole = token.claims.role;
     guideId = token.claims.guideId;
     
+    updateUILanguage();
+    
     await loadAllTours();
     
     document.getElementById('prevTourBtn').addEventListener('click', () => navigateTour(-1));
@@ -49,13 +181,21 @@ async function init() {
   });
 }
 
+function updateUILanguage() {
+  const backSpan = document.querySelector('#backButton span');
+  const logoutSpan = document.querySelector('#logoutBtn span');
+  
+  if (backSpan) backSpan.textContent = t('backBtn');
+  if (logoutSpan) logoutSpan.textContent = t('logoutBtn');
+}
+
 async function handleLogout() {
   try {
     await auth.signOut();
     window.location.href = '/login.html';
   } catch (error) {
     console.error('Error al cerrar sesión:', error);
-    showVendorToast('Error al cerrar sesión', 'error');
+    showVendorToast(t('errorLogout'), 'error');
   }
 }
 
@@ -89,7 +229,7 @@ async function loadAllTours() {
     });
     
     if (allTours.length === 0) {
-      showError('Sin asignaciones', 'No tienes tours asignados en los últimos/próximos 30 días', false);
+      showError(t('errorNoAssignments'), t('errorNoAssignmentsMsg'), false);
       return;
     }
     
@@ -107,7 +247,7 @@ async function loadAllTours() {
     
   } catch (error) {
     console.error('Error loading tours:', error);
-    showError('Error de conexión', 'No se pudo cargar la lista de tours', true);
+    showError(t('errorConnection'), t('errorConnectionMsg'), true);
   }
 }
 
@@ -199,43 +339,53 @@ function renderGuests(guests) {
     const card = document.createElement('div');
     card.className = 'bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-lg p-4 sm:p-5 border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow';
     
+    const personsText = guest.pax === 1 ? t('person') : t('persons');
+    
     card.innerHTML = `
       <h3 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2 sm:mb-3">${guest.nombre || 'N/A'}</h3>
       
-      <div class="space-y-1.5 sm:space-y-2 text-gray-600 dark:text-gray-300 text-sm sm:text-base">
+      <div class="space-y-1.5 sm:space-y-2 text-gray-700 dark:text-gray-200 text-sm sm:text-base">
         <div class="flex items-center gap-2">
-          <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
               d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
           </svg>
-          <span>${guest.pax !== null ? guest.pax + ' personas' : 'N/A'}</span>
+          <span class="font-medium">${guest.pax !== null ? guest.pax + ' ' + personsText : 'N/A'}</span>
         </div>
         
         <div class="flex items-center gap-2">
-          <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
               d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
           </svg>
-          <span class="break-all">${guest.telefono || 'N/A'}</span>
-          ${guest.telefono ? `
-            <button onclick="copyPhoneNumber('${guest.telefono}')" class="p-1 sm:p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-all duration-300 flex-shrink-0" title="Copiar teléfono">
-              <svg class="w-4 h-4 text-gray-500 dark:text-gray-400 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          ${guest.telefono && guest.telefono !== 'N/A' ? `
+            <span class="break-all font-medium">${guest.telefono}</span>
+            <button onclick="copyPhoneNumber('${guest.telefono}')" class="p-1 sm:p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-all duration-300 flex-shrink-0" title="${t('copyPhone')}">
+              <svg class="w-4 h-4 text-gray-600 dark:text-gray-400 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                   d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
               </svg>
             </button>
-          ` : ''}
+          ` : `
+            <span class="text-gray-400 font-medium">N/A</span>
+            <a href="${eventData.htmlLink || '#'}" target="_blank" rel="noopener" class="ml-2 inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded text-xs font-semibold hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+              </svg>
+              ${t('viewEvent')}
+            </a>
+          `}
         </div>
         
         ${guest.notas ? `
           <div class="flex items-start gap-2 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-gray-200 dark:border-gray-700">
-            <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 dark:text-gray-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
             <div>
-              <span class="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Notas:</span>
-              <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">${guest.notas}</p>
+              <span class="text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-200">${t('notes')}:</span>
+              <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1">${guest.notas}</p>
             </div>
           </div>
         ` : ''}
@@ -245,7 +395,12 @@ function renderGuests(guests) {
     container.appendChild(card);
   });
   
-  document.getElementById('guestCount').textContent = guests.length;
+  const guestListTitle = document.querySelector('#guestsList h3');
+  if (guestListTitle) {
+    guestListTitle.innerHTML = `${t('guestListTitle')} (<span id="guestCount">${guests.length}</span>)`;
+  } else {
+    document.getElementById('guestCount').textContent = guests.length;
+  }
 }
 
 // ============================================
@@ -256,15 +411,34 @@ async function renderVendorCostsForm(fecha, slot, guests) {
   const section = document.getElementById('vendorCostsSection');
   section.classList.remove('hidden');
   
-  // Warning si slot es DESCONOCIDO
   if (slot === 'DESCONOCIDO') {
-    showVendorToast('⚠️ Horario no estándar detectado. Verifica con el manager.', 'warning');
+    showVendorToast(t('slotUnknown'), 'warning');
   }
   
   await loadVendorsList();
   
   const totalPax = guests.reduce((sum, guest) => sum + (guest.pax || 0), 0);
-  document.getElementById('numPaxInput').value = totalPax;
+  const paxInput = document.getElementById('numPaxInput');
+  paxInput.value = totalPax;
+  paxInput.placeholder = `${t('numPaxPlaceholder')} ${totalPax}`;
+  
+  // Update labels
+  const paxLabel = document.querySelector('label[for="numPaxInput"]');
+  if (paxLabel) {
+    paxLabel.innerHTML = `${t('numPaxLabel')} <span class="text-red-600">*</span>`;
+  }
+  
+  const vendorsLabel = document.querySelector('#vendorCostsBody label.block.text-sm.font-bold');
+  if (vendorsLabel) vendorsLabel.textContent = t('vendorsLabel');
+  
+  const feedbackLabel = document.querySelector('label[for="postTourFeedback"]');
+  if (feedbackLabel) feedbackLabel.textContent = t('feedbackLabel');
+  
+  const feedbackTextarea = document.getElementById('postTourFeedback');
+  if (feedbackTextarea) feedbackTextarea.placeholder = t('feedbackPlaceholder');
+  
+  const submitBtn = document.querySelector('#vendorCostsForm button[type="submit"]');
+  if (submitBtn) submitBtn.textContent = t('saveCostsBtn');
   
   const header = document.getElementById('vendorCostsHeader');
   const body = document.getElementById('vendorCostsBody');
@@ -275,7 +449,6 @@ async function renderVendorCostsForm(fecha, slot, guests) {
     body.classList.toggle('hidden');
     chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
     
-    // Scroll automático al expandir
     if (isHidden) {
       setTimeout(() => {
         section.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -317,7 +490,6 @@ function renderVendorAccordion() {
   const container = document.getElementById('vendorsAccordion');
   container.innerHTML = '';
   
-  // Inicializar estado si está vacío
   if (Object.keys(vendorCards).length === 0) {
     vendorsList.forEach(vendor => {
       vendorCards[vendor.id] = {
@@ -346,11 +518,11 @@ function renderVendorAccordion() {
           <span class="text-base font-bold text-gray-900 dark:text-white">${vendor.nombre}</span>
           ${cardData.amount && cardData.photo ? `
             <span class="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 px-2 py-1 rounded font-semibold">
-              ✓ Completo
+              ${t('complete')}
             </span>
           ` : cardData.amount || cardData.photo ? `
             <span class="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 px-2 py-1 rounded font-semibold">
-              ⚠ Incompleto
+              ${t('incomplete')}
             </span>
           ` : ''}
         </div>
@@ -361,21 +533,21 @@ function renderVendorAccordion() {
       
       <div class="vendor-card-body ${isOpen ? '' : 'hidden'} border-t border-gray-300 dark:border-gray-600 p-4 space-y-3 bg-gray-50 dark:bg-gray-800">
         <div>
-          <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Importe (€)</label>
+          <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">${t('amountLabel')}</label>
           <input 
             type="number" 
             step="0.01" 
             min="0" 
             max="999.99"
             value="${cardData.amount}"
-            placeholder="0.00"
+            placeholder="${t('amountPlaceholder')}"
             class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm font-medium"
             oninput="updateVendorAmount('${vendor.id}', this.value)"
           />
         </div>
         
         <div>
-          <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Foto Ticket</label>
+          <label class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">${t('photoLabel')}</label>
           <input 
             type="file" 
             accept="image/*"
@@ -401,20 +573,17 @@ function renderVendorAccordion() {
 }
 
 window.toggleVendorCard = function(vendorId) {
-  // Si ya está abierta, cerrar
   if (currentOpenCard === vendorId) {
     currentOpenCard = null;
     renderVendorAccordion();
     return;
   }
   
-  // Si hay otra abierta, verificar estado y resetear si incompleta
   if (currentOpenCard !== null) {
     const prevData = vendorCards[currentOpenCard];
     const hasAmount = prevData.amount && parseFloat(prevData.amount) > 0;
     const hasPhoto = prevData.photo !== null;
     
-    // Si tiene uno pero no ambos → RESET
     if ((hasAmount && !hasPhoto) || (!hasAmount && hasPhoto)) {
       vendorCards[currentOpenCard] = {
         amount: '',
@@ -422,18 +591,15 @@ window.toggleVendorCard = function(vendorId) {
         photoPreview: '',
         photoName: ''
       };
-      // Eliminar de uploadedFileNames si existía
       if (prevData.photoName) {
         uploadedFileNames.delete(prevData.photoName);
       }
     }
   }
   
-  // Abrir nueva card
   currentOpenCard = vendorId;
   renderVendorAccordion();
   
-  // Scroll suave a la card
   setTimeout(() => {
     const card = document.querySelector(`[data-vendor-id="${vendorId}"]`);
     if (card) {
@@ -452,25 +618,21 @@ window.handleVendorPhotoChange = function(vendorId, input) {
   const file = input.files[0];
   const fileName = file.name;
   
-  // Validar duplicados
   if (uploadedFileNames.has(fileName)) {
-    showVendorToast('Ya existe un ticket con ese nombre. Renombra el archivo.', 'error');
+    showVendorToast(t('errorDuplicateFile'), 'error');
     input.value = '';
     return;
   }
   
-  // Eliminar archivo previo de uploadedFileNames si existía
   const prevName = vendorCards[vendorId].photoName;
   if (prevName) {
     uploadedFileNames.delete(prevName);
   }
   
-  // Guardar nuevo archivo
   vendorCards[vendorId].photo = file;
   vendorCards[vendorId].photoName = fileName;
   uploadedFileNames.add(fileName);
   
-  // Preview
   const reader = new FileReader();
   reader.onload = (e) => {
     vendorCards[vendorId].photoPreview = e.target.result;
@@ -511,7 +673,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     
     if (now < minTime) {
       const hoursLeft = Math.ceil((minTime - now) / (1000 * 60 * 60));
-      showVendorToast(`Solo puedes registrar costes 2.5 horas después del tour. Quedan ${hoursLeft}h.`, 'error');
+      showVendorToast(`${t('errorTimeRestriction')} ${hoursLeft}${t('hoursLabel')}`, 'error');
       return;
     }
   }
@@ -519,7 +681,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
   // Validar PAX
   const numPax = parseInt(document.getElementById('numPaxInput').value);
   if (!numPax || numPax < 1 || numPax > 99) {
-    showVendorToast('El número de PAX es obligatorio (1-99)', 'error');
+    showVendorToast(t('errorPaxRequired'), 'error');
     return;
   }
   
@@ -532,13 +694,11 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     const cardData = vendorCards[vendorId];
     const amount = parseFloat(cardData.amount);
     
-    // Skip vacíos
     if (!amount || amount === 0) continue;
     
-    // Validar: si tiene amount DEBE tener foto
     if (!cardData.photo) {
       const vendor = vendorsList.find(v => v.id === vendorId);
-      errorMsg = `${vendor.nombre}: falta foto del ticket`;
+      errorMsg = `${vendor.nombre}: ${t('errorPhotoRequired')}`;
       hasError = true;
       break;
     }
@@ -552,13 +712,13 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
   }
   
   if (validVendors.length === 0) {
-    showVendorToast('Debes registrar al menos un vendor con importe y foto', 'error');
+    showVendorToast(t('errorMinVendors'), 'error');
     return;
   }
   
   const submitBtn = e.target.querySelector('[type="submit"]');
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Procesando...';
+  submitBtn.textContent = t('processingBtn');
   
   try {
     // Comprimir imágenes
@@ -568,7 +728,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
       const { vendorId, cardData } = validVendors[i];
       const vendor = vendorsList.find(v => v.id === vendorId);
       
-      submitBtn.textContent = `Comprimiendo ${i + 1}/${validVendors.length}...`;
+      submitBtn.textContent = `${t('compressingBtn')} ${i + 1}/${validVendors.length}...`;
       
       const compressedBase64 = await compressImage(cardData.photo);
       
@@ -581,7 +741,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     }
     
     // Upload a Drive
-    submitBtn.textContent = 'Subiendo a Drive...';
+    submitBtn.textContent = t('uploadingBtn');
     
     const guideName = currentUser.displayName || currentUser.email;
     const monthFolder = getMonthFolderName(fecha);
@@ -615,7 +775,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     const driveUrls = uploadResult.vendors || [];
     
     // Preparar vendors para Firestore
-    submitBtn.textContent = 'Guardando...';
+    submitBtn.textContent = t('savingBtn');
     
     const finalVendors = driveUrls.map(uploaded => {
       const original = vendorsDataForUpload.find(v => v.vendorId === uploaded.vendorId);
@@ -651,7 +811,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     
     await addDoc(collection(db, 'vendor_costs'), vendorCostDoc);
     
-    showVendorToast('✅ Costes guardados correctamente', 'success');
+    showVendorToast(t('costsSaved'), 'success');
     
     // Reset form
     vendorCards = {};
@@ -664,10 +824,10 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     
   } catch (error) {
     console.error('Error saving vendor costs:', error);
-    showVendorToast('Error: ' + error.message, 'error');
+    showVendorToast(`${t('errorSavingCosts')}: ${error.message}`, 'error');
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Guardar Costes';
+    submitBtn.textContent = t('saveCostsBtn');
   }
 }
 
@@ -701,7 +861,7 @@ async function compressImage(file, maxWidth = 1920, quality = 0.8) {
         canvas.toBlob(
           (blob) => {
             if (!blob) {
-              reject(new Error('Error comprimiendo imagen'));
+              reject(new Error(t('errorCompressing')));
               return;
             }
             
@@ -715,11 +875,11 @@ async function compressImage(file, maxWidth = 1920, quality = 0.8) {
         );
       };
       
-      img.onerror = () => reject(new Error('Error cargando imagen'));
+      img.onerror = () => reject(new Error(t('errorLoadingImage')));
       img.src = e.target.result;
     };
     
-    reader.onerror = () => reject(new Error('Error leyendo archivo'));
+    reader.onerror = () => reject(new Error(t('errorReadingFile')));
     reader.readAsDataURL(file);
   });
 }
@@ -745,35 +905,39 @@ function handleError(error) {
   
   switch(error.code) {
     case 'UNAUTHORIZED':
-      errorTitle.textContent = 'Sesión expirada';
-      errorMessage.textContent = 'Tu sesión ha expirado. Redirigiendo...';
+      errorTitle.textContent = t('errorSessionExpired');
+      errorMessage.textContent = t('errorSessionExpiredMsg');
       retryBtn.classList.add('hidden');
       setTimeout(() => window.location.href = '/login.html', 3000);
       break;
     case 'NOT_FOUND':
-      errorTitle.textContent = 'Tour no encontrado';
-      errorMessage.textContent = 'El evento no existe o fue eliminado.';
+      errorTitle.textContent = t('errorNotFound');
+      errorMessage.textContent = t('errorNotFoundMsg');
       retryBtn.classList.add('hidden');
       break;
     case 'TIMEOUT':
-      errorTitle.textContent = 'Conexión lenta';
-      errorMessage.textContent = 'La conexión está tardando más de lo normal.';
+      errorTitle.textContent = t('errorTimeout');
+      errorMessage.textContent = t('errorTimeoutMsg');
       retryBtn.classList.remove('hidden');
       break;
     default:
-      errorTitle.textContent = 'Error al cargar detalles';
-      errorMessage.textContent = 'No pudimos conectar. Intenta de nuevo.';
+      errorTitle.textContent = t('errorLoadingDetails');
+      errorMessage.textContent = t('errorLoadingDetailsMsg');
       retryBtn.classList.remove('hidden');
   }
   
+  retryBtn.textContent = t('retryBtn');
   retryBtn.onclick = () => loadCurrentTour();
-  showError();
+  showErrorState();
 }
 
 function showLoading() {
   document.getElementById('loadingState').classList.remove('hidden');
   document.getElementById('errorState').classList.add('hidden');
   document.getElementById('guestsList').classList.add('hidden');
+  
+  const loadingSpan = document.querySelector('#loadingState span');
+  if (loadingSpan) loadingSpan.textContent = t('loadingDetails');
 }
 
 function hideLoading() {
@@ -781,7 +945,7 @@ function hideLoading() {
   document.getElementById('guestsList').classList.remove('hidden');
 }
 
-function showError() {
+function showErrorState() {
   document.getElementById('loadingState').classList.add('hidden');
   document.getElementById('guestsList').classList.add('hidden');
   document.getElementById('errorState').classList.remove('hidden');
@@ -796,16 +960,22 @@ function showEmptyState() {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
           d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
       </svg>
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Sin información de guests</h3>
-      <p class="text-gray-600 dark:text-gray-300 mb-4">No hay detalles de reservas para este tour.</p>
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">${t('emptyStateTitle')}</h3>
+      <p class="text-gray-600 dark:text-gray-300 mb-4">${t('emptyStateMessage')}</p>
     </div>
   `;
-  document.getElementById('guestCount').textContent = '0';
+  
+  const guestListTitle = document.querySelector('#guestsList h3');
+  if (guestListTitle) {
+    guestListTitle.innerHTML = `${t('guestListTitle')} (<span id="guestCount">0</span>)`;
+  } else {
+    document.getElementById('guestCount').textContent = '0';
+  }
 }
 
 function formatDate(dateStr) {
   const date = new Date(dateStr + 'T12:00:00');
-  return date.toLocaleDateString('es-ES', { 
+  return date.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', { 
     day: '2-digit', 
     month: '2-digit', 
     year: 'numeric' 
@@ -867,7 +1037,7 @@ window.copyPhoneNumber = (phone) => {
   button.classList.add('scale-110', 'bg-green-100');
   
   navigator.clipboard.writeText(cleanPhone).then(() => {
-    showVendorToast('Teléfono copiado', 'success');
+    showVendorToast(t('phoneCopied'), 'success');
     setTimeout(() => {
       icon.innerHTML = originalIcon;
       icon.classList.remove('text-green-600');
@@ -875,7 +1045,7 @@ window.copyPhoneNumber = (phone) => {
     }, 1500);
   }).catch(() => {
     icon.innerHTML = originalIcon;
-    alert('Copiado: ' + cleanPhone);
+    alert(`${t('copiedAlert')} ${cleanPhone}`);
   });
 };
 

@@ -10,6 +10,17 @@ body {
   min-height: 100vh;
 }
 
+/* ========== INPUT NUMBER SPINNERS (HIDE) ========== */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 /* ========== DARK MODE STANDARDIZATION ========== */
 .dark {
   background-color: #0f172a !important;
