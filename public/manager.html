@@ -18,6 +18,11 @@
   <script>
     tailwind.config = { darkMode: 'class' }
   </script>
+  <script>
+    if (localStorage.getItem('darkMode') === 'true') {
+      document.documentElement.classList.add('dark');
+    }
+  </script>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
   
@@ -149,21 +154,18 @@
     <p id="toast-message" class="text-xs sm:text-base"></p>
   </div>
 
-  <!-- PWA Service Worker Registration -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(reg => console.log('SW registered'))
-          .catch(err => console.error('SW registration failed', err));
-      });
-    }
-    
-    if (localStorage.getItem('darkMode') === 'true') {
-      document.documentElement.classList.add('dark');
-    }
-  </script>
-
   <script type="module" src="/js/manager-dashboard.js?v=8"></script>
+  
+  <!-- Service Worker Registration -->
+  <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(() => {
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          window.location.reload();
+        });
+      });
+  }
+  </script>
 </body>
 </html>

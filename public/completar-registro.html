@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Completar Registro - Calendario Tours</title>
-  
+ 
   <!-- PWA Meta Tags -->
   <meta name="theme-color" content="#0ea5e9">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="SFS">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
-  
+ 
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
@@ -24,6 +24,7 @@
       <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
       <p class="text-gray-600">Verificando tu invitación...</p>
     </div>
+    
     <!-- Success message -->
     <div id="success" class="hidden">
       <div class="text-center mb-6">
@@ -34,21 +35,23 @@
         <p class="mt-2 text-gray-600">Redirigiendo a tu dashboard...</p>
       </div>
     </div>
+    
     <!-- Error message -->
     <div id="error" class="hidden p-4 bg-red-100 text-red-700 rounded"></div>
   </div>
-  
-  <!-- PWA Service Worker Registration -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(reg => console.log('SW registered'))
-          .catch(err => console.error('SW registration failed', err));
-      });
-    }
-  </script>
-  
+ 
   <script type="module" src="/js/completar-registro.js"></script>
+  
+  <!-- Service Worker Registration -->
+  <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(() => {
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          window.location.reload();
+        });
+      });
+  }
+  </script>
 </body>
 </html>

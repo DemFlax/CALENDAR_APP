@@ -169,5 +169,16 @@
   </main>
   
   <script type="module" src="./js/tour-details.js"></script>
+  <script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js')
+    .then(() => {
+      // Forzar recarga si hay actualización
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload();
+      });
+    });
+}
+</script>
 </body>
 </html>

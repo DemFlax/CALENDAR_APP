@@ -74,11 +74,11 @@ async function loadAllTours() {
     
     allTours = data.assignments || [];
     
-    // Sort by date DESC (most recent first)
+    // Sort by date ASC (oldest first)
     allTours.sort((a, b) => {
-      const dateCompare = b.fecha.localeCompare(a.fecha);
+      const dateCompare = a.fecha.localeCompare(b.fecha);
       if (dateCompare !== 0) return dateCompare;
-      return (b.startTime || '').localeCompare(a.startTime || '');
+      return (a.startTime || '').localeCompare(b.startTime || '');
     });
     
     if (allTours.length === 0) {
