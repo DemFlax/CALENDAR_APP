@@ -45,7 +45,18 @@ async function init() {
     document.getElementById('prevTourBtn').addEventListener('click', () => navigateTour(-1));
     document.getElementById('nextTourBtn').addEventListener('click', () => navigateTour(1));
     document.getElementById('backButton').addEventListener('click', goBack);
+    document.getElementById('logoutBtn').addEventListener('click', handleLogout);
   });
+}
+
+async function handleLogout() {
+  try {
+    await auth.signOut();
+    window.location.href = '/login.html';
+  } catch (error) {
+    console.error('Error al cerrar sesión:', error);
+    showVendorToast('Error al cerrar sesión', 'error');
+  }
 }
 
 async function loadAllTours() {
