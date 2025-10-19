@@ -6,11 +6,112 @@ html, body {
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  background: #0f172a;
   min-height: 100vh;
 }
 
-/* ========== MANAGER DASHBOARD ========== */
+/* ========== DARK MODE STANDARDIZATION ========== */
+.dark {
+  background-color: #0f172a !important;
+  color: #f1f5f9 !important;
+}
+
+.dark body {
+  background-color: #0f172a !important;
+}
+
+.dark .bg-white {
+  background-color: #1e293b !important;
+}
+
+.dark .bg-gray-50 {
+  background-color: #334155 !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: #475569 !important;
+}
+
+.dark .bg-gray-800 {
+  background-color: #1e293b !important;
+}
+
+.dark .text-gray-900 {
+  color: #f1f5f9 !important;
+}
+
+.dark .text-gray-700 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-gray-600 {
+  color: #94a3b8 !important;
+}
+
+.dark .text-gray-500 {
+  color: #64748b !important;
+}
+
+.dark .text-gray-400 {
+  color: #475569 !important;
+}
+
+.dark .border-gray-200 {
+  border-color: #334155 !important;
+}
+
+.dark .border-gray-700 {
+  border-color: #475569 !important;
+}
+
+/* ========== GUIDE CALENDAR TABLE ========== */
+.guide-calendar-table {
+  table-layout: fixed;
+  width: 100%;
+  background-color: transparent !important;
+}
+
+.dark .guide-calendar-table thead {
+  background-color: #1e293b !important;
+}
+
+.dark .guide-calendar-table thead th {
+  background-color: #1e293b !important;
+  color: #cbd5e1 !important;
+  border-color: #334155 !important;
+}
+
+.dark .guide-calendar-table tbody tr {
+  background-color: #0f172a !important;
+}
+
+.dark .guide-calendar-table tbody tr:nth-child(even) {
+  background-color: #1a1f2e !important;
+}
+
+.dark .guide-calendar-table tbody td {
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+.dark .guide-calendar-table tbody tr:hover {
+  background-color: #1e293b !important;
+}
+
+/* ========== BUTTONS - GUIDE CALENDAR ========== */
+.dark button[class*="bg-green"] {
+  background-color: #10b981 !important;
+}
+
+.dark button[class*="bg-blue"] {
+  background-color: #3b82f6 !important;
+}
+
+.dark button[class*="bg-gray"] {
+  background-color: #6b7280 !important;
+}
+
+/* ========== MANAGER CALENDAR ========== */
 .calendar-container {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -38,57 +139,17 @@ body {
   color: #f1f5f9 !important;
 }
 
-/* ========== GUIDE DASHBOARD ========== */
-.guide-calendar-container {
-  overflow-x: hidden;
-}
-
-.guide-calendar-table {
-  table-layout: fixed;
-  width: 100%;
-}
-
-/* ========== DARK MODE ========== */
-.dark {
-  background-color: #1e293b;
-  color: #f1f5f9;
-}
-
-.dark .bg-white {
-  background-color: #334155 !important;
-}
-
-.dark .bg-gray-50 {
-  background-color: #1e293b !important;
-}
-
-.dark .text-gray-900 {
-  color: #f1f5f9 !important;
-}
-
-.dark .text-gray-700 {
-  color: #cbd5e1 !important;
-}
-
-.dark .text-gray-500 {
-  color: #94a3b8 !important;
-}
-
-.dark .border-gray-200 {
-  border-color: #475569 !important;
-}
-
 /* ========== MANAGER VENDORS ========== */
 .vendor-card {
-  background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
   transition: all 0.3s ease;
 }
 
 .vendor-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
-  border-color: rgba(59, 130, 246, 0.5);
+  border-color: #3b82f6 !important;
 }
 
 .modal {
@@ -104,10 +165,10 @@ body {
 }
 
 .modal-content {
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  background: #0f172a !important;
   margin: 2% auto;
   padding: 0;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid #334155 !important;
   border-radius: 16px;
   width: 95%;
   max-width: 1400px;
@@ -139,7 +200,7 @@ body {
 }
 
 .costs-table thead th {
-  background: rgba(51, 65, 85, 0.5);
+  background: #1e293b !important;
   color: #94a3b8;
   padding: 16px;
   text-align: left;
@@ -158,18 +219,18 @@ body {
 }
 
 .costs-table tbody tr {
-  background: rgba(51, 65, 85, 0.3);
+  background: #1e293b !important;
   transition: background 0.2s;
 }
 
 .costs-table tbody tr:hover {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(59, 130, 246, 0.1) !important;
 }
 
 .costs-table tbody td {
   padding: 16px;
   color: #e2e8f0;
-  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  border-top: 1px solid #334155;
 }
 
 .costs-table tbody tr:last-child td:first-child {
@@ -204,8 +265,8 @@ body {
 .filter-group select {
   width: 100%;
   padding: 12px;
-  background: rgba(51, 65, 85, 0.5);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
   border-radius: 8px;
   color: #e2e8f0;
   font-size: 14px;
@@ -215,8 +276,8 @@ body {
 
 .filter-group select:focus {
   outline: none;
-  border-color: #3b82f6;
-  background: rgba(51, 65, 85, 0.7);
+  border-color: #3b82f6 !important;
+  background: #334155 !important;
 }
 
 /* ========== MOBILE RESPONSIVE ========== */
