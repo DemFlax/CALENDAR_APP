@@ -144,12 +144,12 @@
             </label>
           </div>
 
-          <div class="flex gap-3">
-            <button id="approve-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold">
-              <span id="approve-text">Aprobar Factura</span>
-            </button>
+         <div class="flex gap-3">
             <button id="report-error-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-semibold">
               <span id="report-text">Reportar Error</span>
+            </button>
+            <button id="approve-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold">
+              <span id="approve-text">Aprobar Factura</span>
             </button>
           </div>
         </div>
@@ -168,6 +168,27 @@
       </div>
     </div>
   </div>
+  <!-- Modal Reportar Error -->
+<div id="error-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+    <h3 class="text-xl font-bold mb-4 dark:text-white">Reportar Error</h3>
+    <label class="block text-sm font-medium mb-2 dark:text-gray-300">Comentarios</label>
+    <textarea 
+      id="error-comments"
+      rows="4"
+      placeholder="Describe el problema encontrado..."
+      class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 mb-4"
+    ></textarea>
+    <div class="flex gap-3">
+      <button id="cancel-error-btn" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded font-semibold">
+        Cancelar
+      </button>
+      <button id="confirm-error-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-semibold">
+        Enviar
+      </button>
+    </div>
+  </div>
+</div>
 
   <!-- Toast -->
   <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg text-white text-sm sm:text-base max-w-xs sm:max-w-md z-50">

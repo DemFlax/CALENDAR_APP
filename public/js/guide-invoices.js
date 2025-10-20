@@ -421,33 +421,47 @@ document.getElementById('approve-btn').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('report-error-btn').addEventListener('click', async () => {
+document.getElementById('report-error-btn').addEventListener('click', () => {
   if (!currentInvoice) return;
+  document.getElementById('error-comments').value = '';
+  document.getElementById('error-modal').classList.remove('hidden');
+});
 
-  const reportBtn = document.getElementById('report-error-btn');
-  reportBtn.disabled = true;
-  reportBtn.classList.add('opacity-50', 'cursor-not-allowed');
+document.getElementById('cancel-error-btn').addEventListener('click', () => {
+  document.getElementById('error-modal').classList.add('hidden');
+});
 
-  showToast(t('toastReporting'), 'info');
+document.getElementById('confirm-error-btn').addEventListener('click', async () => {
+  const comments = document.getElementById('error-comments').value.trim();
+  
+  if (!comments) {
+    showToast('Debes escribir comentarios', 'error');
+    return;
+  }
+
+  const confirmBtn = document.getElementById('confirm-error-btn');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Enviando...';
 
   try {
     const functions = getFunctions(undefined, 'us-central1');
     const reportInvoiceError = httpsCallable(functions, 'reportInvoiceError');
 
     await reportInvoiceError({
-      invoiceId: currentInvoice.id
+      invoiceId: currentInvoice.id,
+      comments: comments
     });
 
     showToast(t('toastReported'), 'success');
+    document.getElementById('error-modal').classList.add('hidden');
     document.getElementById('invoice-modal').classList.add('hidden');
     currentInvoice = null;
   } catch (error) {
     console.error('Error reporting:', error);
-    const errorMessage = error.message || t('toastError');
-    showToast(errorMessage, 'error');
+    showToast(error.message || t('toastError'), 'error');
   } finally {
-    reportBtn.disabled = false;
-    reportBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Enviar';
   }
 });
 

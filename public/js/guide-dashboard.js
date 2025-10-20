@@ -194,11 +194,14 @@ async function loadUpcomingAssignments() {
   const assignments = [];
   snapshot.forEach(doc => assignments.push({ id: doc.id, ...doc.data() }));
   assignments.sort((a, b) => a.fecha.localeCompare(b.fecha));
+  
+  // LIMITAR A 3
+  const limitedAssignments = assignments.slice(0, 3);
 
   const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
 
-  assignmentsList.innerHTML = assignments.map((a, index) => {
+  assignmentsList.innerHTML = limitedAssignments.map((a, index) => {
     const dateStr = new Date(a.fecha + 'T12:00:00').toLocaleDateString(locale, dateOptions);
     const slotStr = a.slot === 'MAÑANA' ? t('morning') : `${t('afternoon')} ${a.slot}`;
     
@@ -215,7 +218,6 @@ async function loadUpcomingAssignments() {
     `;
   }).join('');
   
-  // Añadir event listeners
   document.querySelectorAll('.assignment-card').forEach(card => {
     card.addEventListener('click', function() {
       const eventId = this.dataset.eventId;

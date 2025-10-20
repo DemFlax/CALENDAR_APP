@@ -69,109 +69,124 @@ async function generateInvoicePDF(invoiceData) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      doc.fontSize(24).font('Helvetica-Bold').text('SPAIN FOOD SHERPAS', { align: 'center' });
-      doc.fontSize(10).font('Helvetica').text('Est. 2013', { align: 'center' });
-      doc.moveDown(0.5);
+      // MARCA DE AGUA (logo texto)
+      doc.fontSize(120).font('Helvetica-Bold').fillColor('#f0f0f0').opacity(0.1)
+         .text('SFS', 0, 300, { align: 'center', width: 595 });
+      doc.opacity(1);
 
-      doc.fontSize(18).font('Helvetica-Bold').text(`FACTURA N.º ${invoiceData.invoiceNumber}`, { align: 'right' });
-      doc.moveDown(2);
+      // HEADER elegante gris oscuro
+      doc.rect(0, 0, 595, 100).fill('#1e293b');
+      
+      doc.fontSize(26).font('Helvetica-Bold').fillColor('#ffffff')
+         .text('SPAIN FOOD SHERPAS', 50, 30);
+      doc.fontSize(9).font('Helvetica').fillColor('#cbd5e1')
+         .text('Premium Food Tours · Madrid', 50, 62);
 
-      doc.fontSize(12).font('Helvetica-Bold').text('EMISOR:');
-      doc.fontSize(10).font('Helvetica');
-      doc.text(invoiceData.guide.nombre);
-      doc.text(`DNI: ${invoiceData.guide.dni}`);
+      // Número factura y fecha (derecha, sin solapar)
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#ffffff')
+         .text(`FACTURA Nº ${invoiceData.invoiceNumber}`, 320, 32, { align: 'right', width: 225 });
+      doc.fontSize(8).fillColor('#cbd5e1')
+         .text(new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }), 
+               320, 58, { align: 'right', width: 225 });
+
+      // EMISOR Y RECEPTOR
+      const startY = 130;
+      
+      doc.fillColor('#0f172a').fontSize(11).font('Helvetica-Bold')
+         .text('EMISOR', 50, startY);
+      doc.fillColor('#334155').fontSize(10).font('Helvetica')
+         .text(invoiceData.guide.nombre, 50, startY + 18)
+         .text(`DNI: ${invoiceData.guide.dni}`, 50, startY + 32);
       if (invoiceData.guide.direccion) {
-        doc.text(invoiceData.guide.direccion);
+        doc.text(invoiceData.guide.direccion, 50, startY + 46);
       }
-      doc.moveDown();
 
-      doc.fontSize(12).font('Helvetica-Bold').text('RECEPTOR:');
-      doc.fontSize(10).font('Helvetica');
-      doc.text(invoiceData.company.razonSocial);
-      doc.text(`CIF: ${invoiceData.company.cif}`);
-      doc.text(invoiceData.company.direccion);
-      doc.moveDown();
+      doc.fillColor('#0f172a').fontSize(11).font('Helvetica-Bold')
+         .text('RECEPTOR', 320, startY);
+      doc.fillColor('#334155').fontSize(10).font('Helvetica')
+         .text(invoiceData.company.razonSocial, 320, startY + 18)
+         .text(`CIF: ${invoiceData.company.cif}`, 320, startY + 32)
+         .text(invoiceData.company.direccion, 320, startY + 46);
 
+      // CONCEPTO
+      const [year, month] = invoiceData.month.split('-');
       const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                          'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-      const [year, month] = invoiceData.month.split('-');
       const monthName = monthNames[parseInt(month) - 1];
 
-      doc.fontSize(10).text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`);
-      doc.fontSize(12).font('Helvetica-Bold').text(`CONCEPTO: Servicios guía turístico - ${monthName} ${year}`);
-      doc.moveDown();
+      doc.fillColor('#475569').fontSize(11).font('Helvetica-Bold')
+         .text(`CONCEPTO: Servicios guía turístico - ${monthName} ${year}`, 50, startY + 75);
 
-      doc.fontSize(11).font('Helvetica-Bold').text('DETALLE TOURS:');
-      doc.moveDown(0.3);
+      // TABLA
+      const tableTop = startY + 105;
+      
+      doc.rect(50, tableTop, 495, 22).fill('#f1f5f9');
+      doc.fillColor('#0f172a').fontSize(9).font('Helvetica-Bold');
+      doc.text('FECHA', 55, tableTop + 6);
+      doc.text('TOUR', 120, tableTop + 6);
+      doc.text('PAX', 360, tableTop + 6, { width: 40, align: 'center' });
+      doc.text('SALARIO', 420, tableTop + 6, { width: 120, align: 'right' });
 
-      const tableTop = doc.y;
-      const colWidths = { fecha: 80, tour: 200, pax: 50, salario: 80 };
-      let y = tableTop;
+      let y = tableTop + 26;
+      
+      invoiceData.tours.forEach((tour, idx) => {
+        if (idx % 2 === 0) {
+          doc.rect(50, y - 2, 495, 16).fill('#fafafa');
+        }
 
-      doc.fontSize(9).font('Helvetica-Bold');
-      doc.text('Fecha', 50, y, { width: colWidths.fecha });
-      doc.text('Tour', 130, y, { width: colWidths.tour });
-      doc.text('Pax', 330, y, { width: colWidths.pax });
-      doc.text('Salario', 380, y, { width: colWidths.salario, align: 'right' });
+        const dateObj = new Date(tour.fecha);
+        const dateStr = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }).toUpperCase();
 
-      y += 15;
-      doc.moveTo(50, y).lineTo(550, y).stroke();
-      y += 5;
-
-      doc.font('Helvetica');
-      invoiceData.tours.forEach(tour => {
-        const dateStr = new Date(tour.fecha).toLocaleDateString('es-ES', {
-          day: '2-digit',
-          month: 'short'
-        }).toUpperCase();
-
-        doc.text(dateStr, 50, y, { width: colWidths.fecha });
-        doc.text(tour.tourDescription.substring(0, 35), 130, y, { width: colWidths.tour });
-        doc.text(tour.numPax.toString(), 330, y, { width: colWidths.pax });
+        doc.fillColor('#475569').fontSize(8).font('Helvetica');
+        doc.text(dateStr, 55, y);
+        doc.text(tour.tourDescription.substring(0, 40), 120, y);
+        doc.text(tour.numPax.toString(), 360, y, { width: 40, align: 'center' });
+        
         const salary = tour.salarioCalculado || 0;
-        doc.text(`${salary.toFixed(2)}€`, 380, y, { width: colWidths.salario, align: 'right' });
-        y += 20;
+        doc.fillColor('#0f172a').font('Helvetica-Bold')
+           .text(`${salary.toFixed(2)}€`, 420, y, { width: 120, align: 'right' });
+        
+        y += 16;
       });
 
-      y += 10;
-      doc.moveTo(50, y).lineTo(550, y).stroke();
+      y += 8;
+      doc.strokeColor('#cbd5e1').lineWidth(1)
+         .moveTo(50, y).lineTo(545, y).stroke();
       y += 15;
 
-      doc.font('Helvetica-Bold').fontSize(10);
-      const rightX = 460;
-
-      const totalSalary = invoiceData.totalSalary || 0;
-      const baseImponible = invoiceData.baseImponible || 0;
-      const iva = invoiceData.iva || 0;
-      const irpfAmount = invoiceData.irpfAmount || 0;
-      const totalNeto = invoiceData.totalNeto || 0;
+      // TOTALES
+      const rightX = 420;
+      doc.fillColor('#334155').fontSize(9).font('Helvetica');
 
       doc.text('TOTAL BRUTO:', rightX - 100, y);
-      doc.text(`${totalSalary.toFixed(2)}€`, rightX, y, { align: 'right' });
-      y += 20;
+      doc.font('Helvetica-Bold').text(`${invoiceData.totalSalary.toFixed(2)}€`, rightX, y, { width: 120, align: 'right' });
+      y += 16;
 
-      doc.text('BASE IMPONIBLE:', rightX - 100, y);
-      doc.text(`${baseImponible.toFixed(2)}€`, rightX, y, { align: 'right' });
-      y += 20;
+      doc.font('Helvetica').text('BASE IMPONIBLE:', rightX - 100, y);
+      doc.text(`${invoiceData.baseImponible.toFixed(2)}€`, rightX, y, { width: 120, align: 'right' });
+      y += 16;
 
       doc.text('IVA (21%):', rightX - 100, y);
-      doc.text(`${iva.toFixed(2)}€`, rightX, y, { align: 'right' });
-      y += 20;
+      doc.text(`${invoiceData.iva.toFixed(2)}€`, rightX, y, { width: 120, align: 'right' });
+      y += 16;
 
-      doc.text(`IRPF (${invoiceData.irpfPercent}%):`, rightX - 100, y);
-      doc.text(`-${irpfAmount.toFixed(2)}€`, rightX, y, { align: 'right' });
-      y += 25;
+      doc.fillColor('#dc2626').text(`IRPF (${invoiceData.irpfPercent}%):`, rightX - 100, y);
+      doc.text(`-${invoiceData.irpfAmount.toFixed(2)}€`, rightX, y, { width: 120, align: 'right' });
+      y += 22;
 
-      doc.moveTo(rightX - 100, y).lineTo(550, y).stroke();
-      y += 10;
+      // Total neto
+      doc.rect(rightX - 105, y - 4, 245, 26).fill('#1e293b');
+      doc.fillColor('#ffffff').fontSize(11).font('Helvetica-Bold');
+      doc.text('TOTAL NETO:', rightX - 95, y + 2);
+      doc.fontSize(13).text(`${invoiceData.totalNeto.toFixed(2)}€`, rightX, y + 1, { width: 120, align: 'right' });
 
-      doc.fontSize(12);
-      doc.text('TOTAL NETO:', rightX - 100, y);
-      doc.text(`${totalNeto.toFixed(2)}€`, rightX, y, { align: 'right' });
-
-      doc.fontSize(8).font('Helvetica');
-      doc.text(`Madrid, ${new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}`,
-               50, 750, { align: 'center' });
+      // FOOTER
+      doc.fillColor('#64748b').fontSize(8).font('Helvetica');
+      doc.text('Madrid, ' + new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }),
+               50, 750, { align: 'center', width: 495 });
+      doc.fontSize(7).fillColor('#94a3b8')
+         .text('madrid@spainfoodsherpas.com · www.spainfoodsherpas.com', 
+               50, 770, { align: 'center', width: 495 });
 
       doc.end();
 
@@ -305,7 +320,7 @@ exports.generateGuideInvoices = onSchedule({
           guideName: guide.nombre,
           guideEmail: guide.email,
           month: invoiceMonth,
-          status: 'PENDING_APPROVAL',
+          status: 'MANAGER_REVIEW',
           tours,
           totalSalary: parseFloat(totalSalary.toFixed(2)),
           baseImponible: parseFloat(baseImponible.toFixed(2)),
@@ -316,6 +331,8 @@ exports.generateGuideInvoices = onSchedule({
           invoiceNumber: null,
           pdfDriveId: null,
           pdfDriveUrl: null,
+          editedByManager: false,
+          guideComments: null,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp()
         });
@@ -324,25 +341,8 @@ exports.generateGuideInvoices = onSchedule({
           invoiceId: invoiceRef.id,
           guideId,
           guideName: guide.nombre,
-          totalSalary
-        });
-
-        sgMail.setApiKey(sendgridKey.value());
-        await sgMail.send({
-          to: guide.email,
-          from: { email: FROM_EMAIL, name: FROM_NAME },
-          subject: `Factura ${invoiceMonth} lista para revisión`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px;">
-              <h2>Factura lista para aprobación</h2>
-              <p>Hola ${guide.nombre},</p>
-              <p>Tu factura del mes <strong>${invoiceMonth}</strong> está lista para revisión.</p>
-              <p><strong>Total bruto:</strong> ${totalSalary.toFixed(2)}€</p>
-              <p>Accede a tu dashboard para revisar y aprobar la factura.</p>
-              <hr style="margin: 20px 0;">
-              <p style="color: #999; font-size: 12px;">Spain Food Sherpas</p>
-            </div>
-          `
+          totalSalary,
+          status: 'MANAGER_REVIEW'
         });
 
         generated++;
@@ -539,13 +539,8 @@ exports.approveInvoice = onCall({
             <h2>Factura aprobada correctamente</h2>
             <p>Hola ${guide.nombre},</p>
             <p>Tu factura <strong>${invoiceNumber}</strong> ha sido aprobada.</p>
-            <ul>
-              <li>Mes: ${invoice.month}</li>
-              <li>Total bruto: ${invoice.totalSalary.toFixed(2)}€</li>
-              <li>IRPF (${data.irpfPercent}%): -${irpfAmount.toFixed(2)}€</li>
-              <li><strong>Total neto: ${totalNeto.toFixed(2)}€</strong></li>
-            </ul>
-            <p>El PDF se adjunta en este email.</p>
+            <p><strong>Mes:</strong> ${invoice.month}</p>
+            <p>El PDF se adjunta en este email y está disponible en tu dashboard.</p>
             <hr style="margin: 20px 0;">
             <p style="color: #999; font-size: 12px;">Spain Food Sherpas</p>
           </div>
@@ -568,12 +563,11 @@ exports.approveInvoice = onCall({
             <p><strong>Guía:</strong> ${guide.nombre}</p>
             <p><strong>Factura:</strong> ${invoiceNumber}</p>
             <p><strong>Mes:</strong> ${invoice.month}</p>
-            <p><strong>Total neto:</strong> ${totalNeto.toFixed(2)}€</p>
             <p>PDF disponible en Drive.</p>
           </div>
         `
       }),
-
+      /*
       sgMail.send({
         to: ACCOUNTING_EMAIL,
         from: { email: FROM_EMAIL, name: FROM_NAME },
@@ -584,7 +578,7 @@ exports.approveInvoice = onCall({
             <p><strong>Guía:</strong> ${guide.nombre}</p>
             <p><strong>Factura:</strong> ${invoiceNumber}</p>
             <p><strong>Mes:</strong> ${invoice.month}</p>
-            <p><strong>Total neto a pagar:</strong> ${totalNeto.toFixed(2)}€</p>
+            <p>Revisa el PDF adjunto para los detalles.</p>
           </div>
         `,
         attachments: [{
@@ -594,6 +588,7 @@ exports.approveInvoice = onCall({
           disposition: 'attachment'
         }]
       })
+        */
     ];
 
     await Promise.all(emailPromises);
@@ -790,8 +785,11 @@ exports.reportInvoiceError = onCall({
       throw new HttpsError('failed-precondition', 'Invoice already processed');
     }
 
+    const guideComments = data.comments || 'Sin comentarios específicos';
+
     await db.collection('guide_invoices').doc(data.invoiceId).update({
       status: 'ERROR_REPORTED',
+      guideComments: guideComments,
       updatedAt: FieldValue.serverTimestamp()
     });
 
@@ -804,15 +802,18 @@ exports.reportInvoiceError = onCall({
       from: { email: FROM_EMAIL, name: FROM_NAME },
       subject: `⚠️ Error reportado en factura: ${guide.nombre} - ${invoice.month}`,
       html: `
-        <div style="font-family: Arial, sans-serif;">
+        <div style="font-family: Arial, sans-serif; max-width: 600px;">
           <h3>Error reportado en factura</h3>
           <p><strong>Guía:</strong> ${guide.nombre}</p>
           <p><strong>Email:</strong> ${guide.email}</p>
           <p><strong>Mes:</strong> ${invoice.month}</p>
-          <p><strong>Total:</strong> ${invoice.totalSalary.toFixed(2)}€</p>
           <p><strong>Tours:</strong> ${invoice.tours.length}</p>
-          <hr>
-          <p>El guía ha reportado un error en su factura. Por favor, revisa los datos y contacta con el guía.</p>
+          <hr style="margin: 20px 0;">
+          <p><strong>Comentarios del guía:</strong></p>
+          <p style="background: #f5f5f5; padding: 15px; border-left: 4px solid #ef4444; font-style: italic;">${guideComments}</p>
+          <hr style="margin: 20px 0;">
+          <p>Por favor, revisa los datos en el dashboard de facturas y contacta con el guía si es necesario.</p>
+          <p><a href="https://calendar-app-tours.web.app/manager-invoices.html" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Ir a Dashboard</a></p>
         </div>
       `
     });
@@ -820,7 +821,8 @@ exports.reportInvoiceError = onCall({
     logger.info('Invoice error reported', {
       invoiceId: data.invoiceId,
       guideId,
-      guideName: guide.nombre
+      guideName: guide.nombre,
+      comments: guideComments
     });
 
     return { success: true };
@@ -861,5 +863,93 @@ exports.calculateSalaryPreview = onCall(async (request) => {
   } catch (error) {
     logger.error('Error calculating salary preview', { numPax: data.numPax, error: error.message });
     throw new HttpsError('internal', 'Failed to calculate salary');
+  }
+});
+
+// =========================================
+// FUNCTION: managerApproveInvoice
+// =========================================
+exports.managerApproveInvoice = onCall({
+  cors: true,
+  secrets: [sendgridKey]
+}, async (request) => {
+  const { data, auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Solo managers');
+  }
+
+  if (!data.invoiceId || !data.tours || data.totalSalary === undefined) {
+    throw new HttpsError('invalid-argument', 'Faltan campos requeridos');
+  }
+
+  try {
+    const db = getFirestore();
+    const invoiceSnap = await db.collection('guide_invoices').doc(data.invoiceId).get();
+
+    if (!invoiceSnap.exists) {
+      throw new HttpsError('not-found', 'Factura no encontrada');
+    }
+
+    const invoice = invoiceSnap.data();
+
+    // Recalcular IVA con el nuevo total
+    const baseImponible = data.totalSalary / 1.21;
+    const iva = baseImponible * 0.21;
+
+    // Actualizar factura en Firestore
+    await db.collection('guide_invoices').doc(data.invoiceId).update({
+      tours: data.tours,
+      totalSalary: parseFloat(data.totalSalary.toFixed(2)),
+      baseImponible: parseFloat(baseImponible.toFixed(2)),
+      iva: parseFloat(iva.toFixed(2)),
+      status: 'PENDING_APPROVAL',
+      editedByManager: true,
+      managerEditedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    // Email al guía
+    sgMail.setApiKey(sendgridKey.value());
+    await sgMail.send({
+      to: invoice.guideEmail,
+      from: { email: FROM_EMAIL, name: FROM_NAME },
+      subject: `Factura ${invoice.month} lista para revisión`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px;">
+          <h2>Tu factura está lista</h2>
+          <p>Hola ${invoice.guideName},</p>
+          <p>La factura de <strong>${invoice.month}</strong> ha sido revisada por el manager.</p>
+          <p>Accede a tu dashboard para revisar y aprobar la factura.</p>
+          <div style="margin: 20px 0;">
+            <a href="https://calendar-app-tours.web.app/my-invoices.html" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+              Revisar Factura
+            </a>
+          </div>
+          <hr style="margin: 20px 0;">
+          <p style="color: #999; font-size: 12px;">Spain Food Sherpas</p>
+        </div>
+      `
+    });
+
+    logger.info('Invoice approved by manager', {
+      invoiceId: data.invoiceId,
+      guideId: invoice.guideId,
+      totalSalary: data.totalSalary
+    });
+
+    return { success: true };
+
+  } catch (error) {
+    logger.error('Error in managerApproveInvoice', {
+      invoiceId: data.invoiceId,
+      error: error.message
+    });
+
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+
+    throw new HttpsError('internal', 'Error al aprobar factura');
   }
 });

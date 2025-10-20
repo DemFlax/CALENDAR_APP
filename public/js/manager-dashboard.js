@@ -535,3 +535,26 @@ window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => loadCalendar(), 250);
 });
+document.getElementById('menu-toggle').addEventListener('click', () => {
+  document.getElementById('mobile-menu').classList.remove('hidden');
+});
+
+document.getElementById('close-menu').addEventListener('click', () => {
+  document.getElementById('mobile-menu').classList.add('hidden');
+});
+
+document.getElementById('mobile-menu').addEventListener('click', (e) => {
+  if (e.target.id === 'mobile-menu') {
+    document.getElementById('mobile-menu').classList.add('hidden');
+  }
+});
+
+document.getElementById('logout-btn-mobile').addEventListener('click', async () => {
+  await signOut(auth);
+  window.location.href = '/login.html';
+});
+
+document.getElementById('toggle-filters').addEventListener('click', () => {
+  const filtersSection = document.getElementById('filters-section');
+  filtersSection.classList.toggle('hidden');
+});

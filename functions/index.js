@@ -521,3 +521,4 @@ exports.calculateSalaryPreview = vendorCosts.calculateSalaryPreview;
 exports.generateGuideInvoices = vendorCosts.generateGuideInvoices;
 exports.approveInvoice = vendorCosts.approveInvoice;
 exports.reportInvoiceError = vendorCosts.reportInvoiceError;
+exports.managerApproveInvoice = vendorCosts.managerApproveInvoice;

@@ -1,0 +1,49 @@
+{"users": [
+{
+  "localId": "8IvOSSafLRS2W9VDF8mUnPyiGwk1",
+  "email": "pvazquez@spainfoodsherpas.com",
+  "emailVerified": true,
+  "passwordHash": "aL2WmthGROevrVxF9pgMOiXZsiHMoq7bGO0UY4eENovCc5pnDADqLS0AIS2koqXZzO08hfL5BwEMQL6utBM/xg==",
+  "salt": "bx8B4Aek9ksEIw==",
+  "lastSignedInAt": "1760426295303",
+  "createdAt": "1760230245483",
+  "disabled": false,
+  "customAttributes": "{\"role\":\"guide\",\"guideId\":\"YU9sn150H5RZfy7IpwVe\"}",
+  "providerUserInfo": []
+},
+{
+  "localId": "SQZ8FLYkIFgUQrSyDZdju26Ppg93",
+  "email": "ejeannemae18@gmail.com",
+  "emailVerified": true,
+  "passwordHash": "cPjRIxxj/UZQAX2X5+emIYA4E9E8f8OhIZXiolLjTV53mSK7krS7jkI7GVc6HlWaC79LQaKodwfIq3UmkorT9A==",
+  "salt": "+pMVKHOqko03Ug==",
+  "lastSignedInAt": "1760915269971",
+  "createdAt": "1760366068152",
+  "disabled": false,
+  "customAttributes": "{\"role\":\"guide\",\"guideId\":\"A3BAf9DVLJo3ebvKnesI\"}",
+  "providerUserInfo": []
+},
+{
+  "localId": "hCM3hWYkziMMjuaYBxWginl2x0Y2",
+  "email": "madrid@spainfoodsherpas.com",
+  "emailVerified": true,
+  "passwordHash": "KWEvmi20rGfMOn1GMmu95QBsxqs+bz59ZBO7P6mulKeFDbwbx9DQdlTs159qZDLlLdJOfMlXiA+UrKIUidr2eg==",
+  "salt": "da6p7M4UeMXJvA==",
+  "lastSignedInAt": "1760923313300",
+  "createdAt": "1759764651862",
+  "disabled": false,
+  "customAttributes": "{\"role\":\"manager\"}",
+  "providerUserInfo": []
+},
+{
+  "localId": "qyLyhcbYXLbFJ1lCPtxfEs8gfqX2",
+  "email": "leadtoshopsl@gmail.com",
+  "emailVerified": true,
+  "passwordHash": "8ni73yM8R78altCJi1yQJK77UPtwehHil3oI17FM8c5hGh0vxZl/lm0Xt/OjRkMkE1VLa0WmlEFKGpeevauBjw==",
+  "salt": "ptRoE6lBdKSUHQ==",
+  "lastSignedInAt": "1760920885202",
+  "createdAt": "1760612964348",
+  "disabled": false,
+  "customAttributes": "{\"role\":\"guide\",\"guideId\":\"GYMsS3HicPbbSY1A1FSE\"}",
+  "providerUserInfo": []
+}]}
