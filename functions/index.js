@@ -306,16 +306,16 @@ exports.onCreateGuideGenerateShifts = onDocumentCreated({
 }, async (event) => {
   const guide = event.data.data();
   const guideId = event.params.guideId;
-  
+ 
   if (guide.estado !== 'activo') {
     logger.info('Guía no activo - skip shifts', { guideId });
     return;
   }
-  
+ 
   try {
     const today = new Date();
     let totalCreated = 0;
-    
+   
     for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
       const targetDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
       const year = targetDate.getFullYear();
@@ -324,9 +324,9 @@ exports.onCreateGuideGenerateShifts = onDocumentCreated({
       const created = await generateMonthShifts(guideId, year, month);
       totalCreated += created;
     }
-    
+   
     logger.info('Shifts generados onCreate', { guideId, count: totalCreated });
-    
+   
   } catch (error) {
     logger.error('Error generando turnos onCreate', { guideId, error: error.message });
   }
@@ -340,37 +340,37 @@ exports.maintainTemporalHorizon = onSchedule({
   timeZone: 'Europe/Madrid'
 }, async (event) => {
   logger.info('Iniciando mantenimiento horizonte temporal');
-  
+ 
   try {
     const db = getFirestore();
     const today = new Date();
-    
+   
     const generateDate = new Date(today.getFullYear(), today.getMonth() + 3, 1);
     const generateYear = generateDate.getFullYear();
     const generateMonth = generateDate.getMonth();
-    
+   
     const deleteDate = new Date(today.getFullYear(), today.getMonth() - 2, 1);
     const deleteYear = deleteDate.getFullYear();
     const deleteMonth = deleteDate.getMonth();
-    
+   
     logger.info('Fechas calculadas', {
       generar: `${generateYear}-${String(generateMonth + 1).padStart(2, '0')}`,
       eliminar: `${deleteYear}-${String(deleteMonth + 1).padStart(2, '0')}`
     });
-    
+   
     const guidesSnapshot = await db.collection('guides')
       .where('estado', '==', 'activo')
       .get();
-    
+   
     if (guidesSnapshot.empty) {
       logger.info('No hay guías activos - skip');
       return;
     }
-    
+   
     let totalGenerated = 0;
     let totalDeleted = 0;
     const errors = [];
-    
+   
     for (const guideDoc of guidesSnapshot.docs) {
       const guideId = guideDoc.id;
       
@@ -388,60 +388,21 @@ exports.maintainTemporalHorizon = onSchedule({
         errors.push({ guideId, error: error.message });
       }
     }
-    
+   
     logger.info('Mantenimiento completado', {
       guiasActivos: guidesSnapshot.size,
       shiftsGenerados: totalGenerated,
       guiasEliminados: totalDeleted,
       errores: errors.length
     });
-    
+   
     if (errors.length > 0) {
       logger.warn('Errores durante mantenimiento', { errores: errors });
     }
-    
+   
   } catch (error) {
     logger.error('Error crítico en mantenimiento horizonte', { error: error.message, stack: error.stack });
     throw error;
-  }
-});
-
-// =========================================
-// FUNCIÓN: saveBookeoId - HTTP ENDPOINT
-// =========================================
-exports.saveBookeoId = onRequest({ cors: true }, async (req, res) => {
-  try {
-    const { bookeoId, fecha, slot, apiKey } = req.body;
-    
-    // Validar API Key simple
-    if (!apiKey || apiKey !== 'sfs-bookeo-sync-2025') {
-      logger.warn('Intento no autorizado saveBookeoId');
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
-    
-    if (!bookeoId || !fecha || !slot) {
-      res.status(400).json({ error: 'Missing required parameters: bookeoId, fecha, slot' });
-      return;
-    }
-    
-    const db = getFirestore();
-    const docId = `${fecha}_${slot}`;
-    
-    await db.collection('bookeo_blocks').doc(docId).set({
-      bookeoId,
-      fecha,
-      slot,
-      status: 'BLOCKED',
-      createdAt: FieldValue.serverTimestamp()
-    });
-    
-    logger.info('BookeoId guardado', { bookeoId, fecha, slot, docId });
-    res.json({ success: true, docId });
-    
-  } catch (error) {
-    logger.error('Error saveBookeoId', { error: error.message });
-    res.status(500).json({ error: error.message });
   }
 });
 
@@ -462,7 +423,6 @@ exports.onShiftUpdate = onDocumentUpdated({
   const wasBlocked = before.estado === 'NO_DISPONIBLE';
   const isNowBlocked = after.estado === 'NO_DISPONIBLE';
   
-  // Solo procesar si hay cambio en estado NO_DISPONIBLE
   if (wasBlocked === isNowBlocked) {
     return;
   }
@@ -470,7 +430,6 @@ exports.onShiftUpdate = onDocumentUpdated({
   try {
     const db = getFirestore();
     
-    // Obtener todos los guías activos
     const guidesSnapshot = await db.collection('guides')
       .where('estado', '==', 'activo')
       .get();
@@ -483,7 +442,6 @@ exports.onShiftUpdate = onDocumentUpdated({
     let totalGuides = 0;
     let unavailableCount = 0;
     
-    // Contar guías con NO_DISPONIBLE para este shift
     for (const guideDoc of guidesSnapshot.docs) {
       const shiftDoc = await db
         .collection('guides')
@@ -549,11 +507,54 @@ exports.onShiftUpdate = onDocumentUpdated({
           'Turno': slot
         });
         
-        await axios.post(ZAPIER_WEBHOOK_URL, params.toString(), {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-        });
-        
-        logger.info('Webhook Zapier BLOQUEAR enviado', { fecha, slot });
+        try {
+          const response = await axios.post(ZAPIER_WEBHOOK_URL, params.toString(), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 30000
+          });
+          
+          const bookeoId = response.data?.id || response.data?.bookeoId;
+          
+          if (bookeoId) {
+            await db.collection('bookeo_blocks').doc(shiftId).set({
+              fecha,
+              slot,
+              bookeoId,
+              status: 'BLOCKED',
+              createdAt: FieldValue.serverTimestamp(),
+              webhookResponse: response.data
+            }, { merge: true });
+            
+            logger.info('Webhook BLOQUEAR exitoso', { fecha, slot, bookeoId });
+          } else {
+            logger.error('Zapier no retornó bookeoId', { fecha, slot, response: response.data });
+          }
+        } catch (webhookError) {
+          logger.error('Error webhook BLOQUEAR', { 
+            fecha, 
+            slot, 
+            error: webhookError.message 
+          });
+          
+          await sgMail.send({
+            to: MANAGER_EMAIL,
+            from: { email: FROM_EMAIL, name: FROM_NAME },
+            subject: `⚠️ ERROR Bloqueo Bookeo: ${fecha} ${slot}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #dc2626;">⚠️ Error Sincronización Bookeo</h2>
+                <p><strong>Fecha:</strong> ${fecha}</p>
+                <p><strong>Turno:</strong> ${slot} (${SLOT_TIMES[slot]})</p>
+                <p><strong>Error:</strong> ${webhookError.message}</p>
+                <p style="color: #dc2626; font-weight: bold;">ACCIÓN REQUERIDA: Bloquear manualmente en Bookeo</p>
+                <hr style="border: 1px solid #eee; margin: 20px 0;">
+                <p style="color: #666; font-size: 12px;">
+                  <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
+                </p>
+              </div>
+            `
+          });
+        }
       }
       
       // Registro auditoría
@@ -615,11 +616,48 @@ exports.onShiftUpdate = onDocumentUpdated({
             'Turno': slot
           });
           
-          await axios.post(ZAPIER_WEBHOOK_URL, params.toString(), {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-          });
-          
-          logger.info('Webhook Zapier DESBLOQUEAR enviado', { fecha, slot, bookeoId });
+          try {
+            const response = await axios.post(ZAPIER_WEBHOOK_URL, params.toString(), {
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              timeout: 30000
+            });
+            
+            logger.info('Webhook DESBLOQUEAR exitoso', { fecha, slot, bookeoId });
+            
+            await db.collection('bookeo_blocks').doc(shiftId).update({
+              status: 'UNBLOCKED',
+              unlockedAt: FieldValue.serverTimestamp(),
+              webhookResponse: response.data
+            });
+            
+          } catch (webhookError) {
+            logger.error('Error webhook DESBLOQUEAR', { 
+              fecha, 
+              slot, 
+              bookeoId,
+              error: webhookError.message 
+            });
+            
+            await sgMail.send({
+              to: MANAGER_EMAIL,
+              from: { email: FROM_EMAIL, name: FROM_NAME },
+              subject: `⚠️ ERROR Desbloqueo Bookeo: ${fecha} ${slot}`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #dc2626;">⚠️ Error Desbloqueo Bookeo</h2>
+                  <p><strong>Fecha:</strong> ${fecha}</p>
+                  <p><strong>Turno:</strong> ${slot} (${SLOT_TIMES[slot]})</p>
+                  <p><strong>BookeoId:</strong> ${bookeoId}</p>
+                  <p><strong>Error:</strong> ${webhookError.message}</p>
+                  <p style="color: #dc2626; font-weight: bold;">ACCIÓN REQUERIDA: Desbloquear manualmente en Bookeo</p>
+                  <hr style="border: 1px solid #eee; margin: 20px 0;">
+                  <p style="color: #666; font-size: 12px;">
+                    <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
+                  </p>
+                </div>
+              `
+            });
+          }
         }
         
         // Actualizar estado del bloqueo
@@ -652,6 +690,40 @@ exports.onShiftUpdate = onDocumentUpdated({
       shiftId,
       stack: error.stack 
     });
+  }
+});
+
+// =========================================
+// FUNCIÓN: saveBookeoId - HTTP ENDPOINT
+// =========================================
+exports.saveBookeoId = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const { fecha, slot, bookeoId } = req.body;
+    
+    if (!fecha || !slot || !bookeoId) {
+      res.status(400).json({ error: 'fecha, slot y bookeoId son requeridos' });
+      return;
+    }
+
+    const db = getFirestore();
+    const shiftId = `${fecha}_${slot}`;
+    
+    await db.collection('bookeo_blocks').doc(shiftId).set({
+      fecha,
+      slot,
+      bookeoId,
+      status: 'BLOCKED',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    logger.info('BookeoId guardado', { shiftId, bookeoId });
+    
+    res.json({ success: true, shiftId, bookeoId });
+    
+  } catch (error) {
+    logger.error('Error saveBookeoId', { error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
