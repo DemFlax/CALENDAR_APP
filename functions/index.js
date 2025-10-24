@@ -860,6 +860,9 @@ exports.devSetPassword = onRequest(async (req, res) => {
 // VENDOR COSTS MODULE
 // =========================================
 const vendorCosts = require('./src/vendor-costs');
+const bookeoRL = require('./bookeo-rate-limiting');
+exports.bookeoWebhookWorker = bookeoRL.bookeoWebhookWorker;
+exports.enqueueBookeoWebhook = bookeoRL.enqueueBookeoWebhook;
 exports.registerVendorCost = vendorCosts.registerVendorCost;
 exports.calculateSalaryPreview = vendorCosts.calculateSalaryPreview;
 exports.generateGuideInvoices = vendorCosts.generateGuideInvoices;
