@@ -86,6 +86,13 @@ function createGuideCard(id, guide) {
         </div>
       </div>
       <div class="flex flex-col gap-2">
+        <button onclick="window.impersonateGuide('${id}')" class="bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition whitespace-nowrap flex items-center justify-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+          </svg>
+          Ver como
+        </button>
         <button onclick="window.editGuide('${id}')" class="bg-sky-500 hover:bg-sky-600 dark:bg-sky-600 dark:hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition whitespace-nowrap">
           Editar
         </button>
@@ -97,6 +104,11 @@ function createGuideCard(id, guide) {
   `;
   return card;
 }
+
+// ✅ NUEVA FUNCIÓN: Impersonar guía
+window.impersonateGuide = (guideId) => {
+  window.location.href = `/guide.html?impersonate=${guideId}`;
+};
 
 window.showCreateGuideModal = () => {
   const modal = document.getElementById('guide-modal');

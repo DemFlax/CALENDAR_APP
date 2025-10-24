@@ -100,13 +100,25 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
     const token = await user.getIdTokenResult(true);
-    currentGuideId = token.claims.guideId;
-
-    if (!currentGuideId) {
-      alert('No tienes permisos de guía');
-      await signOut(auth);
-      window.location.href = '/login.html';
-      return;
+    
+    // ✅ NUEVO: Detectar impersonación
+    const urlParams = new URLSearchParams(window.location.search);
+    const impersonateGuideId = urlParams.get('impersonate');
+    
+    // ✅ NUEVO: Si hay impersonación Y el usuario es manager
+    if (impersonateGuideId && token.claims.role === 'manager') {
+      currentGuideId = impersonateGuideId;
+      // Mostrar banner impersonación
+      showImpersonationBanner();
+    } else {
+      // Flujo normal de guía
+      currentGuideId = token.claims.guideId;
+      if (!currentGuideId) {
+        alert('No tienes permisos de guía');
+        await signOut(auth);
+        window.location.href = '/login.html';
+        return;
+      }
     }
 
     const guideDoc = await getDoc(doc(db, 'guides', currentGuideId));
@@ -118,6 +130,11 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     guideName = guideDoc.data().nombre;
+    
+    // ✅ NUEVO: Actualizar nombre en banner si está impersonando
+    const bannerName = document.getElementById('impersonated-guide-name');
+    if (bannerName) bannerName.textContent = guideName;
+    
     updateUILanguage();
     initLanguageToggle();
     initAssignmentsDropdown();
@@ -128,13 +145,38 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
+// ✅ NUEVA FUNCIÓN: Mostrar banner
+function showImpersonationBanner() {
+  const nav = document.querySelector('nav');
+  const banner = document.createElement('div');
+  banner.id = 'impersonation-banner';
+  banner.className = 'bg-yellow-500 text-gray-900 px-4 py-3 flex items-center justify-between shadow-lg';
+  banner.innerHTML = `
+    <div class="flex items-center gap-2">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+      </svg>
+      <span class="font-semibold text-sm sm:text-base">Viendo como: <span id="impersonated-guide-name">...</span></span>
+    </div>
+    <button onclick="window.location.href='/manager.html'" class="bg-gray-900 hover:bg-gray-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
+      Volver al Manager
+    </button>
+  `;
+  nav.insertAdjacentElement('afterend', banner);
+}
+
 function updateUILanguage() {
   document.getElementById('page-title').textContent = `${t('pageTitle')} - ${guideName}`;
   document.getElementById('upcoming-title').textContent = t('upcomingAssignments');
   document.getElementById('calendar-title').textContent = t('calendarTitle');
   
   // Update invoices link
-  document.querySelector('a[href="/my-invoices.html"]').textContent = t('invoices');
+  const invoicesLink = document.querySelector('a[href="/my-invoices.html"]');
+  if (invoicesLink) {
+    const spanElement = invoicesLink.querySelector('span');
+    if (spanElement) spanElement.textContent = t('invoices');
+  }
 
   // Update month selector
   const monthSelect = document.getElementById('month-select');
@@ -195,7 +237,6 @@ async function loadUpcomingAssignments() {
   snapshot.forEach(doc => assignments.push({ id: doc.id, ...doc.data() }));
   assignments.sort((a, b) => a.fecha.localeCompare(b.fecha));
   
-  // LIMITAR A 3
   const limitedAssignments = assignments.slice(0, 3);
 
   const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -217,92 +258,53 @@ async function loadUpcomingAssignments() {
       </div>
     `;
   }).join('');
-  
+
   document.querySelectorAll('.assignment-card').forEach(card => {
-    card.addEventListener('click', function() {
-      const eventId = this.dataset.eventId;
-      const tourName = this.dataset.tourName;
-      const fecha = this.dataset.fecha;
-      const slot = this.dataset.slot;
-      navigateToTourDetails(eventId, tourName, fecha, getTimeFromSlot(slot), slot);
+    card.addEventListener('click', () => {
+      const eventId = card.dataset.eventId;
+      const tourName = card.dataset.tourName;
+      const fecha = card.dataset.fecha;
+      const slot = card.dataset.slot;
+      if (eventId) {
+        window.location.href = `/tour-details.html?eventId=${eventId}&title=${encodeURIComponent(tourName)}&date=${fecha}&time=${slot}`;
+      }
     });
   });
-}
-
-function getTimeFromSlot(slot) {
-  const slotTimes = {
-    'MAÑANA': '12:00',
-    'T1': '17:15',
-    'T2': '18:15',
-    'T3': '19:15'
-  };
-  return slotTimes[slot] || '12:00';
-}
-
-function navigateToTourDetails(eventId, tourName, fecha, time, slot) {
-  if (!eventId) {
-    showToast('Información del tour no disponible', 'error');
-    return;
-  }
-  
-  const params = new URLSearchParams({
-    eventId: eventId,
-    title: tourName,
-    date: fecha,
-    time: time,
-    slot: slot
-  });
-  
-  window.location.href = `/tour-details.html?${params.toString()}`;
 }
 
 function initCalendar() {
   const monthSelect = document.getElementById('month-select');
   const yearSelect = document.getElementById('year-select');
   const estadoFilter = document.getElementById('estado-filter');
-  
-  const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth() + 1;
-  
-  // Populate year selector (3 years back, current, 2 years forward)
-  for (let year = currentYear - 3; year <= currentYear + 2; year++) {
-    const option = document.createElement('option');
-    option.value = year;
-    option.textContent = year;
-    if (year === currentYear) option.selected = true;
-    yearSelect.appendChild(option);
+
+  const currentYear = new Date().getFullYear();
+  for (let y = currentYear - 1; y <= currentYear + 1; y++) {
+    yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
   }
-  
-  // Set current month
-  monthSelect.value = currentMonth;
-  
-  // Update month names based on language
-  monthSelect.innerHTML = monthNames[lang].map((name, idx) => 
-    `<option value="${idx + 1}" ${idx + 1 === currentMonth ? 'selected' : ''}>${name}</option>`
-  ).join('');
-  
+
+  const today = new Date();
+  monthSelect.value = today.getMonth() + 1;
+  yearSelect.value = currentYear;
+
   monthSelect.addEventListener('change', loadCalendar);
   yearSelect.addEventListener('change', loadCalendar);
   estadoFilter.addEventListener('change', loadCalendar);
-  
+
   loadCalendar();
 }
 
-function loadCalendar() {
+async function loadCalendar() {
   const monthSelect = document.getElementById('month-select');
   const yearSelect = document.getElementById('year-select');
   const estadoFilter = document.getElementById('estado-filter').value;
-  
-  const year = yearSelect.value;
+
   const month = String(monthSelect.value).padStart(2, '0');
-  
+  const year = yearSelect.value;
+
   const startDate = `${year}-${month}-01`;
   const endDate = `${year}-${month}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
 
-  if (shiftsUnsubscribe) {
-    shiftsUnsubscribe();
-  }
+  if (shiftsUnsubscribe) shiftsUnsubscribe();
 
   const shiftsQuery = query(
     collection(db, 'guides', currentGuideId, 'shifts'),
@@ -311,14 +313,13 @@ function loadCalendar() {
   );
 
   shiftsUnsubscribe = onSnapshot(shiftsQuery, (snapshot) => {
-    const allShifts = new Map();
+    const shiftsMap = new Map();
     snapshot.forEach(docSnap => {
       const data = docSnap.data();
-      if (estadoFilter === 'todos' || data.estado === estadoFilter) {
-        allShifts.set(docSnap.id, { id: docSnap.id, ...data });
-      }
+      const key = `${data.fecha}_${data.slot}`;
+      shiftsMap.set(key, { id: docSnap.id, ...data });
     });
-    renderCalendar(allShifts);
+    renderCalendar(shiftsMap);
   }, (error) => {
     console.error('Error listener shifts:', error);
     showToast(t('toastError'), 'error');
@@ -327,10 +328,13 @@ function loadCalendar() {
 
 function renderCalendar(shiftsMap) {
   const calendarGrid = document.getElementById('calendar-grid');
+  const estadoFilter = document.getElementById('estado-filter').value;
+  
   calendarGrid.innerHTML = '';
 
   const shiftsByDate = {};
   Array.from(shiftsMap.values()).forEach(shift => {
+    if (estadoFilter && estadoFilter !== 'todos' && shift.estado !== estadoFilter) return;
     if (!shiftsByDate[shift.fecha]) shiftsByDate[shift.fecha] = [];
     shiftsByDate[shift.fecha].push(shift);
   });

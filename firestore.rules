@@ -14,7 +14,8 @@ service cloud.firestore {
     }
     
     function isOwnerGuide(guideId) {
-      return isAuthenticated() && request.auth.token.guideId == guideId;
+      return isAuthenticated() && 
+             (request.auth.token.guideId == guideId || isManager());
     }
     
     // ========================================
