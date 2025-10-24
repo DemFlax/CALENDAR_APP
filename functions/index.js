@@ -474,6 +474,20 @@ exports.onShiftUpdate = onDocumentUpdated({
     if (totalGuides > 0 && unavailableCount === totalGuides) {
       logger.warn('🚫 100% guías NO_DISPONIBLE - BLOQUEANDO', { fecha, slot });
       
+      // ✅ VALIDACIÓN DUPLICADOS: Verificar si ya existe bloqueo activo
+      const existingBlock = await db.collection('bookeo_blocks').doc(shiftId).get();
+      
+      if (existingBlock.exists && existingBlock.data().status === 'BLOCKED') {
+        logger.info('Bloqueo ya existe - skip webhook', { 
+          shiftId,
+          bookeoId: existingBlock.data().bookeoId,
+          createdAt: existingBlock.data().createdAt 
+        });
+        return; // ← NO enviar webhook duplicado
+      }
+      
+      logger.info('No existe bloqueo previo - continuando proceso de bloqueo', { shiftId });
+      
       // Email al Manager
       sgMail.setApiKey(sendgridKey.value());
       await sgMail.send({
