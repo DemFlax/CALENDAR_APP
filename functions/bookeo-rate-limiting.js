@@ -75,9 +75,22 @@ exports.bookeoWebhookWorker = onTaskDispatched({
     
     logger.info(`Webhook ${action} exitoso`, { fecha, slot, status: response.status });
     
-    // Actualizar bookeo_blocks según acción
+    // PRIORIDAD 1: Enviar email al manager
+    if (emailData) {
+      sgMail.setApiKey(sendgridKey.value());
+      await sgMail.send({
+        to: MANAGER_EMAIL,
+        from: { email: FROM_EMAIL, name: FROM_NAME },
+        subject: emailData.subject,
+        html: emailData.html
+      });
+      
+      logger.info('Email enviado al manager', { subject: emailData.subject });
+    }
+    
+    // PRIORIDAD 2: Actualizar bookeo_blocks según acción
     if (action === 'BLOQUEAR') {
-      const bookeoId = response.data?.bookeoId;
+      const bookeoId = response.data?.id;
       
       if (bookeoId) {
         await db.collection('bookeo_blocks').doc(shiftId).set({
@@ -91,7 +104,21 @@ exports.bookeoWebhookWorker = onTaskDispatched({
         
         logger.info('BookeoId guardado', { shiftId, bookeoId });
       } else {
-        throw new Error('Zapier no retornó bookeoId');
+        logger.warn('Zapier no retornó bookeoId - bloqueo aplicado pero ID no guardado', { 
+          shiftId, 
+          responseData: response.data 
+        });
+        
+        // Guardar sin bookeoId para auditoría
+        await db.collection('bookeo_blocks').doc(shiftId).set({
+          fecha,
+          slot,
+          bookeoId: null,
+          status: 'BLOCKED',
+          warning: 'bookeoId no retornado por Zapier',
+          createdAt: FieldValue.serverTimestamp(),
+          webhookResponse: response.data
+        });
       }
     } else if (action === 'DESBLOQUEAR') {
       await db.collection('bookeo_blocks').doc(shiftId).update({
@@ -99,19 +126,6 @@ exports.bookeoWebhookWorker = onTaskDispatched({
         unlockedAt: FieldValue.serverTimestamp(),
         webhookResponse: response.data
       });
-    }
-    
-    // Enviar email al manager si se proporcionó
-    if (emailData) {
-      sgMail.setApiKey(sendgridKey.value());
-      await sgMail.send({
-        to: MANAGER_EMAIL,
-        from: { email: FROM_EMAIL, name: FROM_NAME },
-        subject: emailData.subject,
-        html: emailData.html
-      });
-      
-      logger.info('Email enviado al manager', { subject: emailData.subject });
     }
     
     // Log auditoría
@@ -253,14 +267,10 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
             subject: `🚫 Sin guías disponibles: ${fecha} MAÑANA`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #dc2626;">🚫 Turno Sin Cobertura</h2>
+                <h2 style="color: #dc2626;">🚫 Turno MAÑANA Sin Cobertura</h2>
                 <p><strong>Fecha:</strong> ${fecha}</p>
-                <p><strong>Turno:</strong> MAÑANA (12:00)</p>
+                <p><strong>Turno:</strong> MAÑANA (${SLOT_TIMES['MAÑANA']})</p>
                 <p><strong>Estado:</strong> Todos los guías (${totalGuides}) están NO_DISPONIBLE</p>
-                <hr style="border: 1px solid #eee; margin: 20px 0;">
-                <p style="color: #666; font-size: 12px;">
-                  <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
-                </p>
               </div>
             `
           }
@@ -276,16 +286,16 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
           createdAt: FieldValue.serverTimestamp()
         });
       }
-      // Cualquier disponible → DESBLOQUEAR
+      // <100% NO_DISPONIBLE Y había bloqueo → DESBLOQUEAR
       else if (unavailableCount < totalGuides && isBlocked) {
         const bookeoId = blockDoc.data().bookeoId;
         
         if (!bookeoId) {
-          logger.error('BookeoId faltante para desbloqueo MAÑANA', { fecha });
+          logger.error('BookeoId faltante para desbloqueo', { fecha, slot: 'MAÑANA' });
           return;
         }
         
-        logger.warn('✅ MAÑANA guías disponibles - DESBLOQUEANDO', { fecha, bookeoId });
+        logger.warn('✅ MAÑANA guías disponibles - DESBLOQUEANDO', { fecha, unavailableCount, totalGuides, bookeoId });
         
         await enqueueWebhook(db, {
           action: 'DESBLOQUEAR',
@@ -302,9 +312,9 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
             subject: `✅ Guías disponibles: ${fecha} MAÑANA`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #059669;">✅ Disponibilidad Restaurada</h2>
+                <h2 style="color: #059669;">✅ Disponibilidad MAÑANA Restaurada</h2>
                 <p><strong>Fecha:</strong> ${fecha}</p>
-                <p><strong>Turno:</strong> MAÑANA (12:00)</p>
+                <p><strong>Turno:</strong> MAÑANA (${SLOT_TIMES['MAÑANA']})</p>
                 <p><strong>Estado:</strong> ${totalGuides - unavailableCount} de ${totalGuides} guías disponibles</p>
               </div>
             `
@@ -318,8 +328,8 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
           totalGuides,
           unavailableCount,
           availableCount: totalGuides - unavailableCount,
-          action: 'DESBLOQUEAR',
           bookeoId,
+          action: 'DESBLOQUEAR',
           createdAt: FieldValue.serverTimestamp()
         });
       }
@@ -329,9 +339,9 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
     // LÓGICA TARDE (T1, T2, T3)
     // =========================================
     else if (['T1', 'T2', 'T3'].includes(slot)) {
-      // Contar disponibilidad en TODA la TARDE
+      // Contar NO_DISPONIBLE por cada slot de TARDE
+      const tardeSlotsCount = {};
       let unavailableCountTarde = 0;
-      const tardeSlotsCount = {}; // Contador por cada T
       
       for (const tardeSlot of ['T1', 'T2', 'T3']) {
         const tardeShiftId = `${fecha}_${tardeSlot}`;
