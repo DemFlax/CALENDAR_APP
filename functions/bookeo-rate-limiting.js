@@ -1,7 +1,7 @@
 // =========================================
 // BOOKEO RATE LIMITING CON CLOUD TASKS
 // Lógica progresiva TARDE: 1 guía=T2, 2=T2+T1, 3+=T2+T1+T3
-// Hash deduplicación para evitar webhooks duplicados
+// Transacciones atómicas para prevenir webhooks duplicados
 // =========================================
 const { onTaskDispatched } = require("firebase-functions/v2/tasks");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
@@ -245,33 +245,53 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
         }
       }
       
-      logger.info('Estado MAÑANA', { fecha, totalGuides, unavailableCount });
-      
-      // Calcular hash del estado agregado
-      const stateHash = calculateStateHash({ totalGuides, unavailableCount });
-      const stateDocId = `${fecha}_MAÑANA_STATE`;
-      
-      // Verificar si estado cambió
-      const stateDoc = await db.collection('bookeo_blocks').doc(stateDocId).get();
-      if (stateDoc.exists && stateDoc.data().lastHash === stateHash) {
-        logger.info('Estado MAÑANA sin cambios - skip webhook', { fecha, stateHash });
-        return;
-      }
-      
-      // Actualizar hash ANTES de procesar
-      await db.collection('bookeo_blocks').doc(stateDocId).set({
-        lastHash: stateHash,
-        lastProcessed: FieldValue.serverTimestamp(),
-        totalGuides,
+      logger.info('Estado MAÑANA', { 
+        fecha, 
+        totalGuides, 
         unavailableCount
       });
       
-      const blockDoc = await db.collection('bookeo_blocks').doc(mananaShiftId).get();
-      const isBlocked = blockDoc.exists && blockDoc.data().status === 'BLOCKED';
+      // Calcular hash del estado agregado MAÑANA
+      const stateHash = calculateStateHash({ 
+        totalGuides, 
+        unavailableCount
+      });
+      const stateDocId = `${fecha}_MAÑANA_STATE`;
       
-      // 100% NO_DISPONIBLE → BLOQUEAR
-      if (unavailableCount === totalGuides && !isBlocked) {
-        logger.warn('🚫 MAÑANA 100% NO_DISPONIBLE - BLOQUEANDO', { fecha });
+      // ✅ TRANSACCIÓN ATÓMICA para verificar+actualizar hash
+      const shouldProcess = await db.runTransaction(async (transaction) => {
+        const stateDocRef = db.collection('bookeo_blocks').doc(stateDocId);
+        const stateDoc = await transaction.get(stateDocRef);
+        
+        if (stateDoc.exists && stateDoc.data().lastHash === stateHash) {
+          logger.info('Estado MAÑANA sin cambios - skip webhook', { fecha, stateHash });
+          return false; // No procesar
+        }
+        
+        // Actualizar hash dentro de la transacción
+        transaction.set(stateDocRef, {
+          lastHash: stateHash,
+          lastProcessed: FieldValue.serverTimestamp(),
+          totalGuides,
+          unavailableCount
+        });
+        
+        return true; // Procesar webhooks
+      });
+      
+      if (!shouldProcess) {
+        return; // Estado sin cambios, salir
+      }
+      
+      // Verificar si debe bloquearse o desbloquearse
+      const blockDoc = await db.collection('bookeo_blocks').doc(mananaShiftId).get();
+      const existingBookeoId = blockDoc.exists ? blockDoc.data().bookeoId : null;
+      const isBlocked = blockDoc.exists && blockDoc.data().status === 'BLOCKED';
+      const allUnavailable = unavailableCount === totalGuides;
+      
+      // BLOQUEAR si todos NO_DISPONIBLE y no hay bloqueo activo
+      if (allUnavailable && !existingBookeoId) {
+        logger.warn('🚫 MAÑANA debe bloquearse', { fecha, unavailableCount, totalGuides });
         
         await enqueueWebhook(db, {
           action: 'BLOQUEAR',
@@ -287,10 +307,9 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
             subject: `🚫 Sin guías disponibles: ${fecha} MAÑANA`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #dc2626;">🚫 Turno MAÑANA Sin Cobertura</h2>
+                <h2 style="color: #dc2626;">🚫 MAÑANA Sin Cobertura</h2>
                 <p><strong>Fecha:</strong> ${fecha}</p>
-                <p><strong>Turno:</strong> MAÑANA (${SLOT_TIMES['MAÑANA']})</p>
-                <p><strong>Estado:</strong> Todos los guías (${totalGuides}) están NO_DISPONIBLE</p>
+                <p><strong>Estado:</strong> Todos los guías (${totalGuides}) tienen MAÑANA NO_DISPONIBLE</p>
               </div>
             `
           }
@@ -306,23 +325,29 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
           createdAt: FieldValue.serverTimestamp()
         });
       }
-      // <100% NO_DISPONIBLE Y había bloqueo → DESBLOQUEAR
-      else if (unavailableCount < totalGuides && isBlocked) {
-        const bookeoId = blockDoc.data().bookeoId;
-        
-        if (!bookeoId) {
-          logger.error('BookeoId faltante para desbloqueo', { fecha, slot: 'MAÑANA' });
-          return;
+      // DESBLOQUEAR si hay disponibilidad y existe bloqueo
+      else if (!allUnavailable && existingBookeoId) {
+        if (!isBlocked) {
+          logger.warn('BookeoId existe pero status no es BLOCKED - corrigiendo', { 
+            fecha, 
+            slot: 'MAÑANA',
+            existingBookeoId 
+          });
         }
         
-        logger.warn('✅ MAÑANA guías disponibles - DESBLOQUEANDO', { fecha, unavailableCount, totalGuides, bookeoId });
+        logger.warn('✅ MAÑANA debe desbloquearse', { 
+          fecha, 
+          unavailableCount, 
+          totalGuides,
+          bookeoId: existingBookeoId 
+        });
         
         await enqueueWebhook(db, {
           action: 'DESBLOQUEAR',
           shiftId: mananaShiftId,
           payload: {
             action: 'DESBLOQUEAR',
-            bookeoId: bookeoId,
+            bookeoId: existingBookeoId,
             startDate: fecha,
             startTime: SLOT_TIMES['MAÑANA'],
             slot: 'MAÑANA',
@@ -334,8 +359,7 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #059669;">✅ Disponibilidad MAÑANA Restaurada</h2>
                 <p><strong>Fecha:</strong> ${fecha}</p>
-                <p><strong>Turno:</strong> MAÑANA (${SLOT_TIMES['MAÑANA']})</p>
-                <p><strong>Estado:</strong> ${totalGuides - unavailableCount} de ${totalGuides} guías disponibles</p>
+                <p><strong>Estado:</strong> ${totalGuides - unavailableCount} guía(s) disponibles</p>
               </div>
             `
           }
@@ -348,25 +372,27 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
           totalGuides,
           unavailableCount,
           availableCount: totalGuides - unavailableCount,
-          bookeoId,
           action: 'DESBLOQUEAR',
+          bookeoId: existingBookeoId,
           createdAt: FieldValue.serverTimestamp()
         });
+      }
+      // Si bookeoId existe pero allUnavailable = true, saltar (ya bloqueado)
+      else if (allUnavailable && existingBookeoId) {
+        logger.info('MAÑANA ya bloqueado, skip webhook', { fecha, bookeoId: existingBookeoId });
       }
     }
     
     // =========================================
-    // LÓGICA TARDE (T1, T2, T3)
+    // LÓGICA TARDE
     // =========================================
     else if (['T1', 'T2', 'T3'].includes(slot)) {
-      // Contar NO_DISPONIBLE por cada slot de TARDE
-      const tardeSlotsCount = {};
+      // Contar slots NO_DISPONIBLE por cada T
+      const tardeSlotsCount = { T1: 0, T2: 0, T3: 0 };
       
-      for (const tardeSlot of ['T1', 'T2', 'T3']) {
-        const tardeShiftId = `${fecha}_${tardeSlot}`;
-        let unavailable = 0;
-        
-        for (const guideDoc of guidesSnapshot.docs) {
+      for (const guideDoc of guidesSnapshot.docs) {
+        for (const tardeSlot of ['T1', 'T2', 'T3']) {
+          const tardeShiftId = `${fecha}_${tardeSlot}`;
           const shiftDoc = await db.collection('guides')
             .doc(guideDoc.id)
             .collection('shifts')
@@ -374,14 +400,12 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
             .get();
           
           if (shiftDoc.exists && shiftDoc.data().estado === 'NO_DISPONIBLE') {
-            unavailable++;
+            tardeSlotsCount[tardeSlot]++;
           }
         }
-        
-        tardeSlotsCount[tardeSlot] = unavailable;
       }
       
-      // Calcular guías disponibles (que tienen al menos 1 T libre)
+      // Contar guías con al menos 1 slot TARDE disponible
       let guidesDisponiblesTarde = 0;
       
       for (const guideDoc of guidesSnapshot.docs) {
@@ -425,21 +449,31 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
       });
       const stateDocId = `${fecha}_TARDE_STATE`;
       
-      // Verificar si estado cambió
-      const stateDoc = await db.collection('bookeo_blocks').doc(stateDocId).get();
-      if (stateDoc.exists && stateDoc.data().lastHash === stateHash) {
-        logger.info('Estado TARDE sin cambios - skip webhook', { fecha, stateHash });
-        return;
-      }
-      
-      // Actualizar hash ANTES de procesar
-      await db.collection('bookeo_blocks').doc(stateDocId).set({
-        lastHash: stateHash,
-        lastProcessed: FieldValue.serverTimestamp(),
-        totalGuides,
-        guidesDisponiblesTarde,
-        tardeSlotsCount
+      // ✅ TRANSACCIÓN ATÓMICA para verificar+actualizar hash
+      const shouldProcess = await db.runTransaction(async (transaction) => {
+        const stateDocRef = db.collection('bookeo_blocks').doc(stateDocId);
+        const stateDoc = await transaction.get(stateDocRef);
+        
+        if (stateDoc.exists && stateDoc.data().lastHash === stateHash) {
+          logger.info('Estado TARDE sin cambios - skip webhook', { fecha, stateHash });
+          return false; // No procesar
+        }
+        
+        // Actualizar hash dentro de la transacción
+        transaction.set(stateDocRef, {
+          lastHash: stateHash,
+          lastProcessed: FieldValue.serverTimestamp(),
+          totalGuides,
+          guidesDisponiblesTarde,
+          tardeSlotsCount
+        });
+        
+        return true; // Procesar webhooks
       });
+      
+      if (!shouldProcess) {
+        return; // Estado sin cambios, salir
+      }
       
       // Determinar estado deseado de cada T según disponibilidad
       const estadoDeseado = determinarEstadoTarde(guidesDisponiblesTarde);
@@ -448,11 +482,12 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
       for (const tardeSlot of ['T1', 'T2', 'T3']) {
         const tardeShiftId = `${fecha}_${tardeSlot}`;
         const blockDoc = await db.collection('bookeo_blocks').doc(tardeShiftId).get();
+        const existingBookeoId = blockDoc.exists ? blockDoc.data().bookeoId : null;
         const isBlocked = blockDoc.exists && blockDoc.data().status === 'BLOCKED';
         const deseaBloqueado = !estadoDeseado[tardeSlot];
         
-        // BLOQUEAR si no está bloqueado pero debería estarlo
-        if (deseaBloqueado && !isBlocked) {
+        // BLOQUEAR si no está bloqueado y no existe bookeoId
+        if (deseaBloqueado && !existingBookeoId) {
           logger.warn(`🚫 ${tardeSlot} debe bloquearse`, { fecha, guidesDisponiblesTarde });
           
           await enqueueWebhook(db, {
@@ -488,23 +523,28 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
             createdAt: FieldValue.serverTimestamp()
           });
         }
-        // DESBLOQUEAR si está bloqueado pero debería estar libre
-        else if (!deseaBloqueado && isBlocked) {
-          const bookeoId = blockDoc.data().bookeoId;
-          
-          if (!bookeoId) {
-            logger.error('BookeoId faltante para desbloqueo', { fecha, slot: tardeSlot });
-            continue;
+        // DESBLOQUEAR si debe estar libre y existe bookeoId
+        else if (!deseaBloqueado && existingBookeoId) {
+          if (!isBlocked) {
+            logger.warn('BookeoId existe pero status no es BLOCKED - corrigiendo', { 
+              fecha, 
+              slot: tardeSlot,
+              existingBookeoId 
+            });
           }
           
-          logger.warn(`✅ ${tardeSlot} debe desbloquearse`, { fecha, guidesDisponiblesTarde, bookeoId });
+          logger.warn(`✅ ${tardeSlot} debe desbloquearse`, { 
+            fecha, 
+            guidesDisponiblesTarde, 
+            bookeoId: existingBookeoId 
+          });
           
           await enqueueWebhook(db, {
             action: 'DESBLOQUEAR',
             shiftId: tardeShiftId,
             payload: {
               action: 'DESBLOQUEAR',
-              bookeoId: bookeoId,
+              bookeoId: existingBookeoId,
               startDate: fecha,
               startTime: SLOT_TIMES[tardeSlot],
               slot: tardeSlot,
@@ -530,9 +570,13 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
             totalGuides,
             guidesDisponiblesTarde,
             action: 'DESBLOQUEAR',
-            bookeoId,
+            bookeoId: existingBookeoId,
             createdAt: FieldValue.serverTimestamp()
           });
+        }
+        // Si bookeoId existe y debe estar bloqueado, saltar
+        else if (deseaBloqueado && existingBookeoId) {
+          logger.info(`${tardeSlot} ya bloqueado, skip webhook`, { fecha, bookeoId: existingBookeoId });
         }
       }
     }
@@ -560,6 +604,10 @@ function calculateStateHash(stateObj) {
 
 /**
  * Determina qué T deben estar desbloqueados según disponibilidad
+ * 0 disponibles → Ninguno libre
+ * 1 disponible → Solo T2 libre
+ * 2 disponibles → T1 + T2 libres
+ * 3+ disponibles → T1 + T2 + T3 libres
  */
 function determinarEstadoTarde(guidesDisponibles) {
   if (guidesDisponibles === 0) {
