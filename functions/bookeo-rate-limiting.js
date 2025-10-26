@@ -192,7 +192,7 @@ exports.bookeoWebhookWorker = onTaskDispatched({
 // =========================================
 exports.enqueueBookeoWebhook = onDocumentUpdated({
   document: "guides/{guideId}/shifts/{shiftId}",
-  region: "us-central1",
+  region: "eur3",
   secrets: [sendgridKey]
 }, async (event) => {
   const before = event.data.before.data();
