@@ -222,42 +222,46 @@ exports.onUpdateGuide = onDocumentUpdated({
         userRecord = await getAuth().getUserByEmail(after.email);
         logger.info('Usuario Auth existe - generando reset link', { uid: userRecord.uid });
       } catch (authError) {
-        logger.warn('Usuario Auth no existe - creando nuevo', { email: after.email });
-        userRecord = await getAuth().createUser({
-          email: after.email,
-          emailVerified: false,
-          disabled: false
-        });
-        
-        await getAuth().setCustomUserClaims(userRecord.uid, {
-          role: 'guide',
-          guideId: guideId
-        });
-        
-        await getFirestore().collection('guides').doc(guideId).update({
-          uid: userRecord.uid,
-          updatedAt: FieldValue.serverTimestamp()
-        });
+        if (authError.code === 'auth/user-not-found') {
+          userRecord = await getAuth().createUser({
+            email: after.email,
+            emailVerified: false,
+            disabled: false
+          });
+          logger.info('Usuario Auth creado', { uid: userRecord.uid });
+        } else {
+          throw authError;
+        }
       }
+
+      await getAuth().setCustomUserClaims(userRecord.uid, {
+        role: 'guide',
+        guideId: guideId
+      });
+
+      await getFirestore().collection('guides').doc(guideId).update({
+        uid: userRecord.uid,
+        updatedAt: FieldValue.serverTimestamp()
+      });
       
+      sgMail.setApiKey(sendgridKey.value());
       const firebaseLink = await getAuth().generatePasswordResetLink(after.email);
       const urlObj = new URL(firebaseLink);
       const oobCode = urlObj.searchParams.get('oobCode');
       const directLink = `${APP_URL}/set-password.html?mode=resetPassword&oobCode=${oobCode}`;
       
-      logger.info('Link generado para reactivación', { email: after.email, oobCode: oobCode.substring(0, 10) + '...' });
-      
-      sgMail.setApiKey(sendgridKey.value());
+      logger.info('Link generado para reactivación', { email: after.email });
+     
       const msg = {
         to: after.email,
         from: { email: FROM_EMAIL, name: FROM_NAME },
-        subject: '¡Bienvenido de nuevo! - Reactivación Calendario Tours',
+        subject: 'Reactivación - Calendario Tours Spain Food Sherpas',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #333;">Bienvenido de nuevo a Spain Food Sherpas</h2>
+            <h2 style="color: #333;">Cuenta Reactivada</h2>
             <p>Hola ${after.nombre || ''},</p>
-            <p>Tu cuenta de guía ha sido <strong>reactivada</strong>.</p>
-            <p>Para acceder de nuevo al sistema, establece tu contraseña:</p>
+            <p>Tu cuenta ha sido reactivada en Spain Food Sherpas.</p>
+            <p>Para establecer tu nueva contraseña, haz clic aquí:</p>
             <div style="margin: 20px 0;">
               <a href="${directLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
                 Establecer Contraseña
@@ -271,10 +275,10 @@ exports.onUpdateGuide = onDocumentUpdated({
           </div>
         `
       };
-      
+     
       await sgMail.send(msg);
-      logger.info('Email reactivación enviado vía SendGrid', { email: after.email });
-      
+      logger.info('Email reactivación enviado', { email: after.email });
+     
       await getFirestore().collection('notifications').add({
         guiaId: guideId,
         tipo: 'REACTIVACION',
@@ -285,7 +289,7 @@ exports.onUpdateGuide = onDocumentUpdated({
       });
       
     } catch (error) {
-      logger.error('Error enviando email reactivación', { error: error.message, guideId, email: after.email });
+      logger.error('Error onUpdateGuide reactivación', { error: error.message, guideId });
       await getFirestore().collection('notifications').add({
         guiaId: guideId,
         tipo: 'REACTIVACION',
@@ -299,416 +303,148 @@ exports.onUpdateGuide = onDocumentUpdated({
 });
 
 // =========================================
-// FUNCIÓN: onCreateGuideGenerateShifts
+// FUNCIÓN: assignShiftsToGuide
 // =========================================
-exports.onCreateGuideGenerateShifts = onDocumentCreated({
-  document: 'guides/{guideId}'
-}, async (event) => {
-  const guide = event.data.data();
-  const guideId = event.params.guideId;
- 
-  if (guide.estado !== 'activo') {
-    logger.info('Guía no activo - skip shifts', { guideId });
-    return;
+exports.assignShiftsToGuide = onCall(async (request) => {
+  const { guideId, fecha, turno, eventId, tourName, startTime } = request.data;
+  
+  if (!guideId || !fecha || !turno) {
+    throw new HttpsError('invalid-argument', 'guideId, fecha y turno son obligatorios');
   }
- 
-  try {
-    const today = new Date();
-    let totalCreated = 0;
-   
-    for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
-      const targetDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
-      const year = targetDate.getFullYear();
-      const month = targetDate.getMonth();
-      
-      const created = await generateMonthShifts(guideId, year, month);
-      totalCreated += created;
-    }
-   
-    logger.info('Shifts generados onCreate', { guideId, count: totalCreated });
-   
-  } catch (error) {
-    logger.error('Error generando turnos onCreate', { guideId, error: error.message });
-  }
-});
 
-// =========================================
-// FUNCIÓN: maintainTemporalHorizon (SCHEDULED)
-// =========================================
-exports.maintainTemporalHorizon = onSchedule({
-  schedule: '0 0 1 * *',
-  timeZone: 'Europe/Madrid'
-}, async (event) => {
-  logger.info('Iniciando mantenimiento horizonte temporal');
- 
-  try {
-    const db = getFirestore();
-    const today = new Date();
-   
-    const generateDate = new Date(today.getFullYear(), today.getMonth() + 3, 1);
-    const generateYear = generateDate.getFullYear();
-    const generateMonth = generateDate.getMonth();
-   
-    const deleteDate = new Date(today.getFullYear(), today.getMonth() - 2, 1);
-    const deleteYear = deleteDate.getFullYear();
-    const deleteMonth = deleteDate.getMonth();
-   
-    logger.info('Fechas calculadas', {
-      generar: `${generateYear}-${String(generateMonth + 1).padStart(2, '0')}`,
-      eliminar: `${deleteYear}-${String(deleteMonth + 1).padStart(2, '0')}`
-    });
-   
-    const guidesSnapshot = await db.collection('guides')
-      .where('estado', '==', 'activo')
-      .get();
-   
-    if (guidesSnapshot.empty) {
-      logger.info('No hay guías activos - skip');
-      return;
-    }
-   
-    let totalGenerated = 0;
-    let totalDeleted = 0;
-    const errors = [];
-   
-    for (const guideDoc of guidesSnapshot.docs) {
-      const guideId = guideDoc.id;
-      
-      try {
-        const generated = await generateMonthShifts(guideId, generateYear, generateMonth);
-        totalGenerated += generated;
-        logger.info('Shifts generados', { guideId, mes: `${generateYear}-${generateMonth + 1}`, count: generated });
-        
-        await deleteMonthShifts(guideId, deleteYear, deleteMonth);
-        logger.info('Shifts eliminados', { guideId, mes: `${deleteYear}-${deleteMonth + 1}` });
-        totalDeleted++;
-        
-      } catch (error) {
-        logger.error('Error procesando guía', { guideId, error: error.message });
-        errors.push({ guideId, error: error.message });
-      }
-    }
-   
-    logger.info('Mantenimiento completado', {
-      guiasActivos: guidesSnapshot.size,
-      shiftsGenerados: totalGenerated,
-      guiasEliminados: totalDeleted,
-      errores: errors.length
-    });
-   
-    if (errors.length > 0) {
-      logger.warn('Errores durante mantenimiento', { errores: errors });
-    }
-   
-  } catch (error) {
-    logger.error('Error crítico en mantenimiento horizonte', { error: error.message, stack: error.stack });
-    throw error;
-  }
-});
-
-// =========================================
-// FUNCIÓN: onShiftUpdate - BOOKEO SYNC
-// =========================================
-exports.onShiftUpdate = onDocumentUpdated({
-  document: 'guides/{guideId}/shifts/{shiftId}',
-  secrets: [sendgridKey]
-}, async (event) => {
-  const before = event.data.before.data();
-  const after = event.data.after.data();
-  
-  const fecha = after.fecha;
-  const slot = after.slot;
-  const shiftId = `${fecha}_${slot}`;
-  
-  const wasBlocked = before.estado === 'NO_DISPONIBLE';
-  const isNowBlocked = after.estado === 'NO_DISPONIBLE';
-  
-  if (wasBlocked === isNowBlocked) {
-    return;
-  }
+  const db = getFirestore();
+  const slots = turno === 'MAÑANA' ? ['MAÑANA'] : ['T1', 'T2', 'T3'];
   
   try {
-    const db = getFirestore();
+    const batch = db.batch();
     
-    const guidesSnapshot = await db.collection('guides')
-      .where('estado', '==', 'activo')
-      .get();
-    
-    if (guidesSnapshot.empty) {
-      logger.warn('No hay guías activos');
-      return;
-    }
-    
-    let totalGuides = 0;
-    let unavailableCount = 0;
-    
-    for (const guideDoc of guidesSnapshot.docs) {
-      const shiftDoc = await db
-        .collection('guides')
-        .doc(guideDoc.id)
-        .collection('shifts')
-        .doc(shiftId)
-        .get();
+    for (const slot of slots) {
+      const shiftId = `${fecha}_${slot}`;
+      const shiftRef = db.collection('guides').doc(guideId).collection('shifts').doc(shiftId);
       
-      if (shiftDoc.exists) {
-        totalGuides++;
-        if (shiftDoc.data().estado === 'NO_DISPONIBLE') {
-          unavailableCount++;
-        }
-      }
-    }
-    
-    const percentage = Math.round((unavailableCount / totalGuides) * 100);
-    
-    logger.info('Estado shifts', {
-      fecha,
-      slot,
-      totalGuides,
-      unavailableCount,
-      percentage
-    });
-    
-    // ==================================
-    // CASO 1: BLOQUEO (0-99% → 100%)
-    // ==================================
-    if (totalGuides > 0 && unavailableCount === totalGuides) {
-      logger.warn('🚫 100% guías NO_DISPONIBLE - BLOQUEANDO', { fecha, slot });
-      
-      // ✅ VALIDACIÓN DUPLICADOS: Verificar si ya existe bloqueo activo
-      const existingBlock = await db.collection('bookeo_blocks').doc(shiftId).get();
-      
-      if (existingBlock.exists && existingBlock.data().status === 'BLOCKED') {
-        logger.info('Bloqueo ya existe - skip webhook', { 
-          shiftId,
-          bookeoId: existingBlock.data().bookeoId,
-          createdAt: existingBlock.data().createdAt 
-        });
-        return; // ← NO enviar webhook duplicado
-      }
-      
-      logger.info('No existe bloqueo previo - continuando proceso de bloqueo', { shiftId });
-      
-      // Email al Manager
-      sgMail.setApiKey(sendgridKey.value());
-      await sgMail.send({
-        to: MANAGER_EMAIL,
-        from: { email: FROM_EMAIL, name: FROM_NAME },
-        subject: `🚫 Sin guías disponibles: ${fecha} ${slot}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #dc2626;">⚠️ Alerta: Sin Disponibilidad</h2>
-            <p><strong>Fecha:</strong> ${fecha}</p>
-            <p><strong>Turno:</strong> ${slot} (${SLOT_TIMES[slot]})</p>
-            <p><strong>Estado:</strong> Todos los guías (${totalGuides}) marcaron NO_DISPONIBLE</p>
-            <hr style="border: 1px solid #eee; margin: 20px 0;">
-            <p style="color: #666; font-size: 12px;">
-              <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
-            </p>
-          </div>
-        `
-      });
-      
-      logger.info('Email enviado al manager', { to: MANAGER_EMAIL });
-      
-      // Webhook Zapier BLOQUEAR
-      if (ZAPIER_WEBHOOK_URL) {
-        const params = new URLSearchParams({
-          'Start Time': fecha,
-          'Hora': SLOT_TIMES[slot],
-          'Acción': 'Bloquear',
-          'Botón': 'true',
-          'Hoja': 'Firebase',
-          'Turno': slot
-        });
-        
-        try {
-          const response = await axios.post(ZAPIER_WEBHOOK_URL, params.toString(), {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            timeout: 30000
-          });
-          
-          const bookeoId = response.data?.id || response.data?.bookeoId;
-          
-          if (bookeoId) {
-            await db.collection('bookeo_blocks').doc(shiftId).set({
-              fecha,
-              slot,
-              bookeoId,
-              status: 'BLOCKED',
-              createdAt: FieldValue.serverTimestamp(),
-              webhookResponse: response.data
-            }, { merge: true });
-            
-            logger.info('Webhook BLOQUEAR exitoso', { fecha, slot, bookeoId });
-          } else {
-            logger.error('Zapier no retornó bookeoId', { fecha, slot, response: response.data });
-          }
-        } catch (webhookError) {
-          logger.error('Error webhook BLOQUEAR', { 
-            fecha, 
-            slot, 
-            error: webhookError.message 
-          });
-          
-          await sgMail.send({
-            to: MANAGER_EMAIL,
-            from: { email: FROM_EMAIL, name: FROM_NAME },
-            subject: `⚠️ ERROR Bloqueo Bookeo: ${fecha} ${slot}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #dc2626;">⚠️ Error Sincronización Bookeo</h2>
-                <p><strong>Fecha:</strong> ${fecha}</p>
-                <p><strong>Turno:</strong> ${slot} (${SLOT_TIMES[slot]})</p>
-                <p><strong>Error:</strong> ${webhookError.message}</p>
-                <p style="color: #dc2626; font-weight: bold;">ACCIÓN REQUERIDA: Bloquear manualmente en Bookeo</p>
-                <hr style="border: 1px solid #eee; margin: 20px 0;">
-                <p style="color: #666; font-size: 12px;">
-                  <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
-                </p>
-              </div>
-            `
-          });
-        }
-      }
-      
-      // Registro auditoría
-      await db.collection('notifications').add({
-        tipo: 'BOOKEO_BLOCK',
-        fecha,
-        slot,
-        startTime: SLOT_TIMES[slot],
-        totalGuides,
-        unavailableCount,
-        managerEmail: MANAGER_EMAIL,
-        webhookSent: !!ZAPIER_WEBHOOK_URL,
-        action: 'BLOQUEAR',
-        createdAt: FieldValue.serverTimestamp()
+      batch.update(shiftRef, {
+        estado: 'ASIGNADO',
+        eventId: eventId || null,
+        tourName: tourName || null,
+        startTime: startTime || null,
+        updatedAt: FieldValue.serverTimestamp()
       });
     }
     
-    // ==================================
-    // CASO 2: DESBLOQUEO (100% → <100%)
-    // ==================================
-    else if (totalGuides > 0 && unavailableCount < totalGuides) {
-      // Verificar si había bloqueo previo
-      const blockDoc = await db.collection('bookeo_blocks').doc(shiftId).get();
-      
-      if (blockDoc.exists && blockDoc.data().status === 'BLOCKED') {
-        const bookeoId = blockDoc.data().bookeoId;
-        
-        logger.warn('✅ Guías disponibles - DESBLOQUEANDO', { fecha, slot, bookeoId });
-        
-        // Email al Manager
-        sgMail.setApiKey(sendgridKey.value());
-        await sgMail.send({
-          to: MANAGER_EMAIL,
-          from: { email: FROM_EMAIL, name: FROM_NAME },
-          subject: `✅ Guías disponibles: ${fecha} ${slot}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #059669;">✅ Disponibilidad Restaurada</h2>
-              <p><strong>Fecha:</strong> ${fecha}</p>
-              <p><strong>Turno:</strong> ${slot} (${SLOT_TIMES[slot]})</p>
-              <p><strong>Estado:</strong> ${totalGuides - unavailableCount} de ${totalGuides} guías disponibles</p>
-              <hr style="border: 1px solid #eee; margin: 20px 0;">
-              <p style="color: #666; font-size: 12px;">
-                <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
-              </p>
-            </div>
-          `
-        });
-        
-        logger.info('Email DESBLOQUEO enviado al manager', { to: MANAGER_EMAIL });
-        
-        // Webhook Zapier DESBLOQUEAR
-        if (ZAPIER_WEBHOOK_URL && bookeoId) {
-          const params = new URLSearchParams({
-            'bookeoId': bookeoId,
-            'Acción': 'Desbloquear',
-            'Start Time': fecha,
-            'Hora': SLOT_TIMES[slot],
-            'Turno': slot
-          });
-          
-          try {
-            const response = await axios.post(ZAPIER_WEBHOOK_URL, params.toString(), {
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              timeout: 30000
-            });
-            
-            logger.info('Webhook DESBLOQUEAR exitoso', { fecha, slot, bookeoId });
-            
-            await db.collection('bookeo_blocks').doc(shiftId).update({
-              status: 'UNBLOCKED',
-              unlockedAt: FieldValue.serverTimestamp(),
-              webhookResponse: response.data
-            });
-            
-          } catch (webhookError) {
-            logger.error('Error webhook DESBLOQUEAR', { 
-              fecha, 
-              slot, 
-              bookeoId,
-              error: webhookError.message 
-            });
-            
-            await sgMail.send({
-              to: MANAGER_EMAIL,
-              from: { email: FROM_EMAIL, name: FROM_NAME },
-              subject: `⚠️ ERROR Desbloqueo Bookeo: ${fecha} ${slot}`,
-              html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                  <h2 style="color: #dc2626;">⚠️ Error Desbloqueo Bookeo</h2>
-                  <p><strong>Fecha:</strong> ${fecha}</p>
-                  <p><strong>Turno:</strong> ${slot} (${SLOT_TIMES[slot]})</p>
-                  <p><strong>BookeoId:</strong> ${bookeoId}</p>
-                  <p><strong>Error:</strong> ${webhookError.message}</p>
-                  <p style="color: #dc2626; font-weight: bold;">ACCIÓN REQUERIDA: Desbloquear manualmente en Bookeo</p>
-                  <hr style="border: 1px solid #eee; margin: 20px 0;">
-                  <p style="color: #666; font-size: 12px;">
-                    <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
-                  </p>
-                </div>
-              `
-            });
-          }
-        }
-        
-        // Actualizar estado del bloqueo
-        await db.collection('bookeo_blocks').doc(shiftId).update({
-          status: 'UNBLOCKED',
-          unlockedAt: FieldValue.serverTimestamp()
-        });
-        
-        // Registro auditoría
-        await db.collection('notifications').add({
-          tipo: 'BOOKEO_UNBLOCK',
-          fecha,
-          slot,
-          startTime: SLOT_TIMES[slot],
-          totalGuides,
-          unavailableCount,
-          availableCount: totalGuides - unavailableCount,
-          bookeoId,
-          managerEmail: MANAGER_EMAIL,
-          webhookSent: !!ZAPIER_WEBHOOK_URL,
-          action: 'DESBLOQUEAR',
-          createdAt: FieldValue.serverTimestamp()
-        });
-      }
-    }
+    await batch.commit();
+    
+    logger.info('Shifts asignados', { guideId, fecha, turno, slots });
+    
+    return { 
+      success: true, 
+      message: `${slots.length} shift(s) asignado(s) correctamente`,
+      slots: slots
+    };
     
   } catch (error) {
-    logger.error('Error onShiftUpdate', { 
-      error: error.message, 
-      shiftId,
-      stack: error.stack 
-    });
+    logger.error('Error assignShiftsToGuide', { error: error.message, guideId, fecha, turno });
+    throw new HttpsError('internal', `Error: ${error.message}`);
   }
 });
 
 // =========================================
-// FUNCIÓN: saveBookeoId - HTTP ENDPOINT
+// FUNCIÓN: deleteShiftAssignment
+// =========================================
+exports.deleteShiftAssignment = onCall(async (request) => {
+  const { guideId, fecha, turno } = request.data;
+  
+  if (!guideId || !fecha || !turno) {
+    throw new HttpsError('invalid-argument', 'guideId, fecha y turno son obligatorios');
+  }
+
+  const db = getFirestore();
+  const slots = turno === 'MAÑANA' ? ['MAÑANA'] : ['T1', 'T2', 'T3'];
+  
+  try {
+    const batch = db.batch();
+    
+    for (const slot of slots) {
+      const shiftId = `${fecha}_${slot}`;
+      const shiftRef = db.collection('guides').doc(guideId).collection('shifts').doc(shiftId);
+      
+      batch.update(shiftRef, {
+        estado: 'LIBRE',
+        eventId: FieldValue.delete(),
+        tourName: FieldValue.delete(),
+        startTime: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+    
+    await batch.commit();
+    
+    logger.info('Asignación eliminada', { guideId, fecha, turno, slots });
+    
+    return { 
+      success: true, 
+      message: `${slots.length} shift(s) liberado(s) correctamente`,
+      slots: slots
+    };
+    
+  } catch (error) {
+    logger.error('Error deleteShiftAssignment', { error: error.message, guideId, fecha, turno });
+    throw new HttpsError('internal', `Error: ${error.message}`);
+  }
+});
+
+// =========================================
+// FUNCIÓN: generateShifts
+// =========================================
+exports.generateShifts = onCall(async (request) => {
+  const { guideId, year, month } = request.data;
+  
+  if (!guideId || year === undefined || month === undefined) {
+    throw new HttpsError('invalid-argument', 'guideId, year y month son obligatorios');
+  }
+
+  try {
+    const created = await generateMonthShifts(guideId, year, month);
+    logger.info('Shifts generados', { guideId, year, month, created });
+    
+    return { 
+      success: true, 
+      message: `${created} shifts creados para ${year}-${String(month + 1).padStart(2, '0')}`,
+      created 
+    };
+    
+  } catch (error) {
+    logger.error('Error generateShifts', { error: error.message, guideId, year, month });
+    throw new HttpsError('internal', `Error: ${error.message}`);
+  }
+});
+
+// =========================================
+// FUNCIÓN: deleteShifts
+// =========================================
+exports.deleteShifts = onCall(async (request) => {
+  const { guideId, year, month } = request.data;
+  
+  if (!guideId || year === undefined || month === undefined) {
+    throw new HttpsError('invalid-argument', 'guideId, year y month son obligatorios');
+  }
+
+  try {
+    await deleteMonthShifts(guideId, year, month);
+    logger.info('Shifts eliminados', { guideId, year, month });
+    
+    return { 
+      success: true, 
+      message: `Shifts eliminados para ${year}-${String(month + 1).padStart(2, '0')}`
+    };
+    
+  } catch (error) {
+    logger.error('Error deleteShifts', { error: error.message, guideId, year, month });
+    throw new HttpsError('internal', `Error: ${error.message}`);
+  }
+});
+
+// =========================================
+// FUNCIÓN: saveBookeoId
 // =========================================
 exports.saveBookeoId = onRequest({ cors: true }, async (req, res) => {
   try {
@@ -857,12 +593,16 @@ exports.devSetPassword = onRequest(async (req, res) => {
 });
 
 // =========================================
-// VENDOR COSTS MODULE
+// BOOKEO RATE LIMITING MODULE
 // =========================================
-const vendorCosts = require('./src/vendor-costs');
 const bookeoRL = require('./bookeo-rate-limiting');
 exports.bookeoWebhookWorker = bookeoRL.bookeoWebhookWorker;
 exports.enqueueBookeoWebhook = bookeoRL.enqueueBookeoWebhook;
+
+// =========================================
+// VENDOR COSTS MODULE
+// =========================================
+const vendorCosts = require('./src/vendor-costs');
 exports.registerVendorCost = vendorCosts.registerVendorCost;
 exports.calculateSalaryPreview = vendorCosts.calculateSalaryPreview;
 exports.generateGuideInvoices = vendorCosts.generateGuideInvoices;
