@@ -1,6 +1,7 @@
 // =========================================
 // BOOKEO RATE LIMITING CON CLOUD TASKS
 // Lógica progresiva TARDE: 1 guía=T2, 2=T2+T1, 3+=T2+T1+T3
+// Hash deduplicación para evitar webhooks duplicados
 // =========================================
 const { onTaskDispatched } = require("firebase-functions/v2/tasks");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
@@ -10,6 +11,7 @@ const { getFunctions } = require("firebase-admin/functions");
 const { defineSecret } = require('firebase-functions/params');
 const sgMail = require('@sendgrid/mail');
 const axios = require('axios');
+const crypto = require('crypto');
 
 // =========================================
 // SECRETS Y CONFIGURACIÓN
@@ -109,7 +111,6 @@ exports.bookeoWebhookWorker = onTaskDispatched({
           responseData: response.data 
         });
         
-        // Guardar sin bookeoId para auditoría
         await db.collection('bookeo_blocks').doc(shiftId).set({
           fecha,
           slot,
@@ -246,6 +247,25 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
       
       logger.info('Estado MAÑANA', { fecha, totalGuides, unavailableCount });
       
+      // Calcular hash del estado agregado
+      const stateHash = calculateStateHash({ totalGuides, unavailableCount });
+      const stateDocId = `${fecha}_MAÑANA_STATE`;
+      
+      // Verificar si estado cambió
+      const stateDoc = await db.collection('bookeo_blocks').doc(stateDocId).get();
+      if (stateDoc.exists && stateDoc.data().lastHash === stateHash) {
+        logger.info('Estado MAÑANA sin cambios - skip webhook', { fecha, stateHash });
+        return;
+      }
+      
+      // Actualizar hash ANTES de procesar
+      await db.collection('bookeo_blocks').doc(stateDocId).set({
+        lastHash: stateHash,
+        lastProcessed: FieldValue.serverTimestamp(),
+        totalGuides,
+        unavailableCount
+      });
+      
       const blockDoc = await db.collection('bookeo_blocks').doc(mananaShiftId).get();
       const isBlocked = blockDoc.exists && blockDoc.data().status === 'BLOCKED';
       
@@ -341,7 +361,6 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
     else if (['T1', 'T2', 'T3'].includes(slot)) {
       // Contar NO_DISPONIBLE por cada slot de TARDE
       const tardeSlotsCount = {};
-      let unavailableCountTarde = 0;
       
       for (const tardeSlot of ['T1', 'T2', 'T3']) {
         const tardeShiftId = `${fecha}_${tardeSlot}`;
@@ -360,15 +379,9 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
         }
         
         tardeSlotsCount[tardeSlot] = unavailable;
-        
-        // Si algún T tiene 100% NO_DISPONIBLE, contamos
-        if (unavailable === totalGuides) {
-          unavailableCountTarde++;
-        }
       }
       
-      // Calcular guías disponibles (que tienen TODA la TARDE libre)
-      // Un guía está "disponible TARDE" si tiene al menos 1 T libre
+      // Calcular guías disponibles (que tienen al menos 1 T libre)
       let guidesDisponiblesTarde = 0;
       
       for (const guideDoc of guidesSnapshot.docs) {
@@ -402,6 +415,32 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
         t3Unavailable: tardeSlotsCount['T3']
       });
       
+      // Calcular hash del estado agregado TARDE
+      const stateHash = calculateStateHash({ 
+        totalGuides, 
+        guidesDisponiblesTarde,
+        t1: tardeSlotsCount['T1'],
+        t2: tardeSlotsCount['T2'],
+        t3: tardeSlotsCount['T3']
+      });
+      const stateDocId = `${fecha}_TARDE_STATE`;
+      
+      // Verificar si estado cambió
+      const stateDoc = await db.collection('bookeo_blocks').doc(stateDocId).get();
+      if (stateDoc.exists && stateDoc.data().lastHash === stateHash) {
+        logger.info('Estado TARDE sin cambios - skip webhook', { fecha, stateHash });
+        return;
+      }
+      
+      // Actualizar hash ANTES de procesar
+      await db.collection('bookeo_blocks').doc(stateDocId).set({
+        lastHash: stateHash,
+        lastProcessed: FieldValue.serverTimestamp(),
+        totalGuides,
+        guidesDisponiblesTarde,
+        tardeSlotsCount
+      });
+      
       // Determinar estado deseado de cada T según disponibilidad
       const estadoDeseado = determinarEstadoTarde(guidesDisponiblesTarde);
       
@@ -410,7 +449,7 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
         const tardeShiftId = `${fecha}_${tardeSlot}`;
         const blockDoc = await db.collection('bookeo_blocks').doc(tardeShiftId).get();
         const isBlocked = blockDoc.exists && blockDoc.data().status === 'BLOCKED';
-        const deseaBloqueado = !estadoDeseado[tardeSlot]; // true si debe estar bloqueado
+        const deseaBloqueado = !estadoDeseado[tardeSlot];
         
         // BLOQUEAR si no está bloqueado pero debería estarlo
         if (deseaBloqueado && !isBlocked) {
@@ -512,22 +551,24 @@ exports.enqueueBookeoWebhook = onDocumentUpdated({
 // =========================================
 
 /**
+ * Calcula hash MD5 del estado agregado
+ */
+function calculateStateHash(stateObj) {
+  const stateStr = JSON.stringify(stateObj);
+  return crypto.createHash('md5').update(stateStr).digest('hex');
+}
+
+/**
  * Determina qué T deben estar desbloqueados según disponibilidad
- * @param {number} guidesDisponibles - Número de guías con TARDE disponible
- * @returns {Object} - {T1: bool, T2: bool, T3: bool} true=desbloqueado
  */
 function determinarEstadoTarde(guidesDisponibles) {
   if (guidesDisponibles === 0) {
-    // Todos bloqueados
     return { T1: false, T2: false, T3: false };
   } else if (guidesDisponibles === 1) {
-    // Solo T2 desbloqueado
     return { T1: false, T2: true, T3: false };
   } else if (guidesDisponibles === 2) {
-    // T2 + T1 desbloqueados
     return { T1: true, T2: true, T3: false };
   } else {
-    // 3+ guías: todos desbloqueados
     return { T1: true, T2: true, T3: true };
   }
 }
@@ -566,7 +607,6 @@ async function enqueueWebhook(db, { action, shiftId, payload, emailData }) {
       error: queueError.message 
     });
     
-    // Email error inmediato
     if (emailData) {
       try {
         sgMail.setApiKey(sendgridKey.value());
