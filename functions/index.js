@@ -281,6 +281,147 @@ exports.onUpdateGuide = onDocumentUpdated({
 });
 
 // =========================================
+// FUNCIÓN: assignShiftsToGuide
+// =========================================
+exports.assignShiftsToGuide = onCall(async (request) => {
+  const { guideId, fecha, turno, eventId, tourName, startTime } = request.data;
+  
+  if (!guideId || !fecha || !turno) {
+    throw new HttpsError('invalid-argument', 'guideId, fecha y turno son obligatorios');
+  }
+
+  const db = getFirestore();
+  const slots = turno === 'MAÑANA' ? ['MAÑANA'] : ['T1', 'T2', 'T3'];
+  
+  try {
+    const batch = db.batch();
+    
+    for (const slot of slots) {
+      const shiftId = `${fecha}_${slot}`;
+      const shiftRef = db.collection('guides').doc(guideId).collection('shifts').doc(shiftId);
+      
+      batch.update(shiftRef, {
+        estado: 'ASIGNADO',
+        eventId: eventId || null,
+        tourName: tourName || null,
+        startTime: startTime || null,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+    
+    await batch.commit();
+    
+    logger.info('Shifts asignados', { guideId, fecha, turno, slots });
+    
+    return { 
+      success: true, 
+      message: `${slots.length} shift(s) asignado(s) correctamente`,
+      slots: slots
+    };
+    
+  } catch (error) {
+    logger.error('Error assignShiftsToGuide', { error: error.message, guideId, fecha, turno });
+    throw new HttpsError('internal', `Error: ${error.message}`);
+  }
+});
+
+// =========================================
+// FUNCIÓN: deleteShiftAssignment
+// =========================================
+exports.deleteShiftAssignment = onCall(async (request) => {
+  const { guideId, fecha, turno } = request.data;
+  
+  if (!guideId || !fecha || !turno) {
+    throw new HttpsError('invalid-argument', 'guideId, fecha y turno son obligatorios');
+  }
+
+  const db = getFirestore();
+  const slots = turno === 'MAÑANA' ? ['MAÑANA'] : ['T1', 'T2', 'T3'];
+  
+  try {
+    const batch = db.batch();
+    
+    for (const slot of slots) {
+      const shiftId = `${fecha}_${slot}`;
+      const shiftRef = db.collection('guides').doc(guideId).collection('shifts').doc(shiftId);
+      
+      batch.update(shiftRef, {
+        estado: 'LIBRE',
+        eventId: FieldValue.delete(),
+        tourName: FieldValue.delete(),
+        startTime: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+    
+    await batch.commit();
+    
+    logger.info('Asignación eliminada', { guideId, fecha, turno, slots });
+    
+    return { 
+      success: true, 
+      message: `${slots.length} shift(s) liberado(s) correctamente`,
+      slots: slots
+    };
+    
+  } catch (error) {
+    logger.error('Error deleteShiftAssignment', { error: error.message, guideId, fecha, turno });
+    throw new HttpsError('internal', `Error: ${error.message}`);
+  }
+});
+
+// =========================================
+// FUNCIÓN: generateShifts
+// =========================================
+exports.generateShifts = onCall(async (request) => {
+  const { guideId, year, month } = request.data;
+  
+  if (!guideId || year === undefined || month === undefined) {
+    throw new HttpsError('invalid-argument', 'guideId, year y month son obligatorios');
+  }
+
+  try {
+    const created = await generateMonthShifts(guideId, year, month);
+    logger.info('Shifts generados', { guideId, year, month, created });
+    
+    return { 
+      success: true, 
+      message: `${created} shifts creados para ${year}-${String(month + 1).padStart(2, '0')}`,
+      created 
+    };
+    
+  } catch (error) {
+    logger.error('Error generateShifts', { error: error.message, guideId, year, month });
+    throw new HttpsError('internal', `Error: ${error.message}`);
+  }
+});
+
+// =========================================
+// FUNCIÓN: deleteShifts
+// =========================================
+exports.deleteShifts = onCall(async (request) => {
+  const { guideId, year, month } = request.data;
+  
+  if (!guideId || year === undefined || month === undefined) {
+    throw new HttpsError('invalid-argument', 'guideId, year y month son obligatorios');
+  }
+
+  try {
+    await deleteMonthShifts(guideId, year, month);
+    logger.info('Shifts eliminados', { guideId, year, month });
+    
+    return { 
+      success: true, 
+      message: `Shifts eliminados para ${year}-${String(month + 1).padStart(2, '0')}`
+    };
+    
+  } catch (error) {
+    logger.error('Error deleteShifts', { error: error.message, guideId, year, month });
+    throw new HttpsError('internal', `Error: ${error.message}`);
+  }
+});
+
+// =========================================
 // FUNCIÓN: onMonthToggle
 // =========================================
 exports.onMonthToggle = onDocumentUpdated({
