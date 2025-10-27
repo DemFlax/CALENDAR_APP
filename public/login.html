@@ -21,11 +21,13 @@
     <div class="flex justify-center mb-8">
       <img src="/assets/logo-sfs.png" alt="Spain Food Sherpas" class="w-32 h-32 sm:w-40 sm:h-40">
     </div>
+    
     <!-- Título -->
     <div class="text-center mb-8">
       <h1 class="text-2xl sm:text-3xl font-bold text-white mb-2">Calendario Tours</h1>
       <p class="text-slate-400 text-sm">Spain Food Sherpas · Madrid</p>
     </div>
+    
     <!-- Form -->
     <form id="login-form" class="space-y-6">
       <div>
@@ -38,6 +40,7 @@
           placeholder="tu@email.com"
         >
       </div>
+      
       <div>
         <label class="block text-sm font-semibold text-slate-300 mb-2">Contraseña *</label>
         <input
@@ -48,6 +51,13 @@
           placeholder="••••••••"
         >
       </div>
+
+      <div class="flex justify-end">
+        <a href="/forgot-password.html" class="text-sm text-cyan-400 hover:text-cyan-300 transition">
+          ¿Olvidaste tu contraseña?
+        </a>
+      </div>
+      
       <button
         type="submit"
         class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-3 rounded-lg transition duration-200 shadow-lg"
@@ -55,7 +65,9 @@
         Iniciar Sesión
       </button>
     </form>
+    
     <div id="error" class="hidden mt-6 p-4 bg-red-900/50 border-l-4 border-red-500 text-red-200 rounded text-sm"></div>
+    
     <!-- Footer -->
     <div class="mt-8 text-center text-xs text-slate-500">
       <p>© 2013-2025 Spain Food Sherpas</p>
@@ -77,18 +89,23 @@
   <script type="module">
     import { auth } from './js/firebase-config.js';
     import { signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
       const errorDiv = document.getElementById('error');
       const submitBtn = e.target.querySelector('button[type="submit"]');
+      
       submitBtn.disabled = true;
       submitBtn.textContent = 'Iniciando...';
       errorDiv.classList.add('hidden');
+      
       try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const token = await userCredential.user.getIdTokenResult();
+        
         if (token.claims.role === 'manager') {
           window.location.href = '/manager.html';
         } else if (token.claims.role === 'guide') {
@@ -98,25 +115,36 @@
         }
       } catch (error) {
         console.error('Login error:', error);
-        errorDiv.textContent = error.code === 'auth/invalid-credential'
-          ? 'Credenciales incorrectas'
-          : 'Error al iniciar sesión';
+        
+        let errorMessage = 'Error al iniciar sesión';
+        
+        if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+          errorMessage = 'Email o contraseña incorrectos';
+        } else if (error.code === 'auth/user-not-found') {
+          errorMessage = 'Usuario no encontrado';
+        } else if (error.code === 'auth/too-many-requests') {
+          errorMessage = 'Demasiados intentos. Intenta más tarde';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        errorDiv.textContent = errorMessage;
         errorDiv.classList.remove('hidden');
         submitBtn.disabled = false;
         submitBtn.textContent = 'Iniciar Sesión';
       }
     });
   </script>
-    <script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/service-worker.js')
-    .then(() => {
-      // Forzar recarga si hay actualización
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        window.location.reload();
-      });
-    });
-}
-</script>
+  
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then(() => {
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            window.location.reload();
+          });
+        });
+    }
+  </script>
 </body>
 </html>
