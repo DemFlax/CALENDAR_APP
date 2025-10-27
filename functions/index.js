@@ -456,84 +456,234 @@ exports.onShiftUpdate = onDocumentUpdated({
 }, async (event) => {
   const before = event.data.before.data();
   const after = event.data.after.data();
-  const guideId = event.params.guideId;
   const shiftId = event.params.shiftId;
   
-  if (before.estado === 'NO_DISPONIBLE' && after.estado === 'LIBRE') {
-    logger.info('Guía marcó disponibilidad LIBRE', { guideId, shiftId });
+  const [fecha, slot] = shiftId.split('_');
+  
+  if (!fecha || !slot) {
+    logger.warn('ShiftId inválido', { shiftId });
+    return;
+  }
+  
+  if (slot !== 'MAÑANA' && slot !== 'T2') {
+    return;
+  }
+  
+  if (before.estado === after.estado) {
+    return;
+  }
+  
+  logger.info('Shift bloqueado - verificando disponibilidad total', { shiftId, slot, fecha });
+  
+  try {
+    const db = getFirestore();
     
-    try {
-      const db = getFirestore();
-      const { fecha, slot } = after;
-      
-      const allGuidesQuery = await db.collection('guides')
-        .where('estado', '==', 'activo')
+    const guidesSnapshot = await db.collection('guides')
+      .where('estado', '==', 'activo')
+      .get();
+    
+    const totalGuides = guidesSnapshot.size;
+    
+    if (totalGuides === 0) {
+      logger.warn('No hay guías activos', { fecha, slot });
+      return;
+    }
+    
+    let unavailableCount = 0;
+    
+    for (const guideDoc of guidesSnapshot.docs) {
+      const shiftDoc = await db.collection('guides')
+        .doc(guideDoc.id)
+        .collection('shifts')
+        .doc(shiftId)
         .get();
       
-      const totalGuides = allGuidesQuery.size;
-      let unavailableCount = 0;
+      if (shiftDoc.exists && shiftDoc.data().estado === 'NO_DISPONIBLE') {
+        unavailableCount++;
+      }
+    }
+    
+    const percentage = Math.round((unavailableCount / totalGuides) * 100);
+    
+    logger.info('Estado shifts', { 
+      fecha, 
+      slot, 
+      totalGuides, 
+      unavailableCount, 
+      percentage,
+      message: 'Estado shifts'
+    });
+    
+    // ==================================
+    // CASO 1: BLOQUEO (100% NO_DISPONIBLE)
+    // ==================================
+    if (unavailableCount === totalGuides) {
+      logger.warn('🚫 100% guías NO_DISPONIBLE - BLOQUEANDO', { fecha, slot });
       
-      for (const doc of allGuidesQuery.docs) {
-        const shiftRef = db.collection('guides').doc(doc.id).collection('shifts').doc(shiftId);
-        const shiftDoc = await shiftRef.get();
+      // Email al Manager
+      sgMail.setApiKey(sendgridKey.value());
+      await sgMail.send({
+        to: MANAGER_EMAIL,
+        from: { email: FROM_EMAIL, name: FROM_NAME },
+        subject: `🚫 Sin guías disponibles: ${fecha} ${slot}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #dc2626;">🚫 Turno Sin Cobertura</h2>
+            <p><strong>Fecha:</strong> ${fecha}</p>
+            <p><strong>Turno:</strong> ${slot} (${SLOT_TIMES[slot]})</p>
+            <p><strong>Estado:</strong> Todos los guías (${totalGuides}) están NO_DISPONIBLE</p>
+            <hr style="border: 1px solid #eee; margin: 20px 0;">
+            <p style="color: #666; font-size: 12px;">
+              <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
+            </p>
+          </div>
+        `
+      });
+      
+      logger.info('Email enviado al manager', { to: MANAGER_EMAIL });
+      
+      // Webhook Zapier BLOQUEAR
+      if (ZAPIER_WEBHOOK_URL) {
+        const payload = {
+          action: 'BLOQUEAR',
+          startDate: fecha,
+          startTime: SLOT_TIMES[slot],
+          slot: slot,
+          timestamp: new Date().toISOString()
+        };
         
-        if (shiftDoc.exists) {
-          const shiftData = shiftDoc.data();
-          if (shiftData.estado === 'NO_DISPONIBLE' || shiftData.estado === 'OCUPADO') {
-            unavailableCount++;
+        try {
+          const response = await axios.post(ZAPIER_WEBHOOK_URL, payload, {
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Firebase-Source': 'calendar-app-tours'
+            },
+            timeout: 30000
+          });
+          
+          const bookeoId = response.data?.bookeoId;
+          
+          if (bookeoId) {
+            // Guardar bookeoId en Firestore
+            await db.collection('bookeo_blocks').doc(shiftId).set({
+              fecha,
+              slot,
+              bookeoId,
+              status: 'BLOCKED',
+              createdAt: FieldValue.serverTimestamp(),
+              webhookResponse: response.data
+            });
+            
+            logger.info('Webhook BLOQUEAR exitoso', { fecha, slot, bookeoId });
+          } else {
+            logger.error('Zapier no retornó bookeoId', { fecha, slot, response: response.data });
           }
+        } catch (webhookError) {
+          logger.error('Error webhook BLOQUEAR', { 
+            fecha, 
+            slot, 
+            error: webhookError.message 
+          });
+          
+          // Notificar Manager del error
+          await sgMail.send({
+            to: MANAGER_EMAIL,
+            from: { email: FROM_EMAIL, name: FROM_NAME },
+            subject: `⚠️ ERROR Bloqueo Bookeo: ${fecha} ${slot}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #dc2626;">⚠️ Error Sincronización Bookeo</h2>
+                <p><strong>Fecha:</strong> ${fecha}</p>
+                <p><strong>Turno:</strong> ${slot} (${SLOT_TIMES[slot]})</p>
+                <p><strong>Error:</strong> ${webhookError.message}</p>
+                <p style="color: #dc2626; font-weight: bold;">ACCIÓN REQUERIDA: Bloquear manualmente en Bookeo</p>
+                <hr style="border: 1px solid #eee; margin: 20px 0;">
+                <p style="color: #666; font-size: 12px;">
+                  <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
+                </p>
+              </div>
+            `
+          });
         }
       }
       
-      const availableCount = totalGuides - unavailableCount;
-      
-      logger.info('Nueva disponibilidad calculada', {
+      // Registro auditoría
+      await db.collection('notifications').add({
+        tipo: 'BOOKEO_BLOCK',
         fecha,
         slot,
+        startTime: SLOT_TIMES[slot],
         totalGuides,
         unavailableCount,
-        availableCount
+        managerEmail: MANAGER_EMAIL,
+        webhookSent: !!ZAPIER_WEBHOOK_URL,
+        action: 'BLOQUEAR',
+        createdAt: FieldValue.serverTimestamp()
       });
-      
+    }
+    
+    // ==================================
+    // CASO 2: DESBLOQUEO (100% → <100%)
+    // ==================================
+    else if (totalGuides > 0 && unavailableCount < totalGuides) {
+      // Verificar si había bloqueo previo
       const blockDoc = await db.collection('bookeo_blocks').doc(shiftId).get();
       
-      if (blockDoc.exists && availableCount > 0) {
-        const blockData = blockDoc.data();
-        const bookeoId = blockData.bookeoId;
+      if (blockDoc.exists && blockDoc.data().status === 'BLOCKED') {
+        const bookeoId = blockDoc.data().bookeoId;
         
-        if (bookeoId && ZAPIER_WEBHOOK_URL) {
-          logger.info('Hay guías disponibles - enviando webhook DESBLOQUEAR', {
-            fecha,
-            slot,
-            bookeoId,
-            availableCount
+        if (!bookeoId) {
+          logger.error('BookeoId faltante para desbloqueo', { fecha, slot, shiftId });
+          
+          await sgMail.send({
+            to: MANAGER_EMAIL,
+            from: { email: FROM_EMAIL, name: FROM_NAME },
+            subject: `⚠️ ERROR Desbloqueo: ${fecha} ${slot}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #dc2626;">⚠️ Error Desbloqueo</h2>
+                <p><strong>Fecha:</strong> ${fecha}</p>
+                <p><strong>Turno:</strong> ${slot}</p>
+                <p><strong>Problema:</strong> No se encontró bookeoId para desbloquear</p>
+                <p style="color: #dc2626; font-weight: bold;">ACCIÓN REQUERIDA: Desbloquear manualmente en Bookeo</p>
+              </div>
+            `
           });
+          return;
+        }
+        
+        logger.warn('✅ Guías disponibles - DESBLOQUEANDO', { fecha, slot, bookeoId });
+        
+        // Webhook Zapier DESBLOQUEAR
+        if (ZAPIER_WEBHOOK_URL) {
+          const payload = {
+            action: 'DESBLOQUEAR',
+            bookeoId: bookeoId,
+            startDate: fecha,
+            startTime: SLOT_TIMES[slot],
+            slot: slot,
+            timestamp: new Date().toISOString()
+          };
           
           try {
-            const response = await axios.post(ZAPIER_WEBHOOK_URL, {
-              action: 'DESBLOQUEAR',
-              fecha: fecha,
-              slot: slot,
-              startTime: SLOT_TIMES[slot] || 'unknown',
-              totalGuides: totalGuides,
-              unavailableCount: unavailableCount,
-              availableCount: availableCount,
-              bookeoId: bookeoId
-            }, {
-              headers: {
-                'Content-Type': 'application/json'
+            const response = await axios.post(ZAPIER_WEBHOOK_URL, payload, {
+              headers: { 
+                'Content-Type': 'application/json',
+                'X-Firebase-Source': 'calendar-app-tours'
               },
               timeout: 30000
             });
             
             logger.info('Webhook DESBLOQUEAR exitoso', { fecha, slot, bookeoId });
             
+            // Actualizar estado del bloqueo
             await db.collection('bookeo_blocks').doc(shiftId).update({
               status: 'UNBLOCKED',
               unlockedAt: FieldValue.serverTimestamp(),
               webhookResponse: response.data
             });
             
+            // Email al Manager
             sgMail.setApiKey(sendgridKey.value());
             await sgMail.send({
               to: MANAGER_EMAIL,
@@ -563,6 +713,7 @@ exports.onShiftUpdate = onDocumentUpdated({
               error: webhookError.message 
             });
             
+            // Notificar Manager del error
             await sgMail.send({
               to: MANAGER_EMAIL,
               from: { email: FROM_EMAIL, name: FROM_NAME },
@@ -585,6 +736,7 @@ exports.onShiftUpdate = onDocumentUpdated({
           }
         }
         
+        // Registro auditoría
         await db.collection('notifications').add({
           tipo: 'BOOKEO_UNBLOCK',
           fecha,
