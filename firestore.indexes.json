@@ -69,6 +69,14 @@
       "collectionGroup": "guide_invoices",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "uploadDeadline", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "guide_invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "month", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]

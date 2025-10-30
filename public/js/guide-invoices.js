@@ -24,48 +24,63 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)
 const i18n = {
   es: {
     pageTitle: 'Mis Facturas',
-    pendingTitle: 'Facturas Pendientes de Aprobación',
+    pendingTitle: 'Reportes Pendientes de Revisión',
+    waitingTitle: 'Esperando Subir Factura',
     historyTitle: 'Historial de Facturas',
-    noPending: 'No tienes facturas pendientes',
+    noPending: 'No tienes reportes pendientes',
+    noWaiting: 'No tienes facturas pendientes de subir',
     noHistory: 'No hay historial de facturas',
     viewDetail: 'Ver Detalle',
     month: 'Mes',
     total: 'Total',
     status: 'Estado',
-    pending: 'Pendiente',
-    approved: 'Aprobada',
-    error: 'Error Reportado',
-    modalTitle: 'Factura Pro-Forma',
+    statusPending: '⏳ Pendiente',
+    statusWaiting: '⏱️ Esperando Factura',
+    statusOverdue: '⚠️ Vencida',
+    statusApproved: '✅ Completada',
+    statusRejected: '✗ Rechazada',
+    modalTitle: 'Reporte Mensual',
     guideInfo: 'Información del Guía',
     dateCol: 'Fecha',
     slotCol: 'Turno',
     tourCol: 'Tour',
     paxCol: 'PAX',
     salaryCol: 'Salario',
+    baseLabel: 'Base Imponible',
+    ivaLabel: 'IVA (21%)',
     totalLabel: 'TOTAL',
-    numberingTitle: 'Numeración de Factura',
-    autoLabel: 'Autogenerar número (SFS-XXX/25)',
-    manualLabel: 'Introducir número manualmente',
-    manualInputLabel: 'Número de Factura',
-    manualWarning: '⚠️ Atención: Si eliges numeración manual, no podrás volver a usar numeración automática (requisito legal)',
-    irpfTitle: 'Retención IRPF',
-    irpfLabel: '% IRPF a retener',
-    irpfHelp: 'Introduce tu porcentaje de IRPF (ej: 15)',
-    saveIrpfDefault: 'Recordar este % para futuras facturas',
-    approveBtn: 'Aprobar Factura',
-    reportBtn: 'Reportar Error',
-    approvedLabel: 'Factura Aprobada',
-    downloadPdf: 'Descargar PDF',
+    approveBtn: 'Aprobar Reporte',
+    rejectBtn: 'Rechazar Reporte',
+    waitingLabel: 'Reporte aprobado - Pendiente factura oficial',
+    uploadDeadlineText: 'Plazo máximo',
+    uploadBtn: 'Subir Factura Oficial (PDF)',
+    approvedLabel: 'Factura Completada',
+    rejectedLabel: 'Reporte Rechazado',
+    downloadPdf: 'Ver Factura en Drive',
     invoiceNumber: 'Nº Factura',
-    approvedOn: 'Aprobada el',
-    toastApproved: 'Factura aprobada correctamente',
-    toastApproving: 'Aprobando factura...',
-    toastReporting: 'Reportando error...',
-    toastReported: 'Error reportado al manager',
-    toastInvoiceNumberRequired: 'Debes introducir un número de factura',
-    toastIrpfRequired: 'Debes introducir el % de IRPF',
-    toastIrpfInvalid: 'El % de IRPF debe estar entre 0 y 100',
-    toastError: 'Error al procesar la solicitud',
+    approvedOn: 'Completada el',
+    rejectModalTitle: 'Rechazar Reporte',
+    rejectCommentsLabel: 'Motivo del rechazo',
+    rejectPlaceholder: 'Describe el problema encontrado...',
+    cancelBtn: 'Cancelar',
+    confirmRejectBtn: 'Confirmar Rechazo',
+    uploadModalTitle: 'Subir Factura Oficial',
+    invoiceNumberLabel: 'Número de Factura',
+    invoiceNumberPlaceholder: '2025/042',
+    pdfFileLabel: 'Archivo PDF',
+    pdfHelpText: 'Solo archivos PDF. Máximo 10MB',
+    confirmUploadBtn: 'Subir Factura',
+    toastApproving: 'Aprobando reporte...',
+    toastApproved: 'Reporte aprobado. Ahora sube tu factura oficial.',
+    toastRejecting: 'Rechazando...',
+    toastRejected: 'Reporte rechazado correctamente',
+    toastUploading: 'Subiendo factura...',
+    toastUploaded: 'Factura subida correctamente',
+    toastError: 'Error al procesar',
+    toastCommentsRequired: 'Debes escribir el motivo del rechazo',
+    toastInvoiceNumberRequired: 'Debes introducir el número de factura',
+    toastPdfRequired: 'Debes seleccionar un archivo PDF',
+    toastPdfTooLarge: 'El archivo es demasiado grande (máx 10MB)',
     morning: 'Mañana',
     afternoon: 'Tarde',
     calendar: 'Calendario',
@@ -73,48 +88,63 @@ const i18n = {
   },
   en: {
     pageTitle: 'My Invoices',
-    pendingTitle: 'Pending Approval Invoices',
+    pendingTitle: 'Reports Pending Review',
+    waitingTitle: 'Waiting to Upload Invoice',
     historyTitle: 'Invoice History',
-    noPending: 'No pending invoices',
+    noPending: 'No pending reports',
+    noWaiting: 'No invoices pending upload',
     noHistory: 'No invoice history',
     viewDetail: 'View Details',
     month: 'Month',
     total: 'Total',
     status: 'Status',
-    pending: 'Pending',
-    approved: 'Approved',
-    error: 'Error Reported',
-    modalTitle: 'Pro-Forma Invoice',
+    statusPending: '⏳ Pending',
+    statusWaiting: '⏱️ Waiting Invoice',
+    statusOverdue: '⚠️ Overdue',
+    statusApproved: '✅ Completed',
+    statusRejected: '✗ Rejected',
+    modalTitle: 'Monthly Report',
     guideInfo: 'Guide Information',
     dateCol: 'Date',
     slotCol: 'Shift',
     tourCol: 'Tour',
     paxCol: 'PAX',
     salaryCol: 'Salary',
+    baseLabel: 'Base Amount',
+    ivaLabel: 'VAT (21%)',
     totalLabel: 'TOTAL',
-    numberingTitle: 'Invoice Numbering',
-    autoLabel: 'Auto-generate number (SFS-XXX/25)',
-    manualLabel: 'Enter number manually',
-    manualInputLabel: 'Invoice Number',
-    manualWarning: '⚠️ Warning: If you choose manual numbering, you cannot go back to automatic (legal requirement)',
-    irpfTitle: 'IRPF Withholding',
-    irpfLabel: 'IRPF % to withhold',
-    irpfHelp: 'Enter your IRPF percentage (e.g., 15)',
-    saveIrpfDefault: 'Remember this % for future invoices',
-    approveBtn: 'Approve Invoice',
-    reportBtn: 'Report Error',
-    approvedLabel: 'Invoice Approved',
-    downloadPdf: 'Download PDF',
+    approveBtn: 'Approve Report',
+    rejectBtn: 'Reject Report',
+    waitingLabel: 'Report approved - Pending official invoice',
+    uploadDeadlineText: 'Deadline',
+    uploadBtn: 'Upload Official Invoice (PDF)',
+    approvedLabel: 'Invoice Completed',
+    rejectedLabel: 'Report Rejected',
+    downloadPdf: 'View Invoice in Drive',
     invoiceNumber: 'Invoice #',
-    approvedOn: 'Approved on',
-    toastApproved: 'Invoice approved successfully',
-    toastApproving: 'Approving invoice...',
-    toastReporting: 'Reporting error...',
-    toastReported: 'Error reported to manager',
-    toastInvoiceNumberRequired: 'You must enter an invoice number',
-    toastIrpfRequired: 'You must enter the IRPF %',
-    toastIrpfInvalid: 'IRPF % must be between 0 and 100',
-    toastError: 'Error processing request',
+    approvedOn: 'Completed on',
+    rejectModalTitle: 'Reject Report',
+    rejectCommentsLabel: 'Rejection reason',
+    rejectPlaceholder: 'Describe the issue found...',
+    cancelBtn: 'Cancel',
+    confirmRejectBtn: 'Confirm Rejection',
+    uploadModalTitle: 'Upload Official Invoice',
+    invoiceNumberLabel: 'Invoice Number',
+    invoiceNumberPlaceholder: '2025/042',
+    pdfFileLabel: 'PDF File',
+    pdfHelpText: 'PDF files only. Max 10MB',
+    confirmUploadBtn: 'Upload Invoice',
+    toastApproving: 'Approving report...',
+    toastApproved: 'Report approved. Now upload your official invoice.',
+    toastRejecting: 'Rejecting...',
+    toastRejected: 'Report rejected successfully',
+    toastUploading: 'Uploading invoice...',
+    toastUploaded: 'Invoice uploaded successfully',
+    toastError: 'Error processing',
+    toastCommentsRequired: 'You must write the rejection reason',
+    toastInvoiceNumberRequired: 'You must enter the invoice number',
+    toastPdfRequired: 'You must select a PDF file',
+    toastPdfTooLarge: 'File is too large (max 10MB)',
     morning: 'Morning',
     afternoon: 'Afternoon',
     calendar: 'Calendar',
@@ -134,9 +164,9 @@ let currentUser = null;
 let currentGuideId = null;
 let guideName = '';
 let pendingUnsubscribe = null;
+let waitingUnsubscribe = null;
 let historyUnsubscribe = null;
 let currentInvoice = null;
-let defaultIrpf = 15;
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
@@ -160,7 +190,6 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     guideName = guideDoc.data().nombre;
-    defaultIrpf = guideDoc.data().defaultIrpfPercent || 15;
 
     updateUILanguage();
     initLanguageToggle();
@@ -173,6 +202,7 @@ onAuthStateChanged(auth, async (user) => {
 function updateUILanguage() {
   document.getElementById('page-title').textContent = `${t('pageTitle')} - ${guideName}`;
   document.getElementById('pending-title').textContent = t('pendingTitle');
+  document.getElementById('waiting-title').textContent = t('waitingTitle');
   document.getElementById('history-title').textContent = t('historyTitle');
   document.getElementById('modal-title').textContent = t('modalTitle');
   document.getElementById('guide-info-title').textContent = t('guideInfo');
@@ -181,20 +211,28 @@ function updateUILanguage() {
   document.getElementById('th-tour').textContent = t('tourCol');
   document.getElementById('th-pax').textContent = t('paxCol');
   document.getElementById('th-salary').textContent = t('salaryCol');
+  document.getElementById('base-label').textContent = t('baseLabel');
+  document.getElementById('iva-label').textContent = t('ivaLabel');
   document.getElementById('total-label').textContent = t('totalLabel');
-  document.getElementById('numbering-title').textContent = t('numberingTitle');
-  document.getElementById('auto-label').textContent = t('autoLabel');
-  document.getElementById('manual-label').textContent = t('manualLabel');
-  document.getElementById('manual-input-label').textContent = t('manualInputLabel');
-  document.getElementById('manual-warning').textContent = t('manualWarning');
-  document.getElementById('irpf-title').textContent = t('irpfTitle');
-  document.getElementById('irpf-label').textContent = t('irpfLabel');
-  document.getElementById('irpf-help').textContent = t('irpfHelp');
-  document.getElementById('save-irpf-label').textContent = t('saveIrpfDefault');
   document.getElementById('approve-text').textContent = t('approveBtn');
-  document.getElementById('report-text').textContent = t('reportBtn');
+  document.getElementById('reject-text').textContent = t('rejectBtn');
+  document.getElementById('waiting-label').textContent = t('waitingLabel');
+  document.getElementById('upload-text').textContent = t('uploadBtn');
   document.getElementById('approved-label').textContent = t('approvedLabel');
+  document.getElementById('rejected-label').textContent = t('rejectedLabel');
   document.getElementById('download-text').textContent = t('downloadPdf');
+  document.getElementById('reject-modal-title').textContent = t('rejectModalTitle');
+  document.getElementById('reject-comments-label').textContent = t('rejectCommentsLabel');
+  document.getElementById('reject-comments').placeholder = t('rejectPlaceholder');
+  document.getElementById('cancel-reject-btn').textContent = t('cancelBtn');
+  document.getElementById('confirm-reject-btn').textContent = t('confirmRejectBtn');
+  document.getElementById('upload-modal-title').textContent = t('uploadModalTitle');
+  document.getElementById('invoice-number-label').textContent = t('invoiceNumberLabel');
+  document.getElementById('invoice-number-input').placeholder = t('invoiceNumberPlaceholder');
+  document.getElementById('pdf-file-label').textContent = t('pdfFileLabel');
+  document.getElementById('pdf-help-text').textContent = t('pdfHelpText');
+  document.getElementById('cancel-upload-btn').textContent = t('cancelBtn');
+  document.getElementById('confirm-upload-btn').textContent = t('confirmUploadBtn');
   document.querySelector('a[href="/guide.html"]').textContent = t('calendar');
   document.getElementById('logout-btn').textContent = t('logout');
 }
@@ -212,38 +250,50 @@ function initLanguageToggle() {
 }
 
 function loadInvoices() {
+  // Pendientes de aprobación
   if (pendingUnsubscribe) pendingUnsubscribe();
-
   const pendingQuery = query(
     collection(db, 'guide_invoices'),
     where('guideId', '==', currentGuideId),
-    where('status', '==', 'PENDING_APPROVAL'),
+    where('status', '==', 'PENDING_GUIDE_APPROVAL'),
     orderBy('createdAt', 'desc')
   );
-
   pendingUnsubscribe = onSnapshot(pendingQuery, (snapshot) => {
-    renderInvoices(snapshot, 'pending-invoices', true);
+    renderInvoices(snapshot, 'pending-invoices', 'pending');
   });
 
-  if (historyUnsubscribe) historyUnsubscribe();
+  // Esperando subir factura
+  if (waitingUnsubscribe) waitingUnsubscribe();
+  const waitingQuery = query(
+    collection(db, 'guide_invoices'),
+    where('guideId', '==', currentGuideId),
+    where('status', 'in', ['WAITING_INVOICE_UPLOAD', 'UPLOAD_OVERDUE']),
+    orderBy('createdAt', 'desc')
+  );
+  waitingUnsubscribe = onSnapshot(waitingQuery, (snapshot) => {
+    renderInvoices(snapshot, 'waiting-invoices', 'waiting');
+  });
 
+  // Historial
+  if (historyUnsubscribe) historyUnsubscribe();
   const historyQuery = query(
     collection(db, 'guide_invoices'),
     where('guideId', '==', currentGuideId),
-    where('status', 'in', ['APPROVED', 'ERROR_REPORTED']),
+    where('status', 'in', ['APPROVED', 'REJECTED']),
     orderBy('createdAt', 'desc')
   );
-
   historyUnsubscribe = onSnapshot(historyQuery, (snapshot) => {
-    renderInvoices(snapshot, 'history-invoices', false);
+    renderInvoices(snapshot, 'history-invoices', 'history');
   });
 }
 
-function renderInvoices(snapshot, containerId, isPending) {
+function renderInvoices(snapshot, containerId, section) {
   const container = document.getElementById(containerId);
 
   if (snapshot.empty) {
-    container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">${isPending ? t('noPending') : t('noHistory')}</p>`;
+    const emptyMsg = section === 'pending' ? t('noPending') : 
+                     section === 'waiting' ? t('noWaiting') : t('noHistory');
+    container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">${emptyMsg}</p>`;
     return;
   }
 
@@ -253,11 +303,16 @@ function renderInvoices(snapshot, containerId, isPending) {
   container.innerHTML = invoices.map(inv => {
     const [year, month] = inv.month.split('-');
     const monthName = monthNames[lang][parseInt(month) - 1];
-    const statusClass = inv.status === 'APPROVED' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' :
-                        inv.status === 'ERROR_REPORTED' ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200' :
-                        'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200';
-    const statusText = inv.status === 'APPROVED' ? t('approved') :
-                       inv.status === 'ERROR_REPORTED' ? t('error') : t('pending');
+    
+    const statusConfig = {
+      'PENDING_GUIDE_APPROVAL': { class: 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200', text: t('statusPending') },
+      'WAITING_INVOICE_UPLOAD': { class: 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200', text: t('statusWaiting') },
+      'UPLOAD_OVERDUE': { class: 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200', text: t('statusOverdue') },
+      'APPROVED': { class: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200', text: t('statusApproved') },
+      'REJECTED': { class: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200', text: t('statusRejected') }
+    };
+
+    const status = statusConfig[inv.status] || { class: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200', text: inv.status };
 
     return `
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 hover:shadow-md transition-shadow cursor-pointer"
@@ -269,7 +324,7 @@ function renderInvoices(snapshot, containerId, isPending) {
             <p class="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">${(inv.totalSalary || 0).toFixed(2)}€</p>
           </div>
           <div class="flex flex-col items-start sm:items-end gap-2">
-            <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusClass}">${statusText}</span>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold ${status.class}">${status.text}</span>
             ${inv.invoiceNumber ? `<span class="text-xs text-gray-600 dark:text-gray-400">${t('invoiceNumber')}: ${inv.invoiceNumber}</span>` : ''}
             <button class="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium view-detail-btn">${t('viewDetail')}</button>
           </div>
@@ -299,50 +354,65 @@ function openInvoiceModal(invoice) {
   const monthName = monthNames[lang][parseInt(month) - 1];
   document.getElementById('modal-month').textContent = `${t('month')}: ${monthName} ${year}`;
 
- const tbody = document.getElementById('modal-tours-body');
-const locale = lang === 'es' ? 'es-ES' : 'en-US';
+  const tbody = document.getElementById('modal-tours-body');
+  const locale = lang === 'es' ? 'es-ES' : 'en-US';
 
-tbody.innerHTML = invoice.tours.map(tour => {
-  const dateObj = new Date(tour.fecha + 'T12:00:00');
-  const dateStr = dateObj.toLocaleDateString(locale, { day: '2-digit', month: 'short' });
-  const slotStr = tour.slot === 'MAÑANA' ? t('morning') : `${t('afternoon')} ${tour.slot}`;
-  const salary = tour.salario || tour.salarioCalculado || 0;
+  tbody.innerHTML = invoice.tours.map(tour => {
+    const dateObj = new Date(tour.fecha + 'T12:00:00');
+    const dateStr = dateObj.toLocaleDateString(locale, { day: '2-digit', month: 'short' });
+    const slotStr = tour.slot === 'MAÑANA' ? t('morning') : `${t('afternoon')} ${tour.slot}`;
+    const salary = tour.salario || tour.salarioCalculado || 0;
 
-  return `
-    <tr class="border-b dark:border-gray-700">
-      <td class="px-3 py-2">${dateStr}</td>
-      <td class="px-3 py-2">${slotStr}</td>
-      <td class="px-3 py-2">${tour.tourDescription || '-'}</td>
-      <td class="px-3 py-2 text-center">${tour.numPax || 0}</td>
-      <td class="px-3 py-2 text-right font-semibold">${salary.toFixed(2)}€</td>
-    </tr>
-  `;
-}).join('');
+    return `
+      <tr class="border-b dark:border-gray-700">
+        <td class="px-3 py-2">${dateStr}</td>
+        <td class="px-3 py-2">${slotStr}</td>
+        <td class="px-3 py-2">${tour.tourDescription || '-'}</td>
+        <td class="px-3 py-2 text-center">${tour.numPax || 0}</td>
+        <td class="px-3 py-2 text-right font-semibold">${salary.toFixed(2)}€</td>
+      </tr>
+    `;
+  }).join('');
 
+  // Desglose
+  const baseImponible = invoice.baseImponible || (invoice.totalSalary / 1.21);
+  const iva = invoice.iva || (baseImponible * 0.21);
+  document.getElementById('modal-base').textContent = `${baseImponible.toFixed(2)}€`;
+  document.getElementById('modal-iva').textContent = `${iva.toFixed(2)}€`;
   document.getElementById('modal-total').textContent = `${(invoice.totalSalary || 0).toFixed(2)}€`;
 
+  // Secciones según estado
   const approvalSection = document.getElementById('approval-section');
+  const waitingSection = document.getElementById('waiting-upload-section');
   const approvedInfo = document.getElementById('approved-info');
+  const rejectedInfo = document.getElementById('rejected-info');
 
-  if (invoice.status === 'PENDING_APPROVAL') {
+  approvalSection.classList.add('hidden');
+  waitingSection.classList.add('hidden');
+  approvedInfo.classList.add('hidden');
+  rejectedInfo.classList.add('hidden');
+
+  if (invoice.status === 'PENDING_GUIDE_APPROVAL') {
     approvalSection.classList.remove('hidden');
-    approvedInfo.classList.add('hidden');
-
-    document.getElementById('irpf-percent').value = defaultIrpf;
-  } else if (invoice.status === 'APPROVED') {
-    approvalSection.classList.add('hidden');
-    approvedInfo.classList.remove('hidden');
-
-    document.getElementById('approved-number').textContent = `${t('invoiceNumber')}: ${invoice.invoiceNumber}`;
-    const approvedDate = invoice.approvedAt?.toDate?.() || new Date(invoice.approvedAt);
-    document.getElementById('approved-date').textContent = `${t('approvedOn')}: ${approvedDate.toLocaleDateString(locale)}`;
-
-    if (invoice.pdfDriveId) {
-      document.getElementById('download-pdf').href = `https://drive.google.com/file/d/${invoice.pdfDriveId}/view`;
+  } else if (invoice.status === 'WAITING_INVOICE_UPLOAD' || invoice.status === 'UPLOAD_OVERDUE') {
+    waitingSection.classList.remove('hidden');
+    if (invoice.uploadDeadline) {
+      const deadline = invoice.uploadDeadline.toDate();
+      document.getElementById('upload-deadline-text').textContent = `${t('uploadDeadlineText')}: ${deadline.toLocaleString(locale)}`;
     }
-  } else {
-    approvalSection.classList.add('hidden');
-    approvedInfo.classList.add('hidden');
+  } else if (invoice.status === 'APPROVED') {
+    approvedInfo.classList.remove('hidden');
+    document.getElementById('approved-number').textContent = `${t('invoiceNumber')}: ${invoice.invoiceNumber}`;
+    if (invoice.uploadedAt) {
+      const uploadedDate = invoice.uploadedAt.toDate();
+      document.getElementById('approved-date').textContent = `${t('approvedOn')}: ${uploadedDate.toLocaleDateString(locale)}`;
+    }
+    if (invoice.invoiceFileUrl) {
+      document.getElementById('download-pdf').href = invoice.invoiceFileUrl;
+    }
+  } else if (invoice.status === 'REJECTED') {
+    rejectedInfo.classList.remove('hidden');
+    document.getElementById('rejection-comments').textContent = invoice.rejectionComments || '-';
   }
 
   modal.classList.remove('hidden');
@@ -353,42 +423,9 @@ document.getElementById('close-modal').addEventListener('click', () => {
   currentInvoice = null;
 });
 
-document.querySelectorAll('input[name="invoice-mode"]').forEach(radio => {
-  radio.addEventListener('change', (e) => {
-    const manualContainer = document.getElementById('manual-input-container');
-    if (e.target.value === 'MANUAL') {
-      manualContainer.classList.remove('hidden');
-    } else {
-      manualContainer.classList.add('hidden');
-    }
-  });
-});
-
+// Aprobar
 document.getElementById('approve-btn').addEventListener('click', async () => {
   if (!currentInvoice) return;
-
-  const mode = document.querySelector('input[name="invoice-mode"]:checked').value;
-  const irpfPercent = parseFloat(document.getElementById('irpf-percent').value);
-  const saveIrpfDefault = document.getElementById('save-irpf-default').checked;
-  let invoiceNumber = null;
-
-  if (isNaN(irpfPercent)) {
-    showToast(t('toastIrpfRequired'), 'error');
-    return;
-  }
-
-  if (irpfPercent < 0 || irpfPercent > 100) {
-    showToast(t('toastIrpfInvalid'), 'error');
-    return;
-  }
-
-  if (mode === 'MANUAL') {
-    invoiceNumber = document.getElementById('manual-invoice-number').value.trim();
-    if (!invoiceNumber) {
-      showToast(t('toastInvoiceNumberRequired'), 'error');
-      return;
-    }
-  }
 
   const approveBtn = document.getElementById('approve-btn');
   approveBtn.disabled = true;
@@ -398,70 +435,137 @@ document.getElementById('approve-btn').addEventListener('click', async () => {
 
   try {
     const functions = getFunctions(undefined, 'us-central1');
-    const approveInvoice = httpsCallable(functions, 'approveInvoice');
+    const guideApproveReport = httpsCallable(functions, 'guideApproveReport');
 
-    await approveInvoice({
-      invoiceId: currentInvoice.id,
-      useAutoNumber: mode === 'AUTO',
-      invoiceNumber: mode === 'MANUAL' ? invoiceNumber : null,
-      irpfPercent: irpfPercent,
-      saveIrpfDefault: saveIrpfDefault
-    });
+    await guideApproveReport({ invoiceId: currentInvoice.id });
 
     showToast(t('toastApproved'), 'success');
     document.getElementById('invoice-modal').classList.add('hidden');
-    currentInvoice = null;
+    
+    // Recargar para ver en sección "Esperando"
+    setTimeout(() => {
+      const waitingInvoice = { ...currentInvoice, status: 'WAITING_INVOICE_UPLOAD' };
+      currentInvoice = waitingInvoice;
+      openInvoiceModal(waitingInvoice);
+    }, 1000);
   } catch (error) {
-    console.error('Error approving invoice:', error);
-    const errorMessage = error.message || t('toastError');
-    showToast(errorMessage, 'error');
+    console.error('Error approving:', error);
+    showToast(t('toastError') + ': ' + error.message, 'error');
   } finally {
     approveBtn.disabled = false;
     approveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
   }
 });
 
-document.getElementById('report-error-btn').addEventListener('click', () => {
+// Rechazar
+document.getElementById('reject-btn').addEventListener('click', () => {
   if (!currentInvoice) return;
-  document.getElementById('error-comments').value = '';
-  document.getElementById('error-modal').classList.remove('hidden');
+  document.getElementById('reject-comments').value = '';
+  document.getElementById('reject-modal').classList.remove('hidden');
 });
 
-document.getElementById('cancel-error-btn').addEventListener('click', () => {
-  document.getElementById('error-modal').classList.add('hidden');
+document.getElementById('cancel-reject-btn').addEventListener('click', () => {
+  document.getElementById('reject-modal').classList.add('hidden');
 });
 
-document.getElementById('confirm-error-btn').addEventListener('click', async () => {
-  const comments = document.getElementById('error-comments').value.trim();
+document.getElementById('confirm-reject-btn').addEventListener('click', async () => {
+  const comments = document.getElementById('reject-comments').value.trim();
   
   if (!comments) {
-    showToast('Debes escribir comentarios', 'error');
+    showToast(t('toastCommentsRequired'), 'error');
     return;
   }
 
-  const confirmBtn = document.getElementById('confirm-error-btn');
+  const confirmBtn = document.getElementById('confirm-reject-btn');
   confirmBtn.disabled = true;
-  confirmBtn.textContent = 'Enviando...';
+  confirmBtn.textContent = t('toastRejecting');
 
   try {
     const functions = getFunctions(undefined, 'us-central1');
-    const reportInvoiceError = httpsCallable(functions, 'reportInvoiceError');
+    const guideRejectReport = httpsCallable(functions, 'guideRejectReport');
 
-    await reportInvoiceError({
+    await guideRejectReport({
       invoiceId: currentInvoice.id,
-      comments: comments
+      rejectionComments: comments
     });
 
-    showToast(t('toastReported'), 'success');
-    document.getElementById('error-modal').classList.add('hidden');
+    showToast(t('toastRejected'), 'success');
+    document.getElementById('reject-modal').classList.add('hidden');
     document.getElementById('invoice-modal').classList.add('hidden');
     currentInvoice = null;
   } catch (error) {
-    console.error('Error reporting:', error);
-    showToast(error.message || t('toastError'), 'error');
+    console.error('Error rejecting:', error);
+    showToast(t('toastError') + ': ' + error.message, 'error');
   } finally {
     confirmBtn.disabled = false;
-    confirmBtn.textContent = 'Enviar';
+    confirmBtn.textContent = t('confirmRejectBtn');
+  }
+});
+
+// Upload PDF
+document.getElementById('upload-invoice-btn').addEventListener('click', () => {
+  if (!currentInvoice) return;
+  document.getElementById('invoice-number-input').value = '';
+  document.getElementById('pdf-file-input').value = '';
+  document.getElementById('upload-modal').classList.remove('hidden');
+});
+
+document.getElementById('cancel-upload-btn').addEventListener('click', () => {
+  document.getElementById('upload-modal').classList.add('hidden');
+});
+
+document.getElementById('confirm-upload-btn').addEventListener('click', async () => {
+  const invoiceNumber = document.getElementById('invoice-number-input').value.trim();
+  const pdfFile = document.getElementById('pdf-file-input').files[0];
+
+  if (!invoiceNumber) {
+    showToast(t('toastInvoiceNumberRequired'), 'error');
+    return;
+  }
+
+  if (!pdfFile) {
+    showToast(t('toastPdfRequired'), 'error');
+    return;
+  }
+
+  if (pdfFile.size > 10 * 1024 * 1024) {
+    showToast(t('toastPdfTooLarge'), 'error');
+    return;
+  }
+
+  const confirmBtn = document.getElementById('confirm-upload-btn');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = t('toastUploading');
+
+  showToast(t('toastUploading'), 'info');
+
+  try {
+    const reader = new FileReader();
+    const pdfBase64 = await new Promise((resolve, reject) => {
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(pdfFile);
+    });
+
+    const functions = getFunctions(undefined, 'us-central1');
+    const uploadOfficialInvoice = httpsCallable(functions, 'uploadOfficialInvoice');
+
+    await uploadOfficialInvoice({
+      invoiceId: currentInvoice.id,
+      invoiceNumber: invoiceNumber,
+      pdfBase64: pdfBase64
+    });
+
+    showToast(t('toastUploaded'), 'success');
+    document.getElementById('upload-modal').classList.add('hidden');
+    document.getElementById('invoice-modal').classList.add('hidden');
+    currentInvoice = null;
+  } catch (error) {
+    console.error('Error uploading:', error);
+    showToast(t('toastError') + ': ' + error.message, 'error');
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = t('confirmUploadBtn');
   }
 });
 
@@ -487,5 +591,6 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 
 window.addEventListener('beforeunload', () => {
   if (pendingUnsubscribe) pendingUnsubscribe();
+  if (waitingUnsubscribe) waitingUnsubscribe();
   if (historyUnsubscribe) historyUnsubscribe();
 });

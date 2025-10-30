@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Revisión de Facturas - Manager</title>
+  <title>Facturas - Manager</title>
   
   <meta name="theme-color" content="#0ea5e9">
   <link rel="manifest" href="/manifest.json">
@@ -17,13 +17,57 @@
 <body class="bg-gray-50 dark:bg-gray-900">
   
   <!-- NAV -->
-  <nav class="bg-sky-600 dark:bg-gray-800 text-white p-3 shadow-md">
-    <div class="container mx-auto flex justify-between items-center">
-      <h1 id="page-title" class="text-base sm:text-xl font-bold">Revisión de Facturas</h1>
-      <div class="flex items-center gap-2 sm:gap-3">
-        <a href="/manager.html" class="bg-sky-700 dark:bg-gray-700 hover:bg-sky-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm font-medium">Dashboard</a>
-        <button id="lang-toggle" class="bg-sky-700 dark:bg-gray-700 hover:bg-sky-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm font-bold">EN</button>
-        <button id="logout-btn" class="bg-sky-700 dark:bg-gray-700 hover:bg-sky-800 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm font-medium">Salir</button>
+  <nav class="bg-gray-800 dark:bg-gray-900 text-white shadow-lg">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <h1 class="text-2xl font-bold">Tours Calendar</h1>
+          <p class="text-sm text-gray-400">Manager Dashboard</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button id="dark-mode-toggle" class="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+            </svg>
+          </button>
+          <button id="logout-btn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-semibold transition">
+            Salir
+          </button>
+        </div>
+      </div>
+      
+      <!-- Tabs -->
+      <div class="flex gap-2 overflow-x-auto">
+        <a href="/manager.html" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition whitespace-nowrap">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+          Calendario
+        </a>
+        <a href="/manager-assignments.html" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition whitespace-nowrap">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+          </svg>
+          Asignaciones
+        </a>
+        <a href="/manager-guides.html" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition whitespace-nowrap">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+          </svg>
+          Guías
+        </a>
+        <a href="/manager-vendors.html" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition whitespace-nowrap">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+          </svg>
+          Vendors
+        </a>
+        <a href="/manager-invoices.html" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 text-white transition whitespace-nowrap">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          Facturas
+        </a>
       </div>
     </div>
   </nav>
@@ -38,9 +82,11 @@
           <select id="status-filter" class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2">
             <option value="ALL">Todas</option>
             <option value="MANAGER_REVIEW">Pendientes Revisión</option>
-            <option value="PENDING_APPROVAL">Enviadas a Guías</option>
+            <option value="PENDING_GUIDE_APPROVAL">Enviadas a Guías</option>
+            <option value="WAITING_INVOICE_UPLOAD">Esperando Factura</option>
+            <option value="UPLOAD_OVERDUE">Plazo Vencido</option>
             <option value="APPROVED">Aprobadas</option>
-            <option value="ERROR_REPORTED">Con Errores</option>
+            <option value="REJECTED">Rechazadas</option>
           </select>
         </div>
         
@@ -70,7 +116,7 @@
       
       <div class="p-4 sm:p-6 border-b dark:border-gray-700 flex justify-between items-center">
         <div>
-          <h3 id="modal-title" class="text-xl font-bold dark:text-white">Editar Factura</h3>
+          <h3 id="modal-title" class="text-xl font-bold dark:text-white">Revisar Reporte</h3>
           <p id="modal-subtitle" class="text-sm text-gray-600 dark:text-gray-400"></p>
         </div>
         <button id="close-modal" class="text-gray-500 hover:text-gray-700 dark:text-gray-400">
@@ -117,19 +163,19 @@
           <span id="modal-total" class="text-2xl font-bold text-sky-600 dark:text-sky-300">0.00€</span>
         </div>
 
-        <!-- Comentarios Guía (si ERROR_REPORTED) -->
+        <!-- Comentarios Guía (si REJECTED) -->
         <div id="guide-comments-section" class="hidden mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <h4 class="font-semibold text-red-800 dark:text-red-300 mb-2">⚠️ Comentarios del Guía</h4>
+          <h4 class="font-semibold text-red-800 dark:text-red-300 mb-2">⚠️ Motivo del Rechazo</h4>
           <p id="guide-comments" class="text-sm text-gray-700 dark:text-gray-300"></p>
         </div>
 
         <!-- Acciones -->
         <div class="flex gap-3">
-          <button id="save-btn" class="flex-1 bg-sky-600 hover:bg-sky-700 text-white px-4 py-3 rounded-lg font-semibold">
+          <button id="save-btn" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-3 rounded-lg font-semibold">
             Guardar Cambios
           </button>
-          <button id="approve-send-btn" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-lg font-semibold">
-            Aprobar y Enviar a Guía
+          <button id="send-to-guide-btn" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-lg font-semibold">
+            ✓ Enviar a Guía para Aprobación
           </button>
         </div>
       </div>

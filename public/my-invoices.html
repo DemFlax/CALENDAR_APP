@@ -36,8 +36,16 @@
   <main class="container mx-auto p-3 sm:p-6 max-w-7xl">
     <!-- Facturas Pendientes -->
     <section class="mb-6">
-      <h2 id="pending-title" class="text-xl sm:text-2xl font-bold mb-4 dark:text-white">Facturas Pendientes de Aprobación</h2>
+      <h2 id="pending-title" class="text-xl sm:text-2xl font-bold mb-4 dark:text-white">Reportes Pendientes de Revisión</h2>
       <div id="pending-invoices" class="space-y-3">
+        <p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">Cargando...</p>
+      </div>
+    </section>
+
+    <!-- Esperando Factura -->
+    <section class="mb-6">
+      <h2 id="waiting-title" class="text-xl sm:text-2xl font-bold mb-4 dark:text-white">Esperando Subir Factura</h2>
+      <div id="waiting-invoices" class="space-y-3">
         <p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">Cargando...</p>
       </div>
     </section>
@@ -51,11 +59,11 @@
     </section>
   </main>
 
-  <!-- Modal Detalle Factura -->
+  <!-- Modal Detalle Reporte -->
   <div id="invoice-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
       <div class="p-4 sm:p-6 border-b dark:border-gray-700 flex justify-between items-center">
-        <h3 id="modal-title" class="text-xl font-bold dark:text-white">Factura Pro-Forma</h3>
+        <h3 id="modal-title" class="text-xl font-bold dark:text-white">Reporte Mensual</h3>
         <button id="close-modal" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -90,105 +98,128 @@
           </table>
         </div>
 
+        <!-- Desglose IVA -->
+        <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span id="base-label" class="dark:text-gray-300">Base Imponible</span>
+            <span id="modal-base" class="font-semibold dark:text-white"></span>
+          </div>
+          <div class="flex justify-between">
+            <span id="iva-label" class="dark:text-gray-300">IVA (21%)</span>
+            <span id="modal-iva" class="font-semibold dark:text-white"></span>
+          </div>
+        </div>
+
         <!-- Total -->
         <div class="flex justify-between items-center p-4 bg-blue-50 dark:bg-blue-900 rounded-lg mb-6">
           <span id="total-label" class="text-lg font-bold dark:text-white">TOTAL</span>
           <span id="modal-total" class="text-2xl font-bold text-blue-600 dark:text-blue-300"></span>
         </div>
 
-        <!-- Sección Aprobación (solo si PENDING_APPROVAL) -->
+        <!-- Sección Aprobación/Rechazo -->
         <div id="approval-section" class="hidden border-t dark:border-gray-700 pt-6">
-          <h4 id="numbering-title" class="font-semibold mb-3 dark:text-white">Numeración de Factura</h4>
-
-          <div class="mb-4">
-            <label class="flex items-center gap-2 mb-2 cursor-pointer">
-              <input type="radio" name="invoice-mode" value="AUTO" class="w-4 h-4" checked>
-              <span id="auto-label" class="dark:text-gray-300">Autogenerar número (SFS-XXX/25)</span>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="invoice-mode" value="MANUAL" class="w-4 h-4">
-              <span id="manual-label" class="dark:text-gray-300">Introducir número manualmente</span>
-            </label>
-          </div>
-
-          <div id="manual-input-container" class="hidden mb-4">
-            <label id="manual-input-label" class="block text-sm font-medium mb-2 dark:text-gray-300">Número de Factura</label>
-            <input
-              type="text"
-              id="manual-invoice-number"
-              placeholder="2025/003"
-              class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2"
-            >
-            <p id="manual-warning" class="text-xs text-amber-600 dark:text-amber-400 mt-1">⚠️ Atención: Si eliges numeración manual, no podrás volver a usar numeración automática (requisito legal)</p>
-          </div>
-
-          <!-- Sección IRPF -->
-          <div class="mb-6 border-t dark:border-gray-700 pt-4">
-            <h4 id="irpf-title" class="font-semibold mb-3 dark:text-white">Retención IRPF</h4>
-            <div class="mb-3">
-              <label id="irpf-label" class="block text-sm font-medium mb-2 dark:text-gray-300">% IRPF a retener</label>
-              <input
-                type="number"
-                id="irpf-percent"
-                min="0"
-                max="100"
-                step="0.5"
-                value="15"
-                class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2"
-              >
-              <p id="irpf-help" class="text-xs text-gray-500 dark:text-gray-400 mt-1">Introduce tu porcentaje de IRPF (ej: 15)</p>
-            </div>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="save-irpf-default" class="w-4 h-4">
-              <span id="save-irpf-label" class="text-sm dark:text-gray-300">Recordar este % para futuras facturas</span>
-            </label>
-          </div>
-
-         <div class="flex gap-3">
-            <button id="report-error-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-semibold">
-              <span id="report-text">Reportar Error</span>
+          <div class="flex gap-3">
+            <button id="reject-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-semibold">
+              ✗ <span id="reject-text">Rechazar Reporte</span>
             </button>
             <button id="approve-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold">
-              <span id="approve-text">Aprobar Factura</span>
+              ✓ <span id="approve-text">Aprobar Reporte</span>
             </button>
           </div>
+        </div>
+
+        <!-- Info Esperando Upload -->
+        <div id="waiting-upload-section" class="hidden border-t dark:border-gray-700 pt-6">
+          <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg mb-4">
+            <p class="font-semibold text-purple-800 dark:text-purple-200 mb-2">⏱️ <span id="waiting-label">Reporte aprobado - Pendiente factura oficial</span></p>
+            <p id="upload-deadline-text" class="text-sm text-gray-600 dark:text-gray-400"></p>
+          </div>
+          <button id="upload-invoice-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-semibold">
+            📄 <span id="upload-text">Subir Factura Oficial (PDF)</span>
+          </button>
         </div>
 
         <!-- Info Factura Aprobada -->
         <div id="approved-info" class="hidden border-t dark:border-gray-700 pt-6">
           <div class="bg-green-50 dark:bg-green-900 p-4 rounded-lg">
-            <p class="font-semibold text-green-800 dark:text-green-200 mb-2">✅ <span id="approved-label">Factura Aprobada</span></p>
+            <p class="font-semibold text-green-800 dark:text-green-200 mb-2">✅ <span id="approved-label">Factura Completada</span></p>
             <p id="approved-number" class="text-sm dark:text-green-300"></p>
             <p id="approved-date" class="text-sm text-gray-600 dark:text-gray-400"></p>
             <a id="download-pdf" href="#" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:underline mt-2 inline-block">
-              📄 <span id="download-text">Descargar PDF</span>
+              📄 <span id="download-text">Ver Factura en Drive</span>
             </a>
+          </div>
+        </div>
+
+        <!-- Info Rechazada -->
+        <div id="rejected-info" class="hidden border-t dark:border-gray-700 pt-6">
+          <div class="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+            <p class="font-semibold text-red-800 dark:text-red-200 mb-2">✗ <span id="rejected-label">Reporte Rechazado</span></p>
+            <p id="rejection-comments" class="text-sm text-gray-700 dark:text-gray-300"></p>
           </div>
         </div>
       </div>
     </div>
   </div>
-  <!-- Modal Reportar Error -->
-<div id="error-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
-    <h3 class="text-xl font-bold mb-4 dark:text-white">Reportar Error</h3>
-    <label class="block text-sm font-medium mb-2 dark:text-gray-300">Comentarios</label>
-    <textarea 
-      id="error-comments"
-      rows="4"
-      placeholder="Describe el problema encontrado..."
-      class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 mb-4"
-    ></textarea>
-    <div class="flex gap-3">
-      <button id="cancel-error-btn" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded font-semibold">
-        Cancelar
-      </button>
-      <button id="confirm-error-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-semibold">
-        Enviar
-      </button>
+
+  <!-- Modal Rechazar -->
+  <div id="reject-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+      <h3 id="reject-modal-title" class="text-xl font-bold mb-4 dark:text-white">Rechazar Reporte</h3>
+      <label id="reject-comments-label" class="block text-sm font-medium mb-2 dark:text-gray-300">Motivo del rechazo</label>
+      <textarea 
+        id="reject-comments"
+        rows="4"
+        placeholder="Describe el problema encontrado..."
+        class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 mb-4"
+      ></textarea>
+      <div class="flex gap-3">
+        <button id="cancel-reject-btn" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded font-semibold">
+          Cancelar
+        </button>
+        <button id="confirm-reject-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-semibold">
+          Confirmar Rechazo
+        </button>
+      </div>
     </div>
   </div>
-</div>
+
+  <!-- Modal Upload PDF -->
+  <div id="upload-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+      <h3 id="upload-modal-title" class="text-xl font-bold mb-4 dark:text-white">Subir Factura Oficial</h3>
+      
+      <div class="mb-4">
+        <label id="invoice-number-label" class="block text-sm font-medium mb-2 dark:text-gray-300">Número de Factura</label>
+        <input
+          type="text"
+          id="invoice-number-input"
+          placeholder="2025/042"
+          class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2"
+        >
+      </div>
+
+      <div class="mb-4">
+        <label id="pdf-file-label" class="block text-sm font-medium mb-2 dark:text-gray-300">Archivo PDF</label>
+        <input
+          type="file"
+          id="pdf-file-input"
+          accept=".pdf"
+          class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2"
+        >
+        <p id="pdf-help-text" class="text-xs text-gray-500 dark:text-gray-400 mt-1">Solo archivos PDF. Máximo 10MB</p>
+      </div>
+
+      <div class="flex gap-3">
+        <button id="cancel-upload-btn" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded font-semibold">
+          Cancelar
+        </button>
+        <button id="confirm-upload-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold">
+          Subir Factura
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Toast -->
   <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg text-white text-sm sm:text-base max-w-xs sm:max-w-md z-50">
@@ -196,18 +227,16 @@
   </div>
 
   <script type="module" src="/js/guide-invoices.js"></script>
-    <script>
+  <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js')
     .then(() => {
-      // Forzar recarga si hay actualización
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         window.location.reload();
       });
     });
 }
 </script>
-<!-- Pull to Refresh iOS PWA -->
   <script src="/js/pulltorefresh.js"></script>
 </body>
 </html>
