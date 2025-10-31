@@ -1,12 +1,7 @@
-const admin = require('firebase-admin');
-const serviceAccount = require('C:/SHERPAS_CALENDAR/Kyes/serviceAccountKey.json');
+const { initAdmin, db, FieldValue } = require('../functions/config/admin-config');
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  projectId: 'calendar-app-tours'
-});
+initAdmin();
 
-const db = admin.firestore();
 const SLOTS = ['MAÑANA', 'T1', 'T2', 'T3'];
 
 async function seedShifts() {
@@ -66,8 +61,8 @@ async function seedShifts() {
                 slot,
                 guiaId: guide.id,
                 estado: 'LIBRE',
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
               });
               created++;
             }

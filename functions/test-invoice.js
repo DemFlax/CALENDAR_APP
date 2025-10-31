@@ -1,11 +1,6 @@
-const admin = require('firebase-admin');
-const serviceAccount = require('../../Kyes/serviceAccountKey.json');
+const { initAdmin, db, FieldValue } = require('./config/admin-config');
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
-
-const db = admin.firestore();
+initAdmin();
 
 db.collection('guide_invoices').add({
   guideId: "GYMsS3HicPbbSY1A1FSE",
@@ -21,8 +16,8 @@ db.collection('guide_invoices').add({
   baseImponible: 165.29,
   iva: 34.71,
   editedByManager: false,
-  createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  createdAt: FieldValue.serverTimestamp(),
+  updatedAt: FieldValue.serverTimestamp()
 }).then(() => {
   console.log('✓ Factura creada');
   process.exit(0);

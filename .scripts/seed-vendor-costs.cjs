@@ -1,12 +1,9 @@
-const admin = require('firebase-admin');
-const serviceAccount = require('C:/SHERPAS_CALENDAR/Kyes/serviceAccountKey.json');
+// =========================================
+// SEED VENDOR COSTS - VERSIÓN MIGRADA
+// =========================================
+const { initAdmin, db, FieldValue } = require('../functions/config/admin-config');
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  projectId: 'calendar-app-tours'
-});
-
-const db = admin.firestore();
+initAdmin();
 
 const INITIAL_VENDORS = [
   { nombre: 'El Escarpín', orden: 0 },
@@ -29,7 +26,7 @@ const SALARY_TABLE = {
     { minPax: 12, maxPax: 20, pagoNeto: 110, pagoBruto: 133.10 }
   ],
   ivaPercent: 21,
-  updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  updatedAt: FieldValue.serverTimestamp(),
   updatedBy: 'madrid@spainfoodsherpas.com'
 };
 
@@ -53,8 +50,8 @@ async function seedVendors() {
         direccion: null,
         email: null,
         estado: 'activo',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
       });
     }
     
