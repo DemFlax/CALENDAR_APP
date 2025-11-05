@@ -912,3 +912,265 @@ exports.bookeoWebhookWorker = bookeoRateLimiting.bookeoWebhookWorker;
 exports.enqueueBookeoWebhook = bookeoRateLimiting.enqueueBookeoWebhook;
 exports.onGuideStatusChange = bookeoRateLimiting.onGuideStatusChange;
 exports.freshStartBookeo = bookeoRateLimiting.freshStartBookeo;
+// =========================================
+// APPS SCRIPT PROXY FUNCTIONS (SECURITY FIX C1)
+// =========================================
+// Añadir al final de functions/index.js
+
+const appsScriptUrl = defineSecret('APPS_SCRIPT_URL');
+const appsScriptKey = defineSecret('APPS_SCRIPT_API_KEY');
+
+// =========================================
+// PROXY 1: Validate Tour
+// =========================================
+exports.proxyValidateTour = onCall({
+  cors: true,
+  secrets: [appsScriptUrl, appsScriptKey]
+}, async (request) => {
+  const { data, auth } = request;
+
+  // Validar autenticación
+  if (!auth) {
+    throw new HttpsError('unauthenticated', 'Authentication required');
+  }
+
+  // Validar role (manager o guide)
+  const role = auth.token.role;
+  if (role !== 'manager' && role !== 'guide') {
+    throw new HttpsError('permission-denied', 'Invalid role');
+  }
+
+  // Validar parámetros
+  if (!data.fecha || !data.slot) {
+    throw new HttpsError('invalid-argument', 'fecha and slot required');
+  }
+
+  try {
+    const url = `${appsScriptUrl.value()}?fecha=${data.fecha}&slot=${data.slot}&apiKey=${appsScriptKey.value()}`;
+    
+    logger.info('Proxying validateTour', { fecha: data.fecha, slot: data.slot });
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(result.message || 'Apps Script error');
+    }
+
+    logger.info('validateTour success', { exists: result.exists });
+
+    return result;
+
+  } catch (error) {
+    logger.error('Error in proxyValidateTour', { error: error.message });
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+// =========================================
+// PROXY 2: Add Guide to Calendar Event
+// =========================================
+exports.proxyAddGuideToEvent = onCall({
+  cors: true,
+  secrets: [appsScriptUrl, appsScriptKey]
+}, async (request) => {
+  const { data, auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Manager only');
+  }
+
+  if (!data.eventId || !data.guideEmail) {
+    throw new HttpsError('invalid-argument', 'eventId and guideEmail required');
+  }
+
+  try {
+    const url = `${appsScriptUrl.value()}?endpoint=addGuideToEvent&eventId=${data.eventId}&guideEmail=${encodeURIComponent(data.guideEmail)}&apiKey=${appsScriptKey.value()}`;
+    
+    logger.info('Proxying addGuideToEvent', { eventId: data.eventId, guideEmail: data.guideEmail });
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(result.message || 'Failed to add guide');
+    }
+
+    logger.info('addGuideToEvent success', { success: result.success });
+
+    return result;
+
+  } catch (error) {
+    logger.error('Error in proxyAddGuideToEvent', { error: error.message });
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+// =========================================
+// PROXY 3: Remove Guide from Calendar Event
+// =========================================
+exports.proxyRemoveGuideFromEvent = onCall({
+  cors: true,
+  secrets: [appsScriptUrl, appsScriptKey]
+}, async (request) => {
+  const { data, auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Manager only');
+  }
+
+  if (!data.eventId || !data.guideEmail) {
+    throw new HttpsError('invalid-argument', 'eventId and guideEmail required');
+  }
+
+  try {
+    const url = `${appsScriptUrl.value()}?endpoint=removeGuideFromEvent&eventId=${data.eventId}&guideEmail=${encodeURIComponent(data.guideEmail)}&apiKey=${appsScriptKey.value()}`;
+    
+    logger.info('Proxying removeGuideFromEvent', { eventId: data.eventId, guideEmail: data.guideEmail });
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(result.message || 'Failed to remove guide');
+    }
+
+    logger.info('removeGuideFromEvent success', { success: result.success });
+
+    return result;
+
+  } catch (error) {
+    logger.error('Error in proxyRemoveGuideFromEvent', { error: error.message });
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+// =========================================
+// PROXY 4: Get Event Details
+// =========================================
+exports.proxyGetEventDetails = onCall({
+  cors: true,
+  secrets: [appsScriptUrl, appsScriptKey]
+}, async (request) => {
+  const { data, auth } = request;
+
+  if (!auth) {
+    throw new HttpsError('unauthenticated', 'Authentication required');
+  }
+
+  const role = auth.token.role;
+  if (role !== 'manager' && role !== 'guide') {
+    throw new HttpsError('permission-denied', 'Invalid role');
+  }
+
+  if (!data.eventId) {
+    throw new HttpsError('invalid-argument', 'eventId required');
+  }
+
+  try {
+    const url = `${appsScriptUrl.value()}?endpoint=getEventDetails&eventId=${data.eventId}&apiKey=${appsScriptKey.value()}`;
+    
+    logger.info('Proxying getEventDetails', { eventId: data.eventId });
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+
+    if (result.error) {
+      const error = new Error(result.message);
+      error.code = result.code;
+      throw error;
+    }
+
+    logger.info('getEventDetails success', { eventId: data.eventId });
+
+    return result;
+
+  } catch (error) {
+    logger.error('Error in proxyGetEventDetails', { error: error.message, code: error.code });
+    
+    if (error.code === 'NOT_FOUND') {
+      throw new HttpsError('not-found', 'Event not found');
+    }
+    
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+// =========================================
+// PROXY 5: Get Assigned Tours
+// =========================================
+exports.proxyGetAssignedTours = onCall({
+  cors: true,
+  secrets: [appsScriptUrl, appsScriptKey]
+}, async (request) => {
+  const { data, auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Manager only');
+  }
+
+  if (!data.startDate || !data.endDate) {
+    throw new HttpsError('invalid-argument', 'startDate and endDate required');
+  }
+
+  try {
+    const url = `${appsScriptUrl.value()}?endpoint=getAssignedTours&startDate=${data.startDate}&endDate=${data.endDate}&apiKey=${appsScriptKey.value()}`;
+    
+    logger.info('Proxying getAssignedTours', { startDate: data.startDate, endDate: data.endDate });
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(result.message || 'Error fetching assignments');
+    }
+
+    logger.info('getAssignedTours success', { count: result.assignments?.length || 0 });
+
+    return result;
+
+  } catch (error) {
+    logger.error('Error in proxyGetAssignedTours', { error: error.message });
+    throw new HttpsError('internal', error.message);
+  }
+});

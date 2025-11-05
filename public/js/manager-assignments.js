@@ -1,8 +1,15 @@
-import { auth, appsScriptConfig } from './firebase-config.js';
-import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+// =========================================
+// MANAGER ASSIGNMENTS - SECURITY FIX C1
+// =========================================
+// Version: 2.0 (Apps Script calls via Cloud Functions)
+// Date: 2025-11-05
+// =========================================
 
-const APPS_SCRIPT_URL = appsScriptConfig.url;
-const API_KEY = appsScriptConfig.apiKey;
+import { auth } from './firebase-config.js';
+import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js';
+
+const functions = getFunctions();
 
 // Auto dark mode detection
 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -73,16 +80,10 @@ async function loadAssignments() {
   const endDate = `${year}-${month}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
  
   try {
-    const url = `${APPS_SCRIPT_URL}?endpoint=getAssignedTours&startDate=${startDate}&endDate=${endDate}&apiKey=${API_KEY}`;
-   
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' }
-    });
-   
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-   
-    const data = await response.json();
+    const proxyGetAssignedTours = httpsCallable(functions, 'proxyGetAssignedTours');
+    const result = await proxyGetAssignedTours({ startDate, endDate });
+    
+    const data = result.data;
     if (data.error) throw new Error(data.message || 'Error desconocido');
    
     cachedAssignments = data.assignments || [];
