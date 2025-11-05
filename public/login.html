@@ -105,29 +105,37 @@
       try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const token = await userCredential.user.getIdTokenResult();
-        
+
         if (token.claims.role === 'manager') {
           window.location.href = '/manager.html';
         } else if (token.claims.role === 'guide') {
           window.location.href = '/guide.html';
         } else {
-          throw new Error('Rol no configurado');
+          // Usuario sin rol configurado - hacer logout y mostrar error
+          await auth.signOut();
+          throw new Error('Rol no configurado. Contacta con el administrador.');
         }
       } catch (error) {
         console.error('Login error:', error);
-        
+
         let errorMessage = 'Error al iniciar sesión';
-        
-        if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+
+        // Validar códigos de error específicos PRIMERO
+        if (error.code === 'auth/invalid-credential') {
           errorMessage = 'Email o contraseña incorrectos';
         } else if (error.code === 'auth/user-not-found') {
           errorMessage = 'Usuario no encontrado';
+        } else if (error.code === 'auth/invalid-email') {
+          errorMessage = 'Formato de email inválido';
         } else if (error.code === 'auth/too-many-requests') {
           errorMessage = 'Demasiados intentos. Intenta más tarde';
-        } else if (error.message) {
+        } else if (error.code === 'auth/network-request-failed') {
+          errorMessage = 'Error de conexión. Verifica tu internet';
+        } else if (error.message && !error.code) {
+          // Solo usar error.message si NO es un error de Firebase (sin code)
           errorMessage = error.message;
         }
-        
+
         errorDiv.textContent = errorMessage;
         errorDiv.classList.remove('hidden');
         submitBtn.disabled = false;
