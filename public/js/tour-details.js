@@ -456,11 +456,8 @@ async function renderVendorCostsForm(fecha, slot, guests) {
     paxLabel.innerHTML = `${t('numPaxLabel')} <span class="text-red-600">*</span>`;
   }
   
-  const vendorsLabel = document.querySelector('#vendorCostsBody label.block.text-sm.font-bold');
   const totalGuestsLabel = document.getElementById('totalGuestsLabel');
   if (totalGuestsLabel) totalGuestsLabel.textContent = t('totalGuestsLabel');
-  
-  if (vendorsLabel) vendorsLabel.textContent = t('vendorsLabel');
   
   const feedbackLabel = document.querySelector('label[for="postTourFeedback"]');
   if (feedbackLabel) feedbackLabel.textContent = t('feedbackLabel');
