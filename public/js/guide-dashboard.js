@@ -12,20 +12,14 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-// Auto dark mode detection
 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
   document.documentElement.classList.add('dark');
 }
 
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-  if (e.matches) {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-  }
+  document.documentElement.classList.toggle('dark', e.matches);
 });
 
-// i18n
 const i18n = {
   es: {
     pageTitle: 'Calendario Tours',
@@ -96,22 +90,19 @@ let currentGuideId = null;
 let shiftsUnsubscribe = null;
 let guideName = '';
 
+// ✅ CAPTURAR IMPERSONACIÓN INMEDIATAMENTE
+const IMPERSONATE_ID = new URLSearchParams(window.location.search).get('impersonate');
+console.log('🔍 IMPERSONATE_ID capturado:', IMPERSONATE_ID);
+
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
     const token = await user.getIdTokenResult(true);
     
-    // ✅ NUEVO: Detectar impersonación
-    const urlParams = new URLSearchParams(window.location.search);
-    const impersonateGuideId = urlParams.get('impersonate');
-    
-    // ✅ NUEVO: Si hay impersonación Y el usuario es manager
-    if (impersonateGuideId && token.claims.role === 'manager') {
-      currentGuideId = impersonateGuideId;
-      // Mostrar banner impersonación
+    if (IMPERSONATE_ID && token.claims.role === 'manager') {
+      currentGuideId = IMPERSONATE_ID;
       showImpersonationBanner();
     } else {
-      // Flujo normal de guía
       currentGuideId = token.claims.guideId;
       if (!currentGuideId) {
         alert('No tienes permisos de guía');
@@ -131,7 +122,6 @@ onAuthStateChanged(auth, async (user) => {
 
     guideName = guideDoc.data().nombre;
     
-    // ✅ NUEVO: Actualizar nombre en banner si está impersonando
     const bannerName = document.getElementById('impersonated-guide-name');
     if (bannerName) bannerName.textContent = guideName;
     
@@ -145,7 +135,6 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-// ✅ NUEVA FUNCIÓN: Mostrar banner
 function showImpersonationBanner() {
   const nav = document.querySelector('nav');
   const banner = document.createElement('div');
@@ -171,14 +160,12 @@ function updateUILanguage() {
   document.getElementById('upcoming-title').textContent = t('upcomingAssignments');
   document.getElementById('calendar-title').textContent = t('calendarTitle');
   
-  // Update invoices link
   const invoicesLink = document.querySelector('a[href="/my-invoices.html"]');
   if (invoicesLink) {
     const spanElement = invoicesLink.querySelector('span');
     if (spanElement) spanElement.textContent = t('invoices');
   }
 
-  // Update month selector
   const monthSelect = document.getElementById('month-select');
   const currentMonth = monthSelect.value;
   monthSelect.innerHTML = monthNames[lang].map((name, idx) => 
@@ -238,37 +225,39 @@ async function loadUpcomingAssignments() {
   assignments.sort((a, b) => a.fecha.localeCompare(b.fecha));
   
   const limitedAssignments = assignments.slice(0, 3);
-
   const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
 
-  assignmentsList.innerHTML = limitedAssignments.map((a, index) => {
+  assignmentsList.innerHTML = '';
+  
+  limitedAssignments.forEach(a => {
     const dateStr = new Date(a.fecha + 'T12:00:00').toLocaleDateString(locale, dateOptions);
     const slotStr = a.slot === 'MAÑANA' ? t('morning') : `${t('afternoon')} ${a.slot}`;
     
-    return `
-      <div class="assignment-card bg-blue-50 dark:bg-blue-900 p-2 sm:p-3 rounded mb-2 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors" 
-           data-event-id="${a.eventId || ''}"
-           data-tour-name="${(a.tourName || 'Tour').replace(/"/g, '&quot;')}"
-           data-fecha="${a.fecha}"
-           data-slot="${a.slot}">
-        <p class="font-semibold text-sm sm:text-base dark:text-white">${dateStr}</p>
-        <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-300">${slotStr}</p>
-        ${a.tourName ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${a.tourName}</p>` : ''}
-      </div>
+    const card = document.createElement('div');
+    card.className = 'assignment-card bg-blue-50 dark:bg-blue-900 p-2 sm:p-3 rounded mb-2 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors';
+    
+    card.innerHTML = `
+      <p class="font-semibold text-sm sm:text-base dark:text-white">${dateStr}</p>
+      <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-300">${slotStr}</p>
+      ${a.tourName ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${a.tourName}</p>` : ''}
     `;
-  }).join('');
-
-  document.querySelectorAll('.assignment-card').forEach(card => {
+    
+    // ✅ EVENT LISTENER CON IMPERSONACIÓN
     card.addEventListener('click', () => {
-      const eventId = card.dataset.eventId;
-      const tourName = card.dataset.tourName;
-      const fecha = card.dataset.fecha;
-      const slot = card.dataset.slot;
-      if (eventId) {
-        window.location.href = `/tour-details.html?eventId=${eventId}&title=${encodeURIComponent(tourName)}&date=${fecha}&time=${slot}`;
+      if (!a.eventId) return;
+      
+      let url = `/tour-details.html?eventId=${a.eventId}&title=${encodeURIComponent(a.tourName || 'Tour')}&date=${a.fecha}&time=${a.slot}`;
+      
+      if (IMPERSONATE_ID) {
+        url += `&impersonate=${IMPERSONATE_ID}`;
       }
+      
+      console.log('🚀 Navegando a:', url);
+      window.location.href = url;
     });
+    
+    assignmentsList.appendChild(card);
   });
 }
 

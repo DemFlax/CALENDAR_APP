@@ -10,6 +10,7 @@ const {onCall, HttpsError} = require('firebase-functions/v2/https');
 const {onSchedule} = require('firebase-functions/v2/scheduler');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
 const {logger} = require('firebase-functions');
+const functions = require('firebase-functions');
 const {defineSecret} = require('firebase-functions/params');
 const sgMail = require('@sendgrid/mail');
 const fetch = require('node-fetch');

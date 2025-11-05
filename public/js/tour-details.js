@@ -1,6 +1,6 @@
 import { auth, db, appsScriptConfig } from './firebase-config.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-import { collection, addDoc, serverTimestamp, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 // ============================================
 // I18N TRANSLATIONS
@@ -25,6 +25,7 @@ const i18n = {
     vendorCostsSubtitle: 'Click para registrar tickets',
     numPaxLabel: 'Número de PAX',
     numPaxPlaceholder: 'Ej:',
+    totalGuestsLabel: 'Total Invitados',
     vendorsLabel: 'Vendors',
     feedbackLabel: 'Post-Tour Feedback (opcional)',
     feedbackPlaceholder: 'Comentarios sobre el tour, incidencias...',
@@ -85,6 +86,7 @@ const i18n = {
     vendorCostsSubtitle: 'Click to register tickets',
     numPaxLabel: 'Number of PAX',
     numPaxPlaceholder: 'Ex:',
+    totalGuestsLabel: 'Total Guests',
     vendorsLabel: 'Vendors',
     feedbackLabel: 'Post-Tour Feedback (optional)',
     feedbackPlaceholder: 'Comments about the tour, incidents...',
@@ -168,7 +170,29 @@ async function init() {
     
     const token = await user.getIdTokenResult();
     userRole = token.claims.role;
-    guideId = token.claims.guideId;
+    
+    // ✅ DETECTAR IMPERSONACIÓN
+    const urlParams = new URLSearchParams(window.location.search);
+    const impersonateGuideId = urlParams.get('impersonate');
+    
+    if (impersonateGuideId && token.claims.role === 'manager') {
+      guideId = impersonateGuideId;
+      console.log('✅ Impersonando guía:', guideId);
+    } else {
+      guideId = token.claims.guideId;
+    }
+    
+    if (!guideId) {
+      showError(t('errorTitle'), 'No guideId disponible', false);
+      return;
+    }
+    
+    // Verificar guía activo
+    const guideDoc = await getDoc(doc(db, 'guides', guideId));
+    if (!guideDoc.exists() || guideDoc.data().estado !== 'activo') {
+      showError(t('errorTitle'), 'Guía inactivo o no existe', false);
+      return;
+    }
     
     updateUILanguage();
     
@@ -203,7 +227,11 @@ async function loadAllTours() {
   showLoading();
   
   try {
-    const guideEmail = currentUser.email;
+    // Obtener email del guía
+    const guideDoc = await getDoc(doc(db, 'guides', guideId));
+    const guideEmail = guideDoc.data().email;
+    console.log('✅ Email del guía:', guideEmail);
+    
     const today = new Date();
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - 30);
@@ -429,6 +457,9 @@ async function renderVendorCostsForm(fecha, slot, guests) {
   }
   
   const vendorsLabel = document.querySelector('#vendorCostsBody label.block.text-sm.font-bold');
+  const totalGuestsLabel = document.getElementById('totalGuestsLabel');
+  if (totalGuestsLabel) totalGuestsLabel.textContent = t('totalGuestsLabel');
+  
   if (vendorsLabel) vendorsLabel.textContent = t('vendorsLabel');
   
   const feedbackLabel = document.querySelector('label[for="postTourFeedback"]');
@@ -971,6 +1002,27 @@ function showEmptyState() {
   } else {
     document.getElementById('guestCount').textContent = '0';
   }
+}
+
+function showError(title, message, showRetry = true) {
+  hideLoading();
+  
+  const errorTitle = document.getElementById('errorTitle');
+  const errorMessage = document.getElementById('errorMessage');
+  const retryBtn = document.getElementById('retryButton');
+  
+  errorTitle.textContent = title;
+  errorMessage.textContent = message;
+  
+  if (showRetry) {
+    retryBtn.classList.remove('hidden');
+    retryBtn.textContent = t('retryBtn');
+    retryBtn.onclick = () => loadAllTours();
+  } else {
+    retryBtn.classList.add('hidden');
+  }
+  
+  showErrorState();
 }
 
 function formatDate(dateStr) {

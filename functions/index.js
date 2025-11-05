@@ -168,15 +168,22 @@ exports.onCreateGuide = onDocumentCreated({
           <h2 style="color: #333;">Bienvenido a Spain Food Sherpas</h2>
           <p>Hola ${guide.nombre || ''},</p>
           <p>Has sido invitado a unirte al equipo de guías turísticos.</p>
-          <p>Para completar tu registro, establece tu contraseña:</p>
+          <p>Para completar tu registro, establece tu contraseña haciendo clic en el botón:</p>
           <div style="margin: 20px 0;">
             <a href="${directLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
               Establecer Contraseña
             </a>
           </div>
-          <p>O copia y pega este enlace:</p>
+          <p>O copia y pega este enlace en tu navegador:</p>
           <p style="word-break: break-all; color: #666; background: #f5f5f5; padding: 10px; border-radius: 4px;">${directLink}</p>
-          <p><small>Este enlace expira en 1 hora.</small></p>
+          
+          <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0; color: #92400e; font-weight: bold;">⏰ Este enlace expira en 1 hora</p>
+            <p style="margin: 8px 0 0 0; color: #92400e; font-size: 14px;">
+              Si el enlace expira, podrás solicitar uno nuevo desde la misma pantalla de establecer contraseña ingresando tu email.
+            </p>
+          </div>
+          
           <hr style="border: 1px solid #eee; margin: 20px 0;">
           <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
         </div>
@@ -304,15 +311,22 @@ exports.onUpdateGuide = onDocumentUpdated({
             <h2 style="color: #333;">Cuenta Reactivada</h2>
             <p>Hola ${after.nombre || ''},</p>
             <p>Tu cuenta ha sido reactivada en Spain Food Sherpas.</p>
-            <p>Para establecer tu nueva contraseña, haz clic aquí:</p>
+            <p>Para establecer tu nueva contraseña, haz clic en el botón:</p>
             <div style="margin: 20px 0;">
               <a href="${directLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
                 Establecer Contraseña
               </a>
             </div>
-            <p>O copia y pega este enlace:</p>
+            <p>O copia y pega este enlace en tu navegador:</p>
             <p style="word-break: break-all; color: #666; background: #f5f5f5; padding: 10px; border-radius: 4px;">${directLink}</p>
-            <p><small>Este enlace expira en 1 hora.</small></p>
+            
+            <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #92400e; font-weight: bold;">⏰ Este enlace expira en 1 hora</p>
+              <p style="margin: 8px 0 0 0; color: #92400e; font-size: 14px;">
+                Si el enlace expira, podrás solicitar uno nuevo desde la misma pantalla de establecer contraseña ingresando tu email.
+              </p>
+            </div>
+            
             <hr style="border: 1px solid #eee; margin: 20px 0;">
             <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
           </div>
@@ -551,324 +565,6 @@ exports.saveBookeoId = onRequest({ cors: true }, async (req, res) => {
 });
 
 // =========================================
-// FUNCIÓN: onShiftUpdate
-// =========================================
-exports.onShiftUpdate = onDocumentUpdated({
-  document: 'guides/{guideId}/shifts/{shiftId}',
-  secrets: [sendgridKey]
-}, async (event) => {
-  const before = event.data.before.data();
-  const after = event.data.after.data();
-  const shiftId = event.params.shiftId;
-  
-  const [fecha, slot] = shiftId.split('_');
-  
-  if (!fecha || !slot) {
-    logger.warn('ShiftId inválido', { shiftId });
-    return;
-  }
-  
-  // Solo procesar slots MAÑANA y T2 (según lógica Bookeo)
-  if (slot !== 'MAÑANA' && slot !== 'T2') {
-    return;
-  }
-  
-  // Solo procesar si hubo cambio de estado
-  if (before.estado === after.estado) {
-    return;
-  }
-  
-  logger.info('🔔 Shift bloqueado - verificando disponibilidad total', { shiftId, slot, fecha });
-  
-  try {
-    const db = getFirestore();
-    
-    const guidesSnapshot = await db.collection('guides')
-      .where('estado', '==', 'activo')
-      .get();
-    
-    const totalGuides = guidesSnapshot.size;
-    
-    if (totalGuides === 0) {
-      logger.warn('⚠️ No hay guías activos', { fecha, slot });
-      return;
-    }
-    
-    let unavailableCount = 0;
-    
-    for (const guideDoc of guidesSnapshot.docs) {
-      const shiftDoc = await db.collection('guides')
-        .doc(guideDoc.id)
-        .collection('shifts')
-        .doc(shiftId)
-        .get();
-      
-      if (shiftDoc.exists && shiftDoc.data().estado === 'NO_DISPONIBLE') {
-        unavailableCount++;
-      }
-    }
-    
-    const percentage = Math.round((unavailableCount / totalGuides) * 100);
-    
-    logger.info('📊 Estado shifts', { 
-      fecha, 
-      slot, 
-      totalGuides, 
-      unavailableCount, 
-      percentage,
-      message: 'Estado shifts'
-    });
-    
-    // ==================================
-    // CASO 1: BLOQUEO (100% NO_DISPONIBLE)
-    // ==================================
-    if (unavailableCount === totalGuides) {
-      logger.warn('🚫 100% guías NO_DISPONIBLE - BLOQUEANDO', { fecha, slot });
-      
-      // Email al Manager
-      sgMail.setApiKey(sendgridKey.value());
-      await sgMail.send({
-        to: MANAGER_EMAIL,
-        from: { email: FROM_EMAIL, name: FROM_NAME },
-        subject: `🚫 Sin guías disponibles: ${fecha} ${slot}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #dc2626;">🚫 Turno Sin Cobertura</h2>
-            <p><strong>Fecha:</strong> ${fecha}</p>
-            <p><strong>Turno:</strong> ${slot} (${SLOT_TIMES[slot]})</p>
-            <p><strong>Estado:</strong> Todos los guías (${totalGuides}) están NO_DISPONIBLE</p>
-            <hr style="border: 1px solid #eee; margin: 20px 0;">
-            <p style="color: #666; font-size: 12px;">
-              <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
-            </p>
-          </div>
-        `
-      });
-      
-      logger.info('📧 Email enviado al manager', { to: MANAGER_EMAIL });
-      
-      // Webhook Zapier BLOQUEAR
-      if (ZAPIER_WEBHOOK_URL) {
-        const payload = {
-          action: 'BLOQUEAR',
-          startDate: fecha,
-          startTime: SLOT_TIMES[slot],
-          slot: slot,
-          timestamp: new Date().toISOString()
-        };
-        
-        try {
-          const response = await axios.post(ZAPIER_WEBHOOK_URL, payload, {
-            headers: { 
-              'Content-Type': 'application/json',
-              'X-Firebase-Source': 'calendar-app-tours'
-            },
-            timeout: 30000
-          });
-          
-          const bookeoId = response.data?.bookeoId;
-          
-          if (bookeoId) {
-            // Guardar bookeoId en Firestore
-            await db.collection('bookeo_blocks').doc(shiftId).set({
-              fecha,
-              slot,
-              bookeoId,
-              status: 'BLOCKED',
-              createdAt: FieldValue.serverTimestamp(),
-              webhookResponse: response.data
-            });
-            
-            logger.info('✅ Webhook BLOQUEAR exitoso', { fecha, slot, bookeoId });
-          } else {
-            logger.error('❌ Zapier no retornó bookeoId', { fecha, slot, response: response.data });
-          }
-        } catch (webhookError) {
-          logger.error('❌ Error webhook BLOQUEAR', { 
-            fecha, 
-            slot, 
-            error: webhookError.message 
-          });
-          
-          // Notificar Manager del error
-          await sgMail.send({
-            to: MANAGER_EMAIL,
-            from: { email: FROM_EMAIL, name: FROM_NAME },
-            subject: `⚠️ ERROR Bloqueo Bookeo: ${fecha} ${slot}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #dc2626;">⚠️ Error Sincronización Bookeo</h2>
-                <p><strong>Fecha:</strong> ${fecha}</p>
-                <p><strong>Turno:</strong> ${slot} (${SLOT_TIMES[slot]})</p>
-                <p><strong>Error:</strong> ${webhookError.message}</p>
-                <p style="color: #dc2626; font-weight: bold;">ACCIÓN REQUERIDA: Bloquear manualmente en Bookeo</p>
-                <hr style="border: 1px solid #eee; margin: 20px 0;">
-                <p style="color: #666; font-size: 12px;">
-                  <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
-                </p>
-              </div>
-            `
-          });
-        }
-      }
-      
-      // Registro auditoría
-      await db.collection('notifications').add({
-        tipo: 'BOOKEO_BLOCK',
-        fecha,
-        slot,
-        startTime: SLOT_TIMES[slot],
-        totalGuides,
-        unavailableCount,
-        managerEmail: MANAGER_EMAIL,
-        webhookSent: !!ZAPIER_WEBHOOK_URL,
-        action: 'BLOQUEAR',
-        createdAt: FieldValue.serverTimestamp()
-      });
-    }
-    
-    // ==================================
-    // CASO 2: DESBLOQUEO (100% → <100%)
-    // ==================================
-    else if (totalGuides > 0 && unavailableCount < totalGuides) {
-      // Verificar si había bloqueo previo
-      const blockDoc = await db.collection('bookeo_blocks').doc(shiftId).get();
-      
-      if (blockDoc.exists && blockDoc.data().status === 'BLOCKED') {
-        const bookeoId = blockDoc.data().bookeoId;
-        
-        if (!bookeoId) {
-          logger.error('❌ BookeoId faltante para desbloqueo', { fecha, slot, shiftId });
-          
-          await sgMail.send({
-            to: MANAGER_EMAIL,
-            from: { email: FROM_EMAIL, name: FROM_NAME },
-            subject: `⚠️ ERROR Desbloqueo: ${fecha} ${slot}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #dc2626;">⚠️ Error Desbloqueo</h2>
-                <p><strong>Fecha:</strong> ${fecha}</p>
-                <p><strong>Turno:</strong> ${slot}</p>
-                <p><strong>Problema:</strong> No se encontró bookeoId para desbloquear</p>
-                <p style="color: #dc2626; font-weight: bold;">ACCIÓN REQUERIDA: Desbloquear manualmente en Bookeo</p>
-              </div>
-            `
-          });
-          return;
-        }
-        
-        logger.warn('✅ Guías disponibles - DESBLOQUEANDO', { fecha, slot, bookeoId });
-        
-        // Webhook Zapier DESBLOQUEAR
-        if (ZAPIER_WEBHOOK_URL) {
-          const payload = {
-            action: 'DESBLOQUEAR',
-            bookeoId: bookeoId,
-            startDate: fecha,
-            startTime: SLOT_TIMES[slot],
-            slot: slot,
-            timestamp: new Date().toISOString()
-          };
-          
-          try {
-            const response = await axios.post(ZAPIER_WEBHOOK_URL, payload, {
-              headers: { 
-                'Content-Type': 'application/json',
-                'X-Firebase-Source': 'calendar-app-tours'
-              },
-              timeout: 30000
-            });
-            
-            logger.info('✅ Webhook DESBLOQUEAR exitoso', { fecha, slot, bookeoId });
-            
-            // Actualizar estado del bloqueo
-            await db.collection('bookeo_blocks').doc(shiftId).update({
-              status: 'UNBLOCKED',
-              unlockedAt: FieldValue.serverTimestamp(),
-              webhookResponse: response.data
-            });
-            
-            // Email al Manager
-            sgMail.setApiKey(sendgridKey.value());
-            await sgMail.send({
-              to: MANAGER_EMAIL,
-              from: { email: FROM_EMAIL, name: FROM_NAME },
-              subject: `✅ Guías disponibles: ${fecha} ${slot}`,
-              html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                  <h2 style="color: #059669;">✅ Disponibilidad Restaurada</h2>
-                  <p><strong>Fecha:</strong> ${fecha}</p>
-                  <p><strong>Turno:</strong> ${slot} (${SLOT_TIMES[slot]})</p>
-                  <p><strong>Estado:</strong> ${totalGuides - unavailableCount} de ${totalGuides} guías disponibles</p>
-                  <hr style="border: 1px solid #eee; margin: 20px 0;">
-                  <p style="color: #666; font-size: 12px;">
-                    <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
-                  </p>
-                </div>
-              `
-            });
-            
-            logger.info('📧 Email DESBLOQUEO enviado al manager', { to: MANAGER_EMAIL });
-            
-          } catch (webhookError) {
-            logger.error('❌ Error webhook DESBLOQUEAR', { 
-              fecha, 
-              slot, 
-              bookeoId,
-              error: webhookError.message 
-            });
-            
-            // Notificar Manager del error
-            await sgMail.send({
-              to: MANAGER_EMAIL,
-              from: { email: FROM_EMAIL, name: FROM_NAME },
-              subject: `⚠️ ERROR Desbloqueo Bookeo: ${fecha} ${slot}`,
-              html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                  <h2 style="color: #dc2626;">⚠️ Error Desbloqueo Bookeo</h2>
-                  <p><strong>Fecha:</strong> ${fecha}</p>
-                  <p><strong>Turno:</strong> ${slot} (${SLOT_TIMES[slot]})</p>
-                  <p><strong>BookeoId:</strong> ${bookeoId}</p>
-                  <p><strong>Error:</strong> ${webhookError.message}</p>
-                  <p style="color: #dc2626; font-weight: bold;">ACCIÓN REQUERIDA: Desbloquear manualmente en Bookeo</p>
-                  <hr style="border: 1px solid #eee; margin: 20px 0;">
-                  <p style="color: #666; font-size: 12px;">
-                    <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
-                  </p>
-                </div>
-              `
-            });
-          }
-        }
-        
-        // Registro auditoría
-        await db.collection('notifications').add({
-          tipo: 'BOOKEO_UNBLOCK',
-          fecha,
-          slot,
-          startTime: SLOT_TIMES[slot],
-          totalGuides,
-          unavailableCount,
-          availableCount: totalGuides - unavailableCount,
-          bookeoId,
-          managerEmail: MANAGER_EMAIL,
-          webhookSent: !!ZAPIER_WEBHOOK_URL,
-          action: 'DESBLOQUEAR',
-          createdAt: FieldValue.serverTimestamp()
-        });
-      }
-    }
-    
-  } catch (error) {
-    logger.error('❌ Error onShiftUpdate', { 
-      error: error.message, 
-      shiftId,
-      stack: error.stack 
-    });
-  }
-});
-
-// =========================================
 // FUNCIÓN: resendInvitation
 // =========================================
 exports.resendInvitation = onCall({
@@ -906,15 +602,22 @@ exports.resendInvitation = onCall({
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #333;">Nueva invitación</h2>
           <p>Has solicitado un nuevo enlace de invitación.</p>
-          <p>Para establecer tu contraseña, haz clic en el siguiente enlace:</p>
+          <p>Para establecer tu contraseña, haz clic en el siguiente botón:</p>
           <div style="margin: 20px 0;">
             <a href="${directLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
               Establecer Contraseña
             </a>
           </div>
-          <p>O copia y pega este enlace:</p>
+          <p>O copia y pega este enlace en tu navegador:</p>
           <p style="word-break: break-all; color: #666; background: #f5f5f5; padding: 10px; border-radius: 4px;">${directLink}</p>
-          <p><small>Este enlace expira en 1 hora.</small></p>
+          
+          <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0; color: #92400e; font-weight: bold;">⏰ Este enlace expira en 1 hora</p>
+            <p style="margin: 8px 0 0 0; color: #92400e; font-size: 14px;">
+              Si necesitas otro enlace, vuelve a solicitar uno desde la pantalla de establecer contraseña.
+            </p>
+          </div>
+          
           <hr style="border: 1px solid #eee; margin: 20px 0;">
           <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
         </div>
@@ -969,6 +672,7 @@ exports.setManagerClaims = onRequest(async (req, res) => {
   }
 });
 
+
 // =========================================
 // FUNCIÓN: devSetPassword
 // =========================================
@@ -995,3 +699,216 @@ exports.guideApproveReport = vendorCosts.guideApproveReport;
 exports.guideRejectReport = vendorCosts.guideRejectReport;
 exports.uploadOfficialInvoice = vendorCosts.uploadOfficialInvoice;
 exports.checkUploadDeadlines = vendorCosts.checkUploadDeadlines;
+
+// =========================================
+// FUNCIÓN: generateMonthlyShifts (SCHEDULED)
+// =========================================
+exports.generateMonthlyShifts = onSchedule({
+  schedule: '0 2 1 * *', // Día 1 de cada mes a las 02:00 UTC (03:00/04:00 Madrid según horario)
+  timeZone: 'UTC',
+  region: 'us-central1',
+  secrets: [sendgridKey]
+}, async (event) => {
+  logger.info('=== 🔄 generateMonthlyShifts TRIGGERED ===');
+  
+  try {
+    const db = getFirestore();
+    const now = new Date();
+    
+    // Calcular mes +2 (mantener ventana de 3 meses: actual + 2)
+    const targetDate = new Date(now.getFullYear(), now.getMonth() + 2, 1);
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = targetDate.getMonth();
+    const monthStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
+    
+    logger.info('📅 Mes objetivo calculado', { 
+      currentMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+      targetMonth: monthStr,
+      targetYear, 
+      targetMonthNumber: targetMonth + 1 
+    });
+    
+    // Obtener todos los guías activos
+    const guidesSnapshot = await db.collection('guides')
+      .where('estado', '==', 'activo')
+      .get();
+    
+    if (guidesSnapshot.empty) {
+      logger.warn('⚠️ No hay guías activos - finalizando proceso');
+      return;
+    }
+    
+    logger.info(`👥 Guías activos encontrados: ${guidesSnapshot.size}`);
+    
+    let totalCreated = 0;
+    let guidesProcessed = 0;
+    let guidesSkipped = 0;
+    const errors = [];
+    
+    for (const guideDoc of guidesSnapshot.docs) {
+      const guideId = guideDoc.id;
+      const guideName = guideDoc.data().nombre;
+      
+      try {
+        // Verificar si ya existe el mes para este guía
+        const startDate = `${monthStr}-01`;
+        const endDate = `${monthStr}-${String(new Date(targetYear, targetMonth + 1, 0).getDate()).padStart(2, '0')}`;
+        
+        const existingShifts = await db.collection('guides')
+          .doc(guideId)
+          .collection('shifts')
+          .where('fecha', '>=', startDate)
+          .where('fecha', '<=', endDate)
+          .limit(1)
+          .get();
+        
+        if (!existingShifts.empty) {
+          logger.info('ℹ️ Mes ya existe - omitiendo', { guideId, guideName, monthStr });
+          guidesSkipped++;
+          continue;
+        }
+        
+        // Generar mes completo
+        const created = await generateMonthShifts(guideId, targetYear, targetMonth);
+        totalCreated += created;
+        guidesProcessed++;
+        
+        logger.info('✅ Shifts generados', { 
+          guideId, 
+          guideName, 
+          monthStr, 
+          shifts: created 
+        });
+        
+      } catch (error) {
+        logger.error('❌ Error generando shifts para guía', { 
+          guideId, 
+          guideName, 
+          error: error.message,
+          stack: error.stack
+        });
+        errors.push({ 
+          guideId, 
+          guideName, 
+          error: error.message 
+        });
+      }
+    }
+    
+    // Log resumen final
+    logger.info('=== ✅ generateMonthlyShifts COMPLETED ===', {
+      targetMonth: monthStr,
+      totalGuidesActive: guidesSnapshot.size,
+      guidesProcessed,
+      guidesSkipped,
+      totalShiftsCreated: totalCreated,
+      errorsCount: errors.length
+    });
+    
+    // Notificar al Manager sobre el resultado
+    if (guidesProcessed > 0 || errors.length > 0) {
+      try {
+        sgMail.setApiKey(sendgridKey.value());
+        
+        const subject = errors.length > 0 
+          ? `⚠️ Generación automática turnos ${monthStr} - Con errores`
+          : `✅ Generación automática turnos ${monthStr} - Exitosa`;
+        
+        await sgMail.send({
+          to: MANAGER_EMAIL,
+          from: { email: FROM_EMAIL, name: FROM_NAME },
+          subject: subject,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: ${errors.length > 0 ? '#dc2626' : '#059669'};">
+                ${errors.length > 0 ? '⚠️' : '✅'} Generación Automática de Turnos
+              </h2>
+              <p><strong>Mes generado:</strong> ${monthStr}</p>
+              <hr style="border: 1px solid #eee; margin: 20px 0;">
+              <h3>Resumen:</h3>
+              <ul>
+                <li><strong>Guías activos:</strong> ${guidesSnapshot.size}</li>
+                <li><strong>Guías procesados:</strong> ${guidesProcessed}</li>
+                <li><strong>Guías omitidos:</strong> ${guidesSkipped} (mes ya existía)</li>
+                <li><strong>Turnos creados:</strong> ${totalCreated}</li>
+                <li><strong>Errores:</strong> ${errors.length}</li>
+              </ul>
+              ${errors.length > 0 ? `
+                <hr style="border: 1px solid #eee; margin: 20px 0;">
+                <h3 style="color: #dc2626;">Detalles de errores:</h3>
+                <ul style="color: #dc2626;">
+                  ${errors.map(e => `<li><strong>${e.guideName}</strong> (${e.guideId}): ${e.error}</li>`).join('')}
+                </ul>
+                <p style="color: #dc2626; font-weight: bold;">
+                  ACCIÓN REQUERIDA: Revisar errores y generar manualmente si es necesario
+                </p>
+              ` : `
+                <p style="color: #059669; font-weight: bold;">
+                  ✅ Todos los turnos se generaron correctamente
+                </p>
+              `}
+              <hr style="border: 1px solid #eee; margin: 20px 0;">
+              <p style="color: #666; font-size: 12px;">
+                <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a> | 
+                Sistema Automático - Spain Food Sherpas
+              </p>
+            </div>
+          `
+        });
+        
+        logger.info('📧 Email resumen enviado al Manager', { to: MANAGER_EMAIL });
+        
+      } catch (emailError) {
+        logger.error('❌ Error enviando email resumen', { 
+          error: emailError.message,
+          stack: emailError.stack
+        });
+      }
+    }
+    
+  } catch (error) {
+    logger.error('❌ ERROR CRÍTICO generateMonthlyShifts', { 
+      error: error.message, 
+      stack: error.stack 
+    });
+    
+    // Intentar notificar al Manager del error crítico
+    try {
+      if (sendgridKey) {
+        sgMail.setApiKey(sendgridKey.value());
+        await sgMail.send({
+          to: MANAGER_EMAIL,
+          from: { email: FROM_EMAIL, name: FROM_NAME },
+          subject: '🚨 ERROR CRÍTICO - Generación automática turnos',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #dc2626;">🚨 Error Crítico en Sistema</h2>
+              <p>La generación automática mensual de turnos ha fallado completamente.</p>
+              <p><strong>Error:</strong> ${error.message}</p>
+              <p style="color: #dc2626; font-weight: bold;">
+                ACCIÓN URGENTE REQUERIDA: Generar turnos manualmente desde el dashboard
+              </p>
+              <hr style="border: 1px solid #eee; margin: 20px 0;">
+              <p style="color: #666; font-size: 12px;">
+                <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
+              </p>
+            </div>
+          `
+        });
+      }
+    } catch (emailError) {
+      logger.error('❌ No se pudo enviar email de error crítico', { error: emailError.message });
+    }
+    
+    throw error;
+  }
+});
+
+// =========================================
+// BOOKEO RATE LIMITING MODULE
+// =========================================
+const bookeoRateLimiting = require('./src/bookeo-rate-limiting');
+exports.bookeoWebhookWorker = bookeoRateLimiting.bookeoWebhookWorker;
+exports.enqueueBookeoWebhook = bookeoRateLimiting.enqueueBookeoWebhook;
+exports.onGuideStatusChange = bookeoRateLimiting.onGuideStatusChange;
+exports.freshStartBookeo = bookeoRateLimiting.freshStartBookeo;
