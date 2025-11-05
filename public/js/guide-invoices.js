@@ -57,6 +57,8 @@ const i18n = {
     approvedLabel: 'Factura Completada',
     rejectedLabel: 'Reporte Rechazado',
     downloadPdf: 'Ver Factura en Drive',
+    pdfDeleted: '⚠️ Factura eliminada de Drive',
+    pdfDeletedError: 'La factura PDF fue eliminada de Drive. Contacta al manager.',
     invoiceNumber: 'Nº Factura',
     approvedOn: 'Completada el',
     rejectModalTitle: 'Rechazar Reporte',
@@ -121,6 +123,8 @@ const i18n = {
     approvedLabel: 'Invoice Completed',
     rejectedLabel: 'Report Rejected',
     downloadPdf: 'View Invoice in Drive',
+    pdfDeleted: '⚠️ Invoice deleted from Drive',
+    pdfDeletedError: 'The invoice PDF was deleted from Drive. Contact the manager.',
     invoiceNumber: 'Invoice #',
     approvedOn: 'Completed on',
     rejectModalTitle: 'Reject Report',
@@ -167,6 +171,37 @@ let pendingUnsubscribe = null;
 let waitingUnsubscribe = null;
 let historyUnsubscribe = null;
 let currentInvoice = null;
+
+// ============================================
+// HELPER: Extraer y normalizar Drive File ID
+// ============================================
+function extractDriveFileId(urlOrId) {
+  if (!urlOrId) return null;
+  
+  // Si ya es solo un ID (alfanumérico con guiones/underscores)
+  if (/^[a-zA-Z0-9_-]+$/.test(urlOrId) && urlOrId.length > 20) {
+    return urlOrId;
+  }
+  
+  // Extraer de URL completa: https://drive.google.com/file/d/FILE_ID/view
+  const match = urlOrId.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (match) {
+    return match[1];
+  }
+  
+  // Extraer de URL directa: https://drive.google.com/uc?export=view&id=FILE_ID
+  const directMatch = urlOrId.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (directMatch) {
+    return directMatch[1];
+  }
+  
+  return null;
+}
+
+function buildDriveViewUrl(fileId) {
+  if (!fileId) return null;
+  return `https://drive.google.com/file/d/${fileId}/view`;
+}
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
@@ -402,14 +437,71 @@ function openInvoiceModal(invoice) {
     }
   } else if (invoice.status === 'APPROVED') {
     approvedInfo.classList.remove('hidden');
-    document.getElementById('approved-number').textContent = `${t('invoiceNumber')}: ${invoice.invoiceNumber}`;
+    document.getElementById('approved-number').textContent = `${t('invoiceNumber')}: ${invoice.invoiceNumber || '-'}`;
+    
     if (invoice.uploadedAt) {
       const uploadedDate = invoice.uploadedAt.toDate();
       document.getElementById('approved-date').textContent = `${t('approvedOn')}: ${uploadedDate.toLocaleDateString(locale)}`;
     }
-    if (invoice.invoiceFileUrl) {
-      document.getElementById('download-pdf').href = invoice.invoiceFileUrl;
+
+    // ============================================
+    // NUEVO: Manejo de PDF con validación Drive
+    // ============================================
+    const driveLink = document.getElementById('download-pdf');
+    const textSpan = document.getElementById('download-text');
+    
+    // Verificar si PDF fue marcado como eliminado en Firestore
+    if (invoice.pdfDeleted === true) {
+      // PDF eliminado (flag en Firestore)
+      driveLink.href = '#';
+      driveLink.classList.add('pointer-events-none', 'opacity-50', 'cursor-not-allowed');
+      driveLink.classList.remove('hover:underline');
+      
+      textSpan.textContent = t('pdfDeleted');
+      textSpan.classList.remove('text-blue-600', 'dark:text-blue-400');
+      textSpan.classList.add('text-red-600', 'dark:text-red-400');
+      
+      driveLink.onclick = (e) => {
+        e.preventDefault();
+        showToast(t('pdfDeletedError'), 'error');
+        return false;
+      };
+    } else {
+      // Intentar obtener fileId de múltiples campos posibles
+      const rawUrl = invoice.invoiceFileUrl || invoice.officialInvoicePdfUrl || invoice.pdfDriveId;
+      const fileId = extractDriveFileId(rawUrl);
+      
+      if (fileId) {
+        // PDF existe → Comportamiento normal
+        const driveUrl = buildDriveViewUrl(fileId);
+        driveLink.href = driveUrl;
+        driveLink.classList.remove('pointer-events-none', 'opacity-50', 'cursor-not-allowed');
+        driveLink.classList.add('hover:underline');
+        
+        textSpan.textContent = t('downloadPdf');
+        textSpan.classList.remove('text-red-600', 'dark:text-red-400');
+        textSpan.classList.add('text-blue-600', 'dark:text-blue-400');
+        
+        driveLink.onclick = null;
+        
+      } else {
+        // Sin fileId válido → Factura eliminada
+        driveLink.href = '#';
+        driveLink.classList.add('pointer-events-none', 'opacity-50', 'cursor-not-allowed');
+        driveLink.classList.remove('hover:underline');
+        
+        textSpan.textContent = t('pdfDeleted');
+        textSpan.classList.remove('text-blue-600', 'dark:text-blue-400');
+        textSpan.classList.add('text-red-600', 'dark:text-red-400');
+        
+        driveLink.onclick = (e) => {
+          e.preventDefault();
+          showToast(t('pdfDeletedError'), 'error');
+          return false;
+        };
+      }
     }
+    
   } else if (invoice.status === 'REJECTED') {
     rejectedInfo.classList.remove('hidden');
     document.getElementById('rejection-comments').textContent = invoice.rejectionComments || '-';
