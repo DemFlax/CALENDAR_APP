@@ -31,7 +31,7 @@ const i18n = {
     feedbackPlaceholder: 'Comentarios sobre el tour, incidencias...',
     saveCostsBtn: 'Guardar Costes',
     processingBtn: 'Procesando...',
-    compressingBtn: 'Comprimiendo',
+    compressingBtn: 'Comprimiendo imágenes...',
     uploadingBtn: 'Subiendo a Drive...',
     savingBtn: 'Guardando...',
     amountLabel: 'Importe (€)',
@@ -92,7 +92,7 @@ const i18n = {
     feedbackPlaceholder: 'Comments about the tour, incidents...',
     saveCostsBtn: 'Save Costs',
     processingBtn: 'Processing...',
-    compressingBtn: 'Compressing',
+    compressingBtn: 'Compressing images...',
     uploadingBtn: 'Uploading to Drive...',
     savingBtn: 'Saving...',
     amountLabel: 'Amount (€)',
@@ -686,7 +686,7 @@ window.removeVendorPhoto = function(vendorId) {
 };
 
 // ============================================
-// SUBMIT VENDOR COSTS
+// SUBMIT VENDOR COSTS (OPTIMIZADO)
 // ============================================
 
 async function handleVendorCostsSubmit(e, fecha, slot) {
@@ -749,27 +749,21 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
   
   const submitBtn = e.target.querySelector('[type="submit"]');
   submitBtn.disabled = true;
-  submitBtn.textContent = t('processingBtn');
+  submitBtn.textContent = t('compressingBtn');
   
   try {
-    // Comprimir imágenes
-    const vendorsDataForUpload = [];
-    
-    for (let i = 0; i < validVendors.length; i++) {
-      const { vendorId, cardData } = validVendors[i];
+    // ✅ OPTIMIZACIÓN: COMPRESIÓN PARALELA
+    const compressionPromises = validVendors.map(({ vendorId, cardData }) => {
       const vendor = vendorsList.find(v => v.id === vendorId);
-      
-      submitBtn.textContent = `${t('compressingBtn')} ${i + 1}/${validVendors.length}...`;
-      
-      const compressedBase64 = await compressImage(cardData.photo);
-      
-      vendorsDataForUpload.push({
+      return compressImage(cardData.photo, 1280, 0.65).then(compressedBase64 => ({
         vendorId: vendor.id,
         vendorName: vendor.nombre,
         importe: parseFloat(cardData.amount),
         ticketBase64: compressedBase64
-      });
-    }
+      }));
+    });
+    
+    const vendorsDataForUpload = await Promise.all(compressionPromises);
     
     // Upload a Drive
     submitBtn.textContent = t('uploadingBtn');
@@ -863,10 +857,10 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
 }
 
 // ============================================
-// IMAGE COMPRESSION
+// IMAGE COMPRESSION (OPTIMIZADO)
 // ============================================
 
-async function compressImage(file, maxWidth = 1920, quality = 0.8) {
+async function compressImage(file, maxWidth = 1280, quality = 0.65) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
