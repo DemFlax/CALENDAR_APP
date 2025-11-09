@@ -767,6 +767,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     
     const guideName = currentUser.displayName || currentUser.email;
     const monthFolder = getMonthFolderName(fecha);
+    const feedback = document.getElementById('postTourFeedback').value.trim() || null;
     
     const uploadPayload = {
       endpoint: 'uploadVendorTickets',
@@ -778,6 +779,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
       slot,
       numPax,
       monthFolder,
+      postTourFeedback: feedback,
       vendorsData: JSON.stringify(vendorsDataForUpload)
     };
     
@@ -811,7 +813,6 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     });
     
     const totalVendors = finalVendors.reduce((sum, v) => sum + v.importe, 0);
-    const feedback = document.getElementById('postTourFeedback').value.trim() || null;
     
     const vendorCostDoc = {
       shiftId,
