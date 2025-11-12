@@ -32,8 +32,10 @@ const i18n = {
     saveCostsBtn: 'Guardar Costes',
     processingBtn: 'Procesando...',
     compressingBtn: 'Comprimiendo imágenes...',
-    uploadingBtn: 'Subiendo a Drive...',
+    uploadingBtn: 'Subiendo a Drive',
+    uploadingVendorBtn: 'Subiendo',
     savingBtn: 'Guardando...',
+    writingSheetBtn: 'Registrando en Sheet...',
     amountLabel: 'Importe (€)',
     amountPlaceholder: '0.00',
     photoLabel: 'Foto Ticket',
@@ -66,6 +68,7 @@ const i18n = {
     errorCompressing: 'Error comprimiendo imagen',
     errorLoadingImage: 'Error cargando imagen',
     errorReadingFile: 'Error leyendo archivo',
+    errorUploadingVendor: 'Error subiendo',
     copiedAlert: 'Copiado:'
   },
   en: {
@@ -93,8 +96,10 @@ const i18n = {
     saveCostsBtn: 'Save Costs',
     processingBtn: 'Processing...',
     compressingBtn: 'Compressing images...',
-    uploadingBtn: 'Uploading to Drive...',
+    uploadingBtn: 'Uploading to Drive',
+    uploadingVendorBtn: 'Uploading',
     savingBtn: 'Saving...',
+    writingSheetBtn: 'Writing to Sheet...',
     amountLabel: 'Amount (€)',
     amountPlaceholder: '0.00',
     photoLabel: 'Ticket Photo',
@@ -127,6 +132,7 @@ const i18n = {
     errorCompressing: 'Error compressing image',
     errorLoadingImage: 'Error loading image',
     errorReadingFile: 'Error reading file',
+    errorUploadingVendor: 'Error uploading',
     copiedAlert: 'Copied:'
   }
 };
@@ -683,7 +689,7 @@ window.removeVendorPhoto = function(vendorId) {
 };
 
 // ============================================
-// SUBMIT VENDOR COSTS (OPTIMIZADO)
+// SUBMIT VENDOR COSTS (OPTIMIZADO PARALELO)
 // ============================================
 
 async function handleVendorCostsSubmit(e, fecha, slot) {
@@ -749,7 +755,9 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
   submitBtn.textContent = t('compressingBtn');
   
   try {
-    // ✅ OPTIMIZACIÓN: COMPRESIÓN PARALELA
+    // ============================================
+    // FASE 1: COMPRESIÓN PARALELA
+    // ============================================
     const compressionPromises = validVendors.map(({ vendorId, cardData }) => {
       const vendor = vendorsList.find(v => v.id === vendorId);
       return compressImage(cardData.photo, 1280, 0.65).then(compressedBase64 => ({
@@ -762,55 +770,84 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     
     const vendorsDataForUpload = await Promise.all(compressionPromises);
     
-    // Upload a Drive
-    submitBtn.textContent = t('uploadingBtn');
+    // ============================================
+    // FASE 2: UPLOAD PARALELO A DRIVE (NUEVO)
+    // ============================================
+    submitBtn.textContent = `${t('uploadingBtn')} (0/${vendorsDataForUpload.length})`;
     
     const guideName = currentUser.displayName || currentUser.email;
     const monthFolder = getMonthFolderName(fecha);
+    
+    let uploadedCount = 0;
+    const uploadPromises = vendorsDataForUpload.map(async (vendor) => {
+      const payload = {
+        endpoint: 'uploadSingleVendorTicket',
+        apiKey: appsScriptConfig.apiKey,
+        shiftId,
+        monthFolder,
+        vendorData: JSON.stringify(vendor)
+      };
+      
+      const response = await fetch(appsScriptConfig.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${vendor.vendorName}`);
+      
+      const result = await response.json();
+      if (result.error) throw new Error(`${vendor.vendorName}: ${result.message}`);
+      
+      uploadedCount++;
+      submitBtn.textContent = `${t('uploadingBtn')} (${uploadedCount}/${vendorsDataForUpload.length})`;
+      
+      return result;
+    });
+    
+    const uploadResults = await Promise.all(uploadPromises);
+    
+    // ============================================
+    // FASE 3: WRITE BATCH A SHEET (NUEVO)
+    // ============================================
+    submitBtn.textContent = t('writingSheetBtn');
+    
     const feedback = document.getElementById('postTourFeedback').value.trim() || null;
     
-    const uploadPayload = {
-      endpoint: 'uploadVendorTickets',
+    const sheetPayload = {
+      endpoint: 'writeVendorCostsToSheet',
       apiKey: appsScriptConfig.apiKey,
-      shiftId,
-      guideId,
-      guideName,
       fecha,
       slot,
+      guideName,
       numPax,
-      monthFolder,
       postTourFeedback: feedback,
-      vendorsData: JSON.stringify(vendorsDataForUpload)
+      vendorsData: JSON.stringify(uploadResults)
     };
     
-    const uploadResponse = await fetch(appsScriptConfig.url, {
+    const sheetResponse = await fetch(appsScriptConfig.url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8'
-      },
-      body: JSON.stringify(uploadPayload)
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(sheetPayload)
     });
     
-    if (!uploadResponse.ok) throw new Error(`Error subiendo: HTTP ${uploadResponse.status}`);
+    if (!sheetResponse.ok) throw new Error(`Error escribiendo Sheet: HTTP ${sheetResponse.status}`);
     
-    const uploadResult = await uploadResponse.json();
-    if (uploadResult.error) throw new Error(uploadResult.message || 'Error en Apps Script');
+    const sheetResult = await sheetResponse.json();
+    if (sheetResult.error) throw new Error(`Error Sheet: ${sheetResult.message}`);
     
-    const driveUrls = uploadResult.vendors || [];
-    
-    // Preparar vendors para Firestore
+    // ============================================
+    // FASE 4: SAVE A FIRESTORE
+    // ============================================
     submitBtn.textContent = t('savingBtn');
     
-    const finalVendors = driveUrls.map(uploaded => {
-      const original = vendorsDataForUpload.find(v => v.vendorId === uploaded.vendorId);
-      return {
-        vendorId: original.vendorId,
-        vendorName: original.vendorName,
-        importe: original.importe,
-        ticketUrl: uploaded.driveUrl,
-        driveFileId: uploaded.driveFileId
-      };
-    });
+    const finalVendors = uploadResults.map(uploaded => ({
+      vendorId: uploaded.vendorId,
+      vendorName: uploaded.vendorName,
+      importe: uploaded.importe,
+      ticketUrl: uploaded.driveUrl,
+      driveFileId: uploaded.driveFileId
+    }));
     
     const totalVendors = finalVendors.reduce((sum, v) => sum + v.importe, 0);
     
@@ -855,7 +892,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
 }
 
 // ============================================
-// IMAGE COMPRESSION (OPTIMIZADO)
+// IMAGE COMPRESSION
 // ============================================
 
 async function compressImage(file, maxWidth = 1280, quality = 0.65) {
