@@ -1,0 +1,330 @@
+📋 ANÁLISIS EXHAUSTIVO DE CALENDAR_APP - INFORME DE ISSUES
+
+He completado un análisis profundo del repositorio considerando el contexto general de la aplicación. A continuación te presento los issues críticos, bugs e incoherencias encontrados, organizados por categoría y prioridad:
+🚨 CRÍTICOS - SEGURIDAD (Acción Inmediata Requerida)
+C1. Credenciales Expuestas en Código Frontend
+
+Ubicación: /public/js/firebase-config.js:5-16
+Problema:
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA2K1hWVovDGcVart7XFEbTqJuQRErPRTI", // ❌ EXPUESTO
+  // ... otras credenciales expuestas
+};
+
+export const appsScriptConfig = {
+  url: 'https://script.google.com/macros/s/...',
+  apiKey: 'sfs-calendar-2024-secure-key' // ❌ API KEY HARDCODED
+};
+
+Riesgo: Las Firebase API keys son públicas por diseño, PERO el Apps Script API Key NO debería estar hardcoded. Cualquiera con acceso al código puede hacer peticiones directas al Apps Script.
+Impacto: Alto - Acceso no autorizado a Google Calendar API
+Solución: Mover Apps Script API Key a Firestore rules o validar requests en Apps Script usando Firebase Auth tokens.
+C2. Service Account Key con Ruta Hardcoded Windows
+
+Ubicación: /functions/config/admin-config.js:4
+Problema:
+
+const KEYS_PATH = 'C:\\SHERPAS_CALENDAR\\Kyes\\serviceAccountKey.json'; // ❌
+
+Riesgo:
+
+    Path de Windows no funciona en producción (Cloud Functions usa Linux)
+    Ruta absoluta expone estructura de archivos de desarrollo
+    El archivo serviceAccountKey.json contiene credenciales de administrador total de Firebase
+    TYPO en "Kyes" (debería ser "Keys")
+
+Impacto: Crítico - Cloud Functions NO funcionarán en producción
+Solución:
+
+    Usar variables de entorno con Secret Manager para las credenciales
+    En local, usar path relativo o GOOGLE_APPLICATION_CREDENTIALS
+    Verificar que serviceAccountKey.json esté en .gitignore
+
+C3. Falta Validación de Propiedad en vendor-costs
+
+Ubicación: /functions/src/vendor-costs.js:815-930
+Problema: La función registerVendorCost permite a un guía registrar costos para cualquier shift solo validando que:
+
+if (shift.estado !== 'ASIGNADO') {
+  throw new HttpsError('failed-precondition', 'Shift not assigned');
+}
+
+Pero NO valida que el shift esté asignado al guía que hace el request.
+
+Riesgo: Un guía puede registrar vendor costs de shifts de otros guías.
+Impacto: Alto - Manipulación de salarios
+Solución: Agregar validación:
+
+if (shift.guideId !== guideId) {
+  throw new HttpsError('permission-denied', 'Shift no pertenece a este guía');
+}
+
+C4. Firestore Rules - Escalation Privilege en guide_invoices
+
+Ubicación: /firestore.rules:78-81
+Problema:
+
+allow update: if isGuide() && 
+  resource.data.guideId == request.auth.token.guideId &&
+  resource.data.status == "PENDING_APPROVAL" &&
+  request.resource.data.status == "APPROVED";
+
+Pero NO valida que el guía no modifique otros campos (totalSalary, tours, etc.)
+
+Riesgo: Un guía malicioso podría:
+
+    Interceptar la petición de guideApproveReport
+    Modificar totalSalary mientras cambia status a APPROVED
+
+Impacto: Alto - Manipulación de salarios
+Solución: Cambiar a:
+
+allow update: if isGuide() && 
+  resource.data.guideId == request.auth.token.guideId &&
+  resource.data.status == "PENDING_APPROVAL" &&
+  request.resource.data.status in ["APPROVED", "REJECTED"] &&
+  request.resource.data.diff(resource.data).affectedKeys()
+    .hasOnly(['status', 'guideApprovedReportAt', 'rejectionComments', 'rejectedAt', 'updatedAt']);
+
+⚠️ ALTOS - RACE CONDITIONS Y CONCURRENCIA
+A1. Generación Duplicada de Shifts en onCreateGuide/onUpdateGuide
+
+Ubicación: /functions/index.js:206-227 y 346-376
+Problema: Ambas funciones generan 3 meses de shifts SIN verificar si ya existen:
+
+for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
+  const created = await generateMonthShifts(guideId, year, month); // ❌ No verifica existencia
+}
+
+Escenario de fallo:
+
+    Manager crea guía → onCreateGuide genera shifts
+    Si falla el email, manager reintenta crear guía con mismo email
+    Auth lanza error auth/email-already-exists pero shifts ya fueron creados
+    Manager desactiva y reactiva guía → onUpdateGuide genera shifts duplicados
+
+Impacto: Medio - Shifts duplicados, inconsistencia en calendario
+Solución: En generateMonthShifts, verificar existencia antes de crear:
+
+const existingShift = await docRef.get();
+if (existingShift.exists) {
+  continue; // Skip si ya existe
+}
+batch.set(docRef, {...});
+
+A2. Race Condition en Bookeo Email State
+
+Ubicación: /functions/src/bookeo-rate-limiting.js:477-490 y 693-708
+Problema: Múltiples triggers de shifts pueden ejecutarse simultáneamente. Aunque hay transacción atómica para email state, no hay debounce global por fecha.
+
+Escenario:
+
+    Guía bloquea T1 → Trigger 1 ejecuta
+    Inmediatamente bloquea T2 → Trigger 2 ejecuta
+    Ambos calculan guidesDisponiblesTarde === 0 simultáneamente
+    El segundo trigger puede pasar la transacción si el primero no ha actualizado el estado aún
+
+Impacto: Medio - Múltiples emails al manager para la misma fecha
+Solución: Agregar debounce de 5 segundos usando Cloud Tasks para agrupar cambios de la misma fecha.
+A3. generateMonthlyShifts No Usa Locks Distribuidos
+
+Ubicación: /functions/index.js:706-905
+Problema: El cron mensual procesa todos los guías en paralelo:
+
+for (const guideDoc of guidesSnapshot.docs) {
+  const created = await generateMonthShifts(guideId, targetYear, targetMonth);
+}
+
+Si se ejecuta manualmente mientras el cron está corriendo, pueden crearse shifts duplicados.
+
+Impacto: Bajo - Solo si hay ejecución manual concurrente
+Solución: Usar Firestore transaction lock:
+
+const lockRef = db.collection('system_locks').doc(`generate_shifts_${monthStr}`);
+await db.runTransaction(async (t) => {
+  const lock = await t.get(lockRef);
+  if (lock.exists && lock.data().lockedAt > Date.now() - 600000) {
+    throw new Error('Ya hay un proceso en ejecución');
+  }
+  t.set(lockRef, { lockedAt: Date.now() });
+});
+
+🐛 MEDIOS - BUGS DE LÓGICA
+M1. Inconsistencia en vendor-costs: pagoBruto vs salarioCalculado
+
+Ubicación: /functions/src/vendor-costs.js:51 y 878-896
+Problema:
+
+    calculateSalary retorna range.pagoBruto (línea 51)
+    Pero se guarda como salarioCalculado en la colección (línea 896)
+    En generateGuideInvoices, se suma cost.salarioCalculado (línea 207)
+
+SI la tabla de config usa el campo correcto (pagoBruto), funciona. Pero hay inconsistencia de nombres.
+
+Impacto: Medio - Confusión, posible error si se cambia la estructura
+Solución: Unificar nomenclatura a salarioCalculado en todos los lugares.
+M2. Validación de Fecha en vendor_costs Incorrecta
+
+Ubicación: /firestore.rules:66-69 y /functions/src/vendor-costs.js:841-847
+Problema:
+
+    Rules permite update si request.time < resource.data.createdAt + duration.value(1, 'd')
+    Pero Cloud Function valida diffDays > 7 (línea 846)
+
+Incoherencia: ¿Guía puede editar 24h o 7 días?
+
+Impacto: Bajo - Confusión en reglas de negocio
+Solución: Alinear ambas validaciones (recomendado: 24h en ambas).
+M3. BookeoId Faltante Bloquea Desbloqueos Automáticos
+
+Ubicación: /functions/src/bookeo-rate-limiting.js:102-179
+Problema: Si Zapier no retorna bookeoId, se guarda null:
+
+if (bookeoId) {
+  await db.collection('bookeo_blocks').doc(shiftId).set({ bookeoId, ... });
+} else {
+  await db.collection('bookeo_blocks').doc(shiftId).set({
+    bookeoId: null, // ❌
+    warning: 'bookeoId no retornado - DESBLOQUEO IMPOSIBLE'
+  });
+}
+
+Luego, al intentar desbloquear (línea 540-610), salta el webhook si falta bookeoId.
+
+Impacto: Medio - Turnos bloqueados indefinidamente requieren intervención manual
+Solución: Ya hay emails críticos, pero debería haber un endpoint manual para que manager pueda registrar bookeoId después.
+M4. generateGuideInvoices Usa Field Incorrecto
+
+Ubicación: /functions/src/vendor-costs.js:205-214
+Problema:
+
+costsSnap.forEach(doc => {
+  const cost = doc.data();
+  totalSalary += cost.salarioCalculado; // ❌ ¿Este campo existe?
+  tours.push({
+    ...
+    salario: cost.salarioCalculado
+  });
+});
+
+Pero en registerVendorCost (línea 896) se guarda como:
+
+salarioCalculado,  // ✅ Correcto
+
+Verificar: ¿La estructura de vendor_costs es coherente? Parece que sí, pero falta documentación.
+
+Impacto: Bajo - Si funciona, no hay problema. Pero falta validación.
+Solución: Agregar validación en la query para asegurar que el campo existe.
+📝 BAJOS - VALIDACIONES Y MEJORAS
+B1. No Hay Validación de Email Format
+
+Ubicación: Frontend: /public/js/manager-guides.js y Backend: /functions/index.js:133-136
+Problema: Se acepta cualquier string como email sin validar formato.
+
+Impacto: Bajo - Firebase Auth valida, pero mala UX
+Solución: Agregar regex en frontend:
+
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  throw new Error('Email inválido');
+}
+
+B2. No Hay Validación de DNI Español
+
+Ubicación: Manager guide form
+Problema: El campo dni acepta cualquier valor, pero debería validar formato español (8 dígitos + letra).
+
+Impacto: Bajo - Datos inconsistentes
+Solución: Validar con:
+
+function validateDNI(dni) {
+  const dniRegex = /^[0-9]{8}[A-Z]$/;
+  if (!dniRegex.test(dni)) return false;
+  
+  const letters = 'TRWAGMYFPDXBNJZSQVHLCKE';
+  const number = parseInt(dni.substr(0, 8), 10);
+  const letter = dni.charAt(8);
+  return letters[number % 23] === letter;
+}
+
+B3. onSnapshot Listeners No Se Limpian en Errores
+
+Ubicación: /public/js/manager-dashboard.js:135-149 y /public/js/guide-dashboard.js
+Problema: Si un listener falla, no se limpia:
+
+const unsub = onSnapshot(shiftsQuery, (snapshot) => {
+  // Si snapshot tiene error, unsub nunca se agrega a shiftsUnsubscribes
+  shiftsUnsubscribes.push(unsub); // ❌ No se ejecuta si hay error arriba
+});
+
+Impacto: Bajo - Memory leaks en caso de errores
+Solución:
+
+const unsub = onSnapshot(shiftsQuery, 
+  (snapshot) => { /* success */ },
+  (error) => { 
+    console.error(error);
+    // Listener se auto-limpia en error
+  }
+);
+shiftsUnsubscribes.push(unsub); // Agregar inmediatamente
+
+B4. ZAPIER_WEBHOOK_URL Puede Ser Undefined
+
+Ubicación: /functions/src/bookeo-rate-limiting.js:1032-1036
+Problema:
+
+if (!ZAPIER_WEBHOOK_URL) {
+  logger.warn('ZAPIER_WEBHOOK_URL no configurado', { shiftId });
+  return; // ❌ Silencioso, no lanza error
+}
+
+Impacto: Bajo - Sistema no bloquea/desbloquea en Bookeo, pero no hay alerta crítica
+Solución: En producción, esto debería fallar ruidosamente y enviar email al manager.
+B5. Apps Script Timeout Hardcoded a 10s
+
+Ubicación: /public/js/calendar-api.js:59
+Problema:
+
+const timeout = options.timeout || 10000; // 10s
+
+Pero getTourGuestDetails puede tardar más si el calendar tiene muchos eventos.
+
+Impacto: Bajo - UX degradada en calendars grandes
+Solución: Aumentar a 30s o hacer configurable.
+🔧 INCOHERENCIAS DE CONFIGURACIÓN
+CF1. Node Version Mismatch
+
+Ubicación: /package.json:24 vs /functions/package.json
+Verificar: ¿Ambos package.json especifican Node 20? Root dice "node": "20" pero falta verificar functions.
+
+Solución: Asegurar coherencia en versión de Node.
+CF2. Firestore Indexes Posiblemente Incompletos
+
+Ubicación: /firestore.indexes.json
+Problema: No hay índice compuesto para:
+
+    vendor_costs: guideId + fecha + createdAt (usado en generateGuideInvoices)
+    shifts: guideId + estado + fecha (usado en múltiples queries)
+
+Impacto: Bajo - Queries lentas si hay muchos documentos
+Solución: Revisar logs de Firestore y agregar índices faltantes.
+CF3. Frontend Usa CDN de Firebase 10.8.0
+
+Ubicación: Todos los archivos JS del frontend
+Problema: Versión hardcoded puede tener vulnerabilidades.
+
+Impacto: Bajo - Hasta que haya CVE conocido
+Solución: Actualizar a última versión de Firebase JS SDK (10.14.x).
+🎯 RESUMEN PRIORIZADO
+
+| ID | Categoría | Prioridad | Impacto | Esfuerzo | |----|-----------|-----------|---------|----------| | C2 | Seguridad | 🔴 Crítico | Alto | Bajo | | C3 | Seguridad | 🔴 Crítico | Alto | Bajo | | C4 | Seguridad | 🔴 Crítico | Alto | Medio | | C1 | Seguridad | 🟠 Alto | Alto | Medio | | A1 | Race Condition | 🟠 Alto | Medio | Bajo | | A2 | Race Condition | 🟠 Alto | Medio | Alto | | M3 | Bug Lógica | 🟡 Medio | Medio | Medio | | M1 | Inconsistencia | 🟡 Medio | Bajo | Bajo | | B4 | Validación | 🟢 Bajo | Bajo | Bajo |
+📌 RECOMENDACIONES GENERALES
+
+    Agregar tests unitarios para Cloud Functions críticas (vendor-costs, bookeo-rate-limiting)
+    Implementar logging estructurado con correlation IDs para tracing
+    Agregar monitoring de Cloud Functions (latencia, error rate)
+    Documentar reglas de negocio para evitar incoherencias entre backend/frontend/rules
+    Implementar rate limiting en Apps Script para prevenir abuso del API Key
+
+¿Quieres que profundice en algún issue específico o te ayude a generar los fixes para los críticos?
