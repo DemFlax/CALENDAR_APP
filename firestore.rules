@@ -65,26 +65,43 @@ service cloud.firestore {
       allow delete: if false;
     }
     
-    // ==========================================
+       // ==========================================
     // GUIDE_INVOICES COLLECTION
-    // ✅ FIX C4 APLICADO
+    // Manager edita todo; guía solo ciertos campos de su propia factura
     // ==========================================
-    
+
     match /guide_invoices/{invoiceId} {
-      allow read: if isManager() || 
-                     (isGuide() && resource.data.guideId == request.auth.token.guideId);
-      
-      // ✅ FIX: Corregir estado + validar campos permitidos
-      allow update: if isGuide() && 
-                       resource.data.guideId == request.auth.token.guideId &&
-                       resource.data.status == "PENDING_GUIDE_APPROVAL" &&
-                       request.resource.data.status in ["WAITING_INVOICE_UPLOAD", "REJECTED"] &&
-                       request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['status', 'guideApprovedReportAt', 'uploadDeadline', 
-                                  'rejectionComments', 'rejectedAt', 'updatedAt']);
-      
+      // Manager puede leer todo; guía solo su propia factura
+      allow read: if isManager() ||
+                   (isGuide() && resource.data.guideId == request.auth.token.guideId);
+
+      // La creación/borrado de reportes la hace SOLO backend (Cloud Functions)
       allow create, delete: if false;
+
+      // Actualización:
+      // - Guía: solo su propia factura y solo campos relacionados con su flujo
+      // - Manager: puede actualizar cualquier campo necesario (tours, salarios, etc.)
+      allow update: if
+        (
+          isGuide() &&
+          resource.data.guideId == request.auth.token.guideId &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly([
+              'status',
+              'guideApprovedReportAt',
+              'uploadDeadline',
+              'rejectionComments',
+              'rejectedAt',
+              'officialInvoicePdfUrl',
+              'officialInvoiceNumber',
+              'officialInvoiceUploadedAt',
+              'updatedAt'
+            ])
+        )
+        ||
+        isManager();
     }
+
     
     // ==========================================
     // VENDOR_REPORTS COLLECTION

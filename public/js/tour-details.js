@@ -689,7 +689,7 @@ window.removeVendorPhoto = function(vendorId) {
 };
 
 // ============================================
-// SUBMIT VENDOR COSTS (OPTIMIZADO PARALELO)
+// SUBMIT VENDOR COSTS (ESTRATEGIA HÍBRIDA: 1 SECUENCIAL + N PARALELOS)
 // ============================================
 
 async function handleVendorCostsSubmit(e, fecha, slot) {
@@ -756,7 +756,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
   
   try {
     // ============================================
-    // FASE 1: COMPRESIÓN PARALELA
+    // FASE 1: COMPRESIÓN PARALELA (Se mantiene rápida)
     // ============================================
     const compressionPromises = validVendors.map(({ vendorId, cardData }) => {
       const vendor = vendorsList.find(v => v.id === vendorId);
@@ -771,15 +771,17 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     const vendorsDataForUpload = await Promise.all(compressionPromises);
     
     // ============================================
-    // FASE 2: UPLOAD PARALELO A DRIVE (NUEVO)
+    // FASE 2: UPLOAD HÍBRIDO (1 Secuencial + Resto Paralelo)
+    // Evita duplicar carpetas sin perder velocidad
     // ============================================
-    submitBtn.textContent = `${t('uploadingBtn')} (0/${vendorsDataForUpload.length})`;
     
     const guideName = currentUser.displayName || currentUser.email;
     const monthFolder = getMonthFolderName(fecha);
-    
     let uploadedCount = 0;
-    const uploadPromises = vendorsDataForUpload.map(async (vendor) => {
+    const uploadResults = [];
+
+    // Helper para reutilizar lógica de subida
+    const uploadVendorFn = async (vendor) => {
       const payload = {
         endpoint: 'uploadSingleVendorTicket',
         apiKey: appsScriptConfig.apiKey,
@@ -803,12 +805,25 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
       submitBtn.textContent = `${t('uploadingBtn')} (${uploadedCount}/${vendorsDataForUpload.length})`;
       
       return result;
-    });
-    
-    const uploadResults = await Promise.all(uploadPromises);
+    };
+
+    if (vendorsDataForUpload.length > 0) {
+        // 1. SUBIR EL PRIMERO (Secuencial para crear carpeta)
+        submitBtn.textContent = `${t('uploadingBtn')} (1/${vendorsDataForUpload.length})`;
+        const firstResult = await uploadVendorFn(vendorsDataForUpload[0]);
+        uploadResults.push(firstResult);
+        
+        // 2. SUBIR EL RESTO (Paralelo para velocidad)
+        if (vendorsDataForUpload.length > 1) {
+            const restVendors = vendorsDataForUpload.slice(1);
+            const restPromises = restVendors.map(v => uploadVendorFn(v));
+            const restResults = await Promise.all(restPromises);
+            uploadResults.push(...restResults);
+        }
+    }
     
     // ============================================
-    // FASE 3: WRITE BATCH A SHEET (NUEVO)
+    // FASE 3: WRITE BATCH A SHEET
     // ============================================
     submitBtn.textContent = t('writingSheetBtn');
     

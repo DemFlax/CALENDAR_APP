@@ -699,6 +699,8 @@ exports.guideApproveReport = vendorCosts.guideApproveReport;
 exports.guideRejectReport = vendorCosts.guideRejectReport;
 exports.uploadOfficialInvoice = vendorCosts.uploadOfficialInvoice;
 exports.checkUploadDeadlines = vendorCosts.checkUploadDeadlines;
+exports.manualGenerateGuideInvoices = vendorCosts.manualGenerateGuideInvoices;
+
 
 // =========================================
 // FUNCIÓN: generateMonthlyShifts (SCHEDULED)
@@ -908,10 +910,14 @@ exports.generateMonthlyShifts = onSchedule({
 // BOOKEO RATE LIMITING MODULE
 // =========================================
 const bookeoRateLimiting = require('./src/bookeo-rate-limiting');
-exports.bookeoWebhookWorker = bookeoRateLimiting.bookeoWebhookWorker;
-exports.enqueueBookeoWebhook = bookeoRateLimiting.enqueueBookeoWebhook;
-exports.onGuideStatusChange = bookeoRateLimiting.onGuideStatusChange;
-exports.freshStartBookeo = bookeoRateLimiting.freshStartBookeo;
+
+exports.bookeoWebhookWorker   = bookeoRateLimiting.bookeoWebhookWorker;
+exports.enqueueBookeoWebhook  = bookeoRateLimiting.enqueueBookeoWebhook;
+exports.freshStartBookeo      = bookeoRateLimiting.freshStartBookeo;
+exports.saveBookeoBlockId     = bookeoRateLimiting.saveBookeoBlockId;
+exports.receiveBlockIdFromMake = bookeoRateLimiting.receiveBlockIdFromMake;
+
+
 // =========================================
 // APPS SCRIPT PROXY FUNCTIONS (SECURITY FIX C1)
 // =========================================
@@ -1110,7 +1116,7 @@ exports.proxyGetEventDetails = onCall({
     if (result.error) {
       const error = new Error(result.message);
       error.code = result.code;
-      throw error;
+      error.throw;
     }
 
     logger.info('getEventDetails success', { eventId: data.eventId });
