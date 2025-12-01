@@ -1,17 +1,23 @@
 // =========================================
 // VENDOR COSTS MODULE - VERIFACTU REDESIGN
 // =========================================
-// Version: 2.0
-// Date: 2025-10-30
-// Changes: Removed PDF generation, added new invoice flows for VERIFACTU compliance
+// Version: 2.3 (Cron día 1 + manual backfill + dedupe por shiftId)
+// Date: 2025-12-01
+// Changes:
+// - Nueva arquitectura de generación de reportes:
+//   * generateGuideInvoicesForMonth(targetMonthDate, options)
+//   * Cron generateGuideInvoices: día 1 a las 00:05 UTC, mes anterior
+//   * manualGenerateGuideInvoices: onCall, solo managers
+// - Evita duplicados usando invoiceId fijo: REPORT_<guideId>_<YYYY-MM>
+// - Email-resumen al manager con resultados y errores
+// - NUEVO: deduplicación de vendor_costs por shiftId al generar reportes
 // =========================================
 
-const {onCall, HttpsError} = require('firebase-functions/v2/https');
-const {onSchedule} = require('firebase-functions/v2/scheduler');
-const {getFirestore, FieldValue} = require('firebase-admin/firestore');
-const {logger} = require('firebase-functions');
-const functions = require('firebase-functions');
-const {defineSecret} = require('firebase-functions/params');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { logger } = require('firebase-functions');
+const { defineSecret } = require('firebase-functions/params');
 const sgMail = require('@sendgrid/mail');
 const fetch = require('node-fetch');
 
@@ -27,33 +33,35 @@ const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
 const APP_URL = process.env.APP_URL || 'https://calendar-app-tours.web.app';
 
 // =========================================
-// HELPER: Calculate Salary
+// HELPER: Calculate Salary (SIN IVA)
 // =========================================
 async function calculateSalary(numPax) {
   const db = getFirestore();
-  
+
   try {
     const tableSnap = await db.collection('config').doc('salary_table').get();
-    
+
     if (!tableSnap.exists) {
       throw new Error('Salary table not configured');
     }
-    
+
     const table = tableSnap.data();
-    const range = table.ranges.find(r => 
+    const range = table.ranges.find(r =>
       numPax >= r.minPax && numPax <= r.maxPax
     );
-    
+
     if (!range) {
       throw new Error(`No salary range found for ${numPax} pax`);
     }
-    
-    return range.pagoBruto;
+
+    // AHORA SIEMPRE NETO (sin IVA)
+    return range.pagoNeto;
   } catch (error) {
     logger.error('Error calculating salary', { numPax, error: error.message });
     throw error;
   }
 }
+
 
 // =========================================
 // HELPER: Upload PDF to Drive via Apps Script
@@ -145,135 +153,280 @@ function getEmailTemplate(content) {
 }
 
 // =========================================
-// FUNCTION: generateGuideInvoices (MODIFIED)
-// Cron: Last day of month at 23:00 UTC
-// Status: MANAGER_REVIEW (no auto email to guide)
+// HELPERS NUEVOS: generación de facturas
 // =========================================
-exports.generateGuideInvoices = onSchedule({
-  schedule: '0 23 L * *',
-  timeZone: 'UTC',
-  secrets: [sendgridKey]
-}, async (event) => {
-  logger.info('Iniciando generación reportes de servicios');
 
-  try {
-    const db = getFirestore();
-
-    const today = new Date();
-    const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const year = currentMonth.getFullYear();
-    const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
-    const invoiceMonth = `${year}-${month}`;
-
-    const startDate = `${year}-${month}-01`;
-    const lastDay = new Date(year, currentMonth.getMonth() + 1, 0).getDate();
-    const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
-
-    logger.info('Procesando mes', { invoiceMonth, startDate, endDate });
-
-    const guidesSnap = await db.collection('guides')
-      .where('estado', '==', 'activo')
-      .get();
-
-    if (guidesSnap.empty) {
-      logger.info('No hay guías activos');
-      return;
+/**
+ * Resuelve el mes objetivo a procesar.
+ * - Si se pasa monthParam (YYYY-MM) → lo valida y devuelve Date UTC día 1.
+ * - Si no se pasa → devuelve el primer día del MES ANTERIOR en UTC.
+ */
+function resolveTargetMonth(monthParam) {
+  if (monthParam) {
+    const match = /^([0-9]{4})-([0-9]{2})$/.exec(monthParam);
+    if (!match) {
+      throw new HttpsError('invalid-argument', 'Formato de mes inválido, use YYYY-MM');
     }
 
-    let generated = 0;
-    const errors = [];
+    const year = Number(match[1]);
+    const monthIndex = Number(match[2]) - 1;
+    if (monthIndex < 0 || monthIndex > 11) {
+      throw new HttpsError('invalid-argument', 'Mes fuera de rango');
+    }
 
-    for (const guideDoc of guidesSnap.docs) {
-      const guideId = guideDoc.id;
-      const guide = guideDoc.data();
+    return new Date(Date.UTC(year, monthIndex, 1));
+  }
 
-      try {
-        const costsSnap = await db.collection('vendor_costs')
-          .where('guideId', '==', guideId)
-          .where('fecha', '>=', startDate)
-          .where('fecha', '<=', endDate)
-          .get();
+  const today = new Date();
+  const currentMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+  const targetMonth = new Date(currentMonth);
+  targetMonth.setUTCMonth(targetMonth.getUTCMonth() - 1);
+  return targetMonth;
+}
 
-        if (costsSnap.empty) {
-          logger.info('Sin vendor costs para guía', { guideId, guideName: guide.nombre });
-          continue;
+/**
+ * Genera reportes de servicios (guide_invoices) para un mes concreto.
+ * targetMonthDate: Date UTC día 1 del mes a procesar.
+ * options.notifyManager: si true, envía email-resumen al manager.
+ */
+async function generateGuideInvoicesForMonth(targetMonthDate, { notifyManager = true } = {}) {
+  const db = getFirestore();
+
+  const year = targetMonthDate.getUTCFullYear();
+  const month = String(targetMonthDate.getUTCMonth() + 1).padStart(2, '0');
+  const invoiceMonth = `${year}-${month}`;
+
+  const startDate = `${year}-${month}-01`;
+  const lastDay = new Date(Date.UTC(year, targetMonthDate.getUTCMonth() + 1, 0)).getUTCDate();
+  const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+
+  logger.info('Procesando mes', { invoiceMonth, startDate, endDate });
+
+  const guidesSnap = await db.collection('guides')
+    .where('estado', '==', 'activo')
+    .get();
+
+  if (guidesSnap.empty) {
+    logger.info('No hay guías activos');
+    return { invoiceMonth, generated: 0, errors: [], generatedGuides: [] };
+  }
+
+  let generated = 0;
+  const generatedGuides = [];
+  const errors = [];
+
+  for (const guideDoc of guidesSnap.docs) {
+    const guideId = guideDoc.id;
+    const guide = guideDoc.data();
+
+    try {
+      const costsSnap = await db.collection('vendor_costs')
+        .where('guideId', '==', guideId)
+        .where('fecha', '>=', startDate)
+        .where('fecha', '<=', endDate)
+        .get();
+
+      if (costsSnap.empty) {
+        logger.info('Sin vendor costs para guía', { guideId, guideName: guide.nombre });
+        continue;
+      }
+
+      let totalSalary = 0;
+      const tours = [];
+      const seenShiftIds = new Set(); // dedupe por shiftId
+
+      costsSnap.forEach(docSnap => {
+        const cost = docSnap.data();
+
+        if (cost.shiftId) {
+          if (seenShiftIds.has(cost.shiftId)) {
+            logger.warn('Vendor cost duplicado detectado, se omite en reporte', {
+              guideId,
+              guideName: guide.nombre,
+              shiftId: cost.shiftId,
+              fecha: cost.fecha,
+              slot: cost.slot
+            });
+            return;
+          }
+          seenShiftIds.add(cost.shiftId);
         }
 
-        let totalSalary = 0;
-        const tours = [];
+        // salarioCalculado ya es NETO (sin IVA)
+        totalSalary += cost.salarioCalculado;
 
-        costsSnap.forEach(doc => {
-          const cost = doc.data();
-          totalSalary += cost.salarioCalculado;
-          tours.push({
-            fecha: cost.fecha,
-            slot: cost.slot,
-            tourDescription: cost.tourDescription,
-            numPax: cost.numPax,
-            salario: cost.salarioCalculado
-          });
+        tours.push({
+          shiftId: cost.shiftId || null,
+          fecha: cost.fecha,
+          slot: cost.slot,
+          tourDescription: cost.tourDescription,
+          numPax: cost.numPax,
+          salario: cost.salarioCalculado
         });
+      });
 
-        const baseImponible = totalSalary / 1.21;
-        const iva = baseImponible * 0.21;
-
-        const invoiceId = `REPORT_${guideId}_${invoiceMonth}`;
-
-        await db.collection('guide_invoices').add({
-          invoiceId,
+      if (tours.length === 0) {
+        logger.info('Todos los vendor_costs eran duplicados, nada que reportar', {
           guideId,
-          guideName: guide.nombre,
-          guideEmail: guide.email,
-          guideDni: guide.dni || '',
-          month: invoiceMonth,
-          tours,
-          totalSalary: parseFloat(totalSalary.toFixed(2)),
-          baseImponible: parseFloat(baseImponible.toFixed(2)),
-          iva: parseFloat(iva.toFixed(2)),
-          status: 'MANAGER_REVIEW',
-          editedByManager: false,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp()
+          guideName: guide.nombre
         });
-
-        logger.info('Reporte generado', {
-          invoiceId,
-          guideId,
-          guideName: guide.nombre,
-          totalSalary,
-          toursCount: tours.length
-        });
-
-        generated++;
-
-      } catch (error) {
-        logger.error('Error procesando guía', { guideId, error: error.message });
-        errors.push({ guideId, guideName: guide.nombre, error: error.message });
+        continue;
       }
-    }
 
-    logger.info('Generación completada', {
-      total: guidesSnap.size,
-      generated,
-      errors: errors.length
+      const invoiceId = `REPORT_${guideId}_${invoiceMonth}`;
+      const invoiceRef = db.collection('guide_invoices').doc(invoiceId);
+      const invoiceExists = await invoiceRef.get();
+
+      if (invoiceExists.exists) {
+        logger.info('Reporte ya existe, omitiendo', { invoiceId, guideId });
+        continue;
+      }
+
+      await invoiceRef.set({
+        invoiceId,
+        guideId,
+        guideName: guide.nombre,
+        guideEmail: guide.email,
+        guideDni: guide.dni || '',
+        month: invoiceMonth,
+        tours,
+        // TOTAL SIEMPRE NETO (sin IVA)
+        totalSalary: parseFloat(totalSalary.toFixed(2)),
+        status: 'MANAGER_REVIEW',
+        editedByManager: false,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+
+      logger.info('Reporte generado', {
+        invoiceId,
+        guideId,
+        guideName: guide.nombre,
+        totalSalary,
+        toursCount: tours.length
+      });
+
+      generated++;
+      generatedGuides.push({ name: guide.nombre, email: guide.email });
+
+    } catch (error) {
+      logger.error('Error procesando guía', { guideId, error: error.message });
+      errors.push({ guideId, guideName: guide.nombre, error: error.message });
+    }
+  }
+
+  logger.info('Generación completada', {
+    total: guidesSnap.size,
+    generated,
+    errors: errors.length
+  });
+
+  const hasErrors = errors.length > 0;
+  const summaryList = generatedGuides
+    .map(guide => `<li>${guide.name} (${guide.email || 'sin email'})</li>`)
+    .join('');
+
+  const errorList = errors
+    .map(err => `<li>${err.guideName || err.guideId}: ${err.error}</li>`)
+    .join('');
+
+  if (notifyManager && (generated > 0 || hasErrors)) {
+    sgMail.setApiKey(sendgridKey.value());
+    await sgMail.send({
+      to: MANAGER_EMAIL,
+      from: { email: FROM_EMAIL, name: FROM_NAME },
+      subject: `Resumen generación reportes ${invoiceMonth}: ${generated} creados${hasErrors ? ' con incidencias' : ''}`,
+      html: getEmailTemplate(`
+        <h2>Resultados de la generación automática</h2>
+        <p>Mes procesado: <strong>${invoiceMonth}</strong>.</p>
+        ${
+          generated > 0
+            ? `
+          <p>Se crearon <strong>${generated}</strong> reporte(s):</p>
+          <ul>${summaryList}</ul>
+          <a href="${APP_URL}/manager-invoices.html" class="button">Abrir panel de manager</a>
+        `
+            : '<p>No se generaron reportes nuevos.</p>'
+        }
+        ${
+          hasErrors
+            ? `
+          <div class="alert">
+            <strong>Incidencias:</strong>
+            <ul>${errorList}</ul>
+          </div>
+        `
+            : ''
+        }
+      `)
     });
+  }
 
-    if (errors.length > 0) {
-      logger.warn('Errores durante generación', { errors });
-    }
+  if (hasErrors) {
+    logger.warn('Errores durante generación', { errors });
+  }
 
+  return { invoiceMonth, generated, errors, generatedGuides };
+}
+
+
+// =========================================
+// FUNCTION: generateGuideInvoices (CRON día 1)
+// =========================================
+exports.generateGuideInvoices = onSchedule({
+  schedule: '5 0 1 * *',
+  timeZone: 'UTC',
+  secrets: [sendgridKey]
+}, async () => {
+  logger.info('Iniciando generación reportes de servicios (ejecución programada)');
+
+  try {
+    const result = await generateGuideInvoicesForMonth(resolveTargetMonth());
+    logger.info('Ejecución programada terminada', result);
   } catch (error) {
-    logger.error('Error crítico generando reportes', { 
-      error: error.message, 
-      stack: error.stack 
+    logger.error('Error crítico generando reportes', {
+      error: error.message,
+      stack: error.stack
     });
     throw error;
   }
 });
 
 // =========================================
-// FUNCTION: managerSendToGuide (RENAMED from managerApproveInvoice)
-// Manager reviews and sends report to guide for approval
+// FUNCTION: manualGenerateGuideInvoices
+// =========================================
+exports.manualGenerateGuideInvoices = onCall({
+  cors: true,
+  secrets: [sendgridKey]
+}, async (request) => {
+  const { data, auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Solo managers');
+  }
+
+  const targetMonthDate = resolveTargetMonth(data?.month);
+  const notifyManager = data?.notifyManager !== false;
+
+  try {
+    const result = await generateGuideInvoicesForMonth(targetMonthDate, { notifyManager });
+    return { success: true, ...result };
+  } catch (error) {
+    logger.error('Error manual generando reportes', {
+      month: data?.month,
+      error: error.message
+    });
+
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+
+    throw new HttpsError('internal', 'Error generando reportes');
+  }
+});
+
+// =========================================
+// FUNCTION: managerSendToGuide
 // =========================================
 exports.managerSendToGuide = onCall({
   cors: true,
@@ -299,33 +452,27 @@ exports.managerSendToGuide = onCall({
 
     const invoice = invoiceSnap.data();
 
-    if (invoice.status !== 'MANAGER_REVIEW') {
+    if (invoice.status !== 'MANAGER_REVIEW' && invoice.status !== 'REJECTED') {
       throw new HttpsError('failed-precondition', 'Reporte ya enviado o en otro estado');
     }
 
-    // Actualizar datos si manager editó
     const updateData = {
       status: 'PENDING_GUIDE_APPROVAL',
       sentToGuideAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
     };
 
-    // Si manager envió datos editados
     if (data.tours && data.totalSalary !== undefined) {
-      const baseImponible = data.totalSalary / 1.21;
-      const iva = baseImponible * 0.21;
-
+      // Los importes ya vienen NETOS (sin IVA). Solo guardamos lo que pasa el manager.
       updateData.tours = data.tours;
       updateData.totalSalary = parseFloat(data.totalSalary.toFixed(2));
-      updateData.baseImponible = parseFloat(baseImponible.toFixed(2));
-      updateData.iva = parseFloat(iva.toFixed(2));
       updateData.editedByManager = true;
       updateData.managerEditedAt = FieldValue.serverTimestamp();
     }
 
+
     await db.collection('guide_invoices').doc(data.invoiceId).update(updateData);
 
-    // Email al guía
     sgMail.setApiKey(sendgridKey.value());
     await sgMail.send({
       to: invoice.guideEmail,
@@ -334,7 +481,7 @@ exports.managerSendToGuide = onCall({
       html: getEmailTemplate(`
         <h2>Tu reporte está listo para revisión</h2>
         <p>Hola ${invoice.guideName},</p>
-        <p>El manager ha revisado tu reporte de servicios de <strong>${invoice.month}</strong>.</p>
+        <p>El manager ha revisado tu reporte de <strong>${invoice.month}</strong>.</p>
         <p><strong>Total servicios:</strong> ${(updateData.totalSalary || invoice.totalSalary).toFixed(2)}€</p>
         <p>Por favor, accede a tu dashboard para revisar y aprobar o rechazar.</p>
         <a href="${APP_URL}/my-invoices.html" class="button">
@@ -366,8 +513,7 @@ exports.managerSendToGuide = onCall({
 });
 
 // =========================================
-// FUNCTION: guideApproveReport (NEW)
-// Guide approves the service report and starts 48h countdown
+// FUNCTION: guideApproveReport
 // =========================================
 exports.guideApproveReport = onCall({
   cors: true,
@@ -403,7 +549,6 @@ exports.guideApproveReport = onCall({
       throw new HttpsError('failed-precondition', 'Estado inválido');
     }
 
-    // Calcular deadline 48h
     const now = new Date();
     const deadline = new Date(now.getTime() + (48 * 60 * 60 * 1000));
 
@@ -414,7 +559,6 @@ exports.guideApproveReport = onCall({
       updatedAt: FieldValue.serverTimestamp()
     });
 
-    // Email confirmación
     sgMail.setApiKey(sendgridKey.value());
     await sgMail.send({
       to: invoice.guideEmail,
@@ -466,8 +610,7 @@ exports.guideApproveReport = onCall({
 });
 
 // =========================================
-// FUNCTION: guideRejectReport (RENAMED from reportInvoiceError)
-// Guide rejects the report with mandatory comments
+// FUNCTION: guideRejectReport
 // =========================================
 exports.guideRejectReport = onCall({
   cors: true,
@@ -487,7 +630,7 @@ exports.guideRejectReport = onCall({
   }
 
   if (data.comments.trim().length < 10) {
-    throw new HttpsError('invalid-argument', 
+    throw new HttpsError('invalid-argument',
       'Comentarios obligatorios (mínimo 10 caracteres)');
   }
 
@@ -515,7 +658,6 @@ exports.guideRejectReport = onCall({
       updatedAt: FieldValue.serverTimestamp()
     });
 
-    // Email manager
     sgMail.setApiKey(sendgridKey.value());
     await sgMail.send({
       to: MANAGER_EMAIL,
@@ -560,8 +702,7 @@ exports.guideRejectReport = onCall({
 });
 
 // =========================================
-// FUNCTION: uploadOfficialInvoice (NEW)
-// Guide uploads their VERIFACTU-compliant PDF invoice
+// FUNCTION: uploadOfficialInvoice
 // =========================================
 exports.uploadOfficialInvoice = onCall({
   cors: true,
@@ -595,11 +736,10 @@ exports.uploadOfficialInvoice = onCall({
 
     const validStatuses = ['WAITING_INVOICE_UPLOAD', 'UPLOAD_OVERDUE'];
     if (!validStatuses.includes(invoice.status)) {
-      throw new HttpsError('failed-precondition', 
+      throw new HttpsError('failed-precondition',
         'No puedes subir factura en este estado');
     }
 
-    // Validar tamaño PDF (5MB max)
     const pdfSize = Buffer.from(data.pdfBase64, 'base64').length;
     if (pdfSize > 5 * 1024 * 1024) {
       throw new HttpsError('invalid-argument', 'PDF mayor a 5MB');
@@ -611,7 +751,6 @@ exports.uploadOfficialInvoice = onCall({
       pdfSize
     });
 
-    // Subir a Drive
     const uploadResult = await uploadToGoogleDrive({
       guideId: invoice.guideId,
       guideName: invoice.guideName,
@@ -622,7 +761,6 @@ exports.uploadOfficialInvoice = onCall({
 
     logger.info('Factura subida a Drive', uploadResult);
 
-    // Actualizar invoice
     await db.collection('guide_invoices').doc(data.invoiceId).update({
       status: 'APPROVED',
       officialInvoicePdfUrl: uploadResult.fileId,
@@ -631,12 +769,9 @@ exports.uploadOfficialInvoice = onCall({
       updatedAt: FieldValue.serverTimestamp()
     });
 
-    // Enviar emails
     sgMail.setApiKey(sendgridKey.value());
-    const pdfBuffer = Buffer.from(data.pdfBase64, 'base64');
 
     await Promise.all([
-      // Manager
       sgMail.send({
         to: MANAGER_EMAIL,
         from: { email: FROM_EMAIL, name: FROM_NAME },
@@ -656,7 +791,6 @@ exports.uploadOfficialInvoice = onCall({
         }]
       }),
 
-      // Contabilidad
       sgMail.send({
         to: ACCOUNTING_EMAIL,
         from: { email: FROM_EMAIL, name: FROM_NAME },
@@ -678,7 +812,6 @@ exports.uploadOfficialInvoice = onCall({
         }]
       }),
 
-      // Confirmación guía
       sgMail.send({
         to: invoice.guideEmail,
         from: { email: FROM_EMAIL, name: FROM_NAME },
@@ -720,14 +853,13 @@ exports.uploadOfficialInvoice = onCall({
 });
 
 // =========================================
-// FUNCTION: checkUploadDeadlines (NEW)
-// Daily check for expired upload deadlines
+// FUNCTION: checkUploadDeadlines
 // =========================================
 exports.checkUploadDeadlines = onSchedule({
   schedule: '0 9 * * *',
-  timeZone: 'UTC',
+  timeZone: 'Europe/Madrid',
   secrets: [sendgridKey]
-}, async (event) => {
+}, async () => {
   logger.info('Verificando deadlines de subida de facturas');
 
   try {
@@ -765,7 +897,6 @@ exports.checkUploadDeadlines = onSchedule({
 
     await batch.commit();
 
-    // Email manager con resumen
     if (notifications.length > 0) {
       const listHtml = notifications.map(n =>
         `<li><strong>${n.guideName}</strong> - Mes: ${n.month} 
@@ -800,26 +931,26 @@ exports.checkUploadDeadlines = onSchedule({
 });
 
 // =========================================
-// FUNCTION: registerVendorCost (UNCHANGED)
+// FUNCTION: registerVendorCost (UNCHANGED lógica)
 // =========================================
 exports.registerVendorCost = onCall(async (request) => {
   const { data, auth } = request;
-  
+
   if (!auth || auth.token.role !== 'guide') {
     throw new HttpsError('unauthenticated', 'Must be authenticated guide');
   }
-  
+
   const guideId = auth.token.guideId;
   const db = getFirestore();
-  
+
   if (!data.shiftId || !data.numPax || !Array.isArray(data.vendors) || data.vendors.length === 0) {
     throw new HttpsError('invalid-argument', 'Missing required fields');
   }
-  
+
   if (data.numPax < 1 || data.numPax > 20) {
     throw new HttpsError('invalid-argument', 'numPax must be between 1 and 20');
   }
-  
+
   try {
     const shiftSnap = await db
       .collection('guides')
@@ -827,57 +958,57 @@ exports.registerVendorCost = onCall(async (request) => {
       .collection('shifts')
       .doc(data.shiftId)
       .get();
-    
+
     if (!shiftSnap.exists) {
       throw new HttpsError('not-found', 'Shift not found');
     }
-    
+
     const shift = shiftSnap.data();
-    
+
     if (shift.estado !== 'ASIGNADO') {
       throw new HttpsError('failed-precondition', 'Shift not assigned');
     }
-    
+
     const shiftDate = new Date(shift.fecha);
     const today = new Date();
     const diffDays = Math.floor((today - shiftDate) / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays > 7) {
       throw new HttpsError('failed-precondition', 'Cannot register vendor costs older than 7 days');
     }
-    
+
     const existingSnap = await db
       .collection('vendor_costs')
       .where('shiftId', '==', data.shiftId)
       .where('guideId', '==', guideId)
       .limit(1)
       .get();
-    
+
     if (!existingSnap.empty) {
       throw new HttpsError('already-exists', 'Vendor cost already registered for this shift');
     }
-    
+
     const vendorIds = data.vendors.map(v => v.vendorId);
     const vendorsSnap = await db
       .collection('vendors')
       .where('__name__', 'in', vendorIds)
       .get();
-    
+
     if (vendorsSnap.size !== vendorIds.length) {
       throw new HttpsError('not-found', 'One or more vendors not found');
     }
-    
+
     const inactiveVendor = vendorsSnap.docs.find(doc => doc.data().estado !== 'activo');
     if (inactiveVendor) {
       throw new HttpsError('failed-precondition', `Vendor ${inactiveVendor.data().nombre} is inactive`);
     }
-    
+
     const guideSnap = await db.collection('guides').doc(guideId).get();
     const guide = guideSnap.data();
-    
+
     const salarioCalculado = await calculateSalary(data.numPax);
     const totalVendors = data.vendors.reduce((sum, v) => sum + v.importe, 0);
-    
+
     const vendorCostRef = await db.collection('vendor_costs').add({
       shiftId: data.shiftId,
       guideId,
@@ -899,7 +1030,7 @@ exports.registerVendorCost = onCall(async (request) => {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
     });
-    
+
     logger.info('Vendor cost registered', {
       vendorCostId: vendorCostRef.id,
       guideId,
@@ -907,24 +1038,24 @@ exports.registerVendorCost = onCall(async (request) => {
       numPax: data.numPax,
       salarioCalculado
     });
-    
+
     return {
       success: true,
       vendorCostId: vendorCostRef.id,
       salarioCalculado
     };
-    
+
   } catch (error) {
     logger.error('Error registering vendor cost', {
       guideId,
       shiftId: data.shiftId,
       error: error.message
     });
-    
+
     if (error instanceof HttpsError) {
       throw error;
     }
-    
+
     throw new HttpsError('internal', 'Failed to register vendor cost');
   }
 });
@@ -934,26 +1065,26 @@ exports.registerVendorCost = onCall(async (request) => {
 // =========================================
 exports.calculateSalaryPreview = onCall(async (request) => {
   const { data, auth } = request;
-  
+
   if (!auth) {
     throw new HttpsError('unauthenticated', 'Must be authenticated');
   }
-  
+
   if (!data.numPax || data.numPax < 1 || data.numPax > 20) {
     throw new HttpsError('invalid-argument', 'numPax must be between 1 and 20');
   }
-  
+
   try {
     const salario = await calculateSalary(data.numPax);
-    
+
     return {
       salario,
       numPax: data.numPax
     };
   } catch (error) {
-    logger.error('Error calculating salary preview', { 
-      numPax: data.numPax, 
-      error: error.message 
+    logger.error('Error calculating salary preview', {
+      numPax: data.numPax,
+      error: error.message
     });
     throw new HttpsError('internal', 'Failed to calculate salary');
   }

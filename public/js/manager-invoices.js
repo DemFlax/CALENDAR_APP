@@ -8,7 +8,8 @@ import {
   doc,
   updateDoc,
   getDocs,
-  serverTimestamp
+  serverTimestamp,
+  deleteField
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js';
@@ -21,7 +22,8 @@ if (localStorage.getItem('darkMode') === 'enabled') {
 
 darkModeToggle?.addEventListener('click', () => {
   document.documentElement.classList.toggle('dark');
-  localStorage.setItem('darkMode', 
+  localStorage.setItem(
+    'darkMode',
     document.documentElement.classList.contains('dark') ? 'enabled' : 'disabled'
   );
 });
@@ -66,8 +68,17 @@ const i18n = {
     toastSaved: 'Cambios guardados correctamente',
     toastSent: 'Reporte enviado al guía correctamente',
     toastError: 'Error al procesar',
-    confirmSend: '¿Enviar este reporte al guía? Se le notificará por email para revisión y aprobación.',
-    confirmDelete: '¿Eliminar esta línea?'
+    confirmSend:
+      '¿Enviar este reporte al guía? Se le notificará por email para revisión y aprobación.',
+    confirmDelete: '¿Eliminar esta línea?',
+    // Nuevos textos generación manual
+    generatePrevMonthBtn: 'Generar reportes mes anterior',
+    generatingPrevMonth: 'Generando reportes...',
+    confirmGeneratePrevMonth:
+      'Se generarán los reportes del mes anterior a partir de los costes de vendor. ¿Continuar?',
+    toastGenerateSuccess:
+      'Se han generado {count} reportes para el mes {month}.',
+    toastGenerateNone: 'No se han generado nuevos reportes para {month}.'
   },
   en: {
     logout: 'Logout',
@@ -107,19 +118,33 @@ const i18n = {
     toastSaved: 'Changes saved successfully',
     toastSent: 'Report sent to guide successfully',
     toastError: 'Error processing',
-    confirmSend: 'Send this report to guide? They will be notified by email for review and approval.',
-    confirmDelete: 'Delete this line?'
+    confirmSend:
+      'Send this report to guide? They will be notified by email for review and approval.',
+    confirmDelete: 'Delete this line?',
+    // New texts manual generation
+    generatePrevMonthBtn: 'Generate previous month reports',
+    generatingPrevMonth: 'Generating reports...',
+    confirmGeneratePrevMonth:
+      'This will generate reports for the previous month from vendor costs. Continue?',
+    toastGenerateSuccess:
+      '{count} report(s) generated for month {month}.',
+    toastGenerateNone: 'No new reports were generated for {month}.'
   }
 };
 
 let lang = localStorage.getItem('lang') || 'es';
-function t(key) { return i18n[lang][key] || key; }
+function t(key) {
+  return i18n[lang][key] || key;
+}
 
 let currentUser = null;
 let invoicesUnsubscribe = null;
 let allInvoices = [];
 let currentInvoice = null;
 let allGuides = [];
+
+// Functions (Cloud Functions)
+const functions = getFunctions(undefined, 'us-central1');
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
@@ -140,6 +165,7 @@ onAuthStateChanged(auth, async (user) => {
   updateUILanguage();
   initLanguageToggle();
   initFilters();
+  initGenerateInvoicesButton();
   loadInvoices();
 });
 
@@ -156,6 +182,11 @@ function updateUILanguage() {
   `;
   
   document.getElementById('logout-btn').textContent = t('logout');
+
+  const generateBtn = document.getElementById('generate-invoices-btn');
+  if (generateBtn) {
+    generateBtn.textContent = t('generatePrevMonthBtn');
+  }
 }
 
 function initLanguageToggle() {
@@ -180,8 +211,8 @@ async function loadGuides() {
   const snapshot = await getDocs(guidesQuery);
   
   allGuides = [];
-  snapshot.forEach(doc => {
-    allGuides.push({ id: doc.id, ...doc.data() });
+  snapshot.forEach(docSnap => {
+    allGuides.push({ id: docSnap.id, ...docSnap.data() });
   });
   
   const guideFilter = document.getElementById('guide-filter');
@@ -207,8 +238,8 @@ function loadInvoices() {
 
   invoicesUnsubscribe = onSnapshot(invoicesQuery, (snapshot) => {
     allInvoices = [];
-    snapshot.forEach(doc => {
-      allInvoices.push({ id: doc.id, ...doc.data() });
+    snapshot.forEach(docSnap => {
+      allInvoices.push({ id: docSnap.id, ...docSnap.data() });
     });
     renderInvoices();
   });
@@ -241,27 +272,27 @@ function renderInvoices() {
 
   container.innerHTML = filtered.map(inv => {
     const statusConfig = {
-      'MANAGER_REVIEW': { 
+      MANAGER_REVIEW: { 
         class: 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200', 
         text: t('statusManagerReview')
       },
-      'PENDING_GUIDE_APPROVAL': { 
+      PENDING_GUIDE_APPROVAL: { 
         class: 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200', 
         text: t('statusPendingGuideApproval')
       },
-      'WAITING_INVOICE_UPLOAD': { 
+      WAITING_INVOICE_UPLOAD: { 
         class: 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200', 
         text: t('statusWaitingUpload')
       },
-      'UPLOAD_OVERDUE': { 
+      UPLOAD_OVERDUE: { 
         class: 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200', 
         text: t('statusUploadOverdue')
       },
-      'APPROVED': { 
+      APPROVED: { 
         class: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200', 
         text: t('statusApproved')
       },
-      'REJECTED': { 
+      REJECTED: { 
         class: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200', 
         text: t('statusRejected')
       }
@@ -272,6 +303,8 @@ function renderInvoices() {
       text: inv.status 
     };
 
+    const totalNet = inv.totalSalary || 0;
+
     return `
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 hover:shadow-md transition-shadow">
         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
@@ -281,7 +314,7 @@ function renderInvoices() {
               <span class="px-3 py-1 rounded-full text-xs font-semibold ${status.class}">${status.text}</span>
             </div>
             <p class="text-sm text-gray-600 dark:text-gray-400">${inv.month} · ${inv.tours.length} ${t('tours')}</p>
-            <p class="text-2xl font-bold text-sky-600 dark:text-sky-400 mt-2">${(inv.totalSalary || 0).toFixed(2)}€</p>
+            <p class="text-2xl font-bold text-sky-600 dark:text-sky-400 mt-2">${totalNet.toFixed(2)}€</p>
             ${inv.status === 'UPLOAD_OVERDUE' && inv.uploadDeadline ? `
               <p class="text-xs text-orange-600 dark:text-orange-400 mt-1">
                 ${t('overdueLabel')} ${new Date(inv.uploadDeadline.toDate()).toLocaleString(lang === 'es' ? 'es-ES' : 'en-US')}
@@ -309,9 +342,9 @@ window.openEditModal = async function(invoiceId) {
   renderToursTable();
   updateModalTotal();
 
-  // Mostrar comentarios rechazo si REJECTED
+  // Comentarios rechazo si REJECTED
   const commentsSection = document.getElementById('guide-comments-section');
-  const commentsTitle = document.getElementById('guide-comments-section').querySelector('h4');
+  const commentsTitle = commentsSection.querySelector('h4');
   if (commentsTitle) {
     commentsTitle.textContent = t('rejectionTitle');
   }
@@ -323,7 +356,7 @@ window.openEditModal = async function(invoiceId) {
     commentsSection.classList.add('hidden');
   }
 
-  // Actualizar botones
+  // Botones
   const saveBtn = document.getElementById('save-btn');
   saveBtn.textContent = t('saveBtn');
 
@@ -402,8 +435,8 @@ window.updateTourField = function(index, field, value) {
 window.deleteTour = function(index) {
   if (!confirm(t('confirmDelete'))) return;
   currentInvoice.tours.splice(index, 1);
-  renderToursTable();
   updateModalTotal();
+  renderToursTable();
 };
 
 document.getElementById('add-extra-line').addEventListener('click', () => {
@@ -415,6 +448,7 @@ document.getElementById('add-extra-line').addEventListener('click', () => {
     salario: 0,
     isExtra: true
   });
+  updateModalTotal();
   renderToursTable();
 });
 
@@ -433,14 +467,16 @@ document.getElementById('save-btn').addEventListener('click', async () => {
   saveBtn.textContent = t('saving');
 
   try {
-    const baseImponible = currentInvoice.totalSalary / 1.21;
-    const iva = baseImponible * 0.21;
+    // Recalcular total neto antes de guardar
+    currentInvoice.totalSalary = currentInvoice.tours.reduce((sum, tour) => {
+      return sum + (tour.salario || tour.salarioCalculado || 0);
+    }, 0);
 
     await updateDoc(doc(db, 'guide_invoices', currentInvoice.id), {
       tours: currentInvoice.tours,
       totalSalary: currentInvoice.totalSalary,
-      baseImponible: parseFloat(baseImponible.toFixed(2)),
-      iva: parseFloat(iva.toFixed(2)),
+      baseImponible: deleteField(),
+      iva: deleteField(),
       editedByManager: true,
       managerEditedAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -464,7 +500,6 @@ document.getElementById('send-to-guide-btn').addEventListener('click', async () 
   sendBtn.textContent = t('sending');
 
   try {
-    const functions = getFunctions(undefined, 'us-central1');
     const managerSendToGuide = httpsCallable(functions, 'managerSendToGuide');
 
     await managerSendToGuide({
@@ -490,10 +525,77 @@ document.getElementById('close-modal').addEventListener('click', () => {
   currentInvoice = null;
 });
 
+// ================================
+// Generación manual reportes mes anterior
+// ================================
+function getPreviousMonthString() {
+  const now = new Date();
+  let year = now.getUTCFullYear();
+  let monthIndex = now.getUTCMonth() - 1; // mes anterior
+
+  if (monthIndex < 0) {
+    monthIndex = 11;
+    year -= 1;
+  }
+
+  const month = String(monthIndex + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+function initGenerateInvoicesButton() {
+  const generateBtn = document.getElementById('generate-invoices-btn');
+  if (!generateBtn) return;
+
+  generateBtn.addEventListener('click', async () => {
+    if (!confirm(t('confirmGeneratePrevMonth'))) return;
+
+    generateBtn.disabled = true;
+    const originalText = generateBtn.textContent;
+    generateBtn.textContent = t('generatingPrevMonth');
+
+    try {
+      const targetMonth = getPreviousMonthString();
+      const manualGenerate = httpsCallable(functions, 'manualGenerateGuideInvoices');
+      const result = await manualGenerate({ month: targetMonth });
+      const data = result.data || {};
+
+      const invoiceMonth = data.invoiceMonth || targetMonth;
+      const generated = data.generated || 0;
+
+      if (generated > 0) {
+        const msg = t('toastGenerateSuccess')
+          .replace('{month}', invoiceMonth)
+          .replace('{count}', generated);
+        showToast(msg, 'success');
+
+        const monthFilter = document.getElementById('month-filter');
+        if (monthFilter) {
+          monthFilter.value = invoiceMonth;
+        }
+        renderInvoices();
+      } else {
+        const msg = t('toastGenerateNone').replace('{month}', invoiceMonth);
+        showToast(msg, 'info');
+      }
+    } catch (error) {
+      console.error('Error generating invoices:', error);
+      showToast(t('toastError') + ': ' + (error.message || ''), 'error');
+    } finally {
+      generateBtn.disabled = false;
+      generateBtn.textContent = t('generatePrevMonthBtn');
+    }
+  });
+}
+
 function showToast(message, type) {
   const toast = document.getElementById('toast');
   toast.textContent = message;
-  const typeClass = type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-blue-600';
+  const typeClass =
+    type === 'success'
+      ? 'bg-green-600'
+      : type === 'error'
+      ? 'bg-red-600'
+      : 'bg-blue-600';
   toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 ${typeClass}`;
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3000);

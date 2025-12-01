@@ -45,10 +45,10 @@ const i18n = {
     slotCol: 'Turno',
     tourCol: 'Tour',
     paxCol: 'PAX',
-    salaryCol: 'Salario',
-    baseLabel: 'Base Imponible',
-    ivaLabel: 'IVA (21%)',
-    totalLabel: 'TOTAL',
+    salaryCol: 'Salario (sin IVA)',
+    baseLabel: 'Total (sin IVA)',
+    ivaLabel: '',
+    totalLabel: 'TOTAL (sin IVA)',
     approveBtn: 'Aprobar Reporte',
     rejectBtn: 'Rechazar Reporte',
     waitingLabel: 'Reporte aprobado - Pendiente factura oficial',
@@ -111,10 +111,10 @@ const i18n = {
     slotCol: 'Shift',
     tourCol: 'Tour',
     paxCol: 'PAX',
-    salaryCol: 'Salary',
-    baseLabel: 'Base Amount',
-    ivaLabel: 'VAT (21%)',
-    totalLabel: 'TOTAL',
+    salaryCol: 'Salary (excl. VAT)',
+    baseLabel: 'Total (excl. VAT)',
+    ivaLabel: '',
+    totalLabel: 'TOTAL (excl. VAT)',
     approveBtn: 'Approve Report',
     rejectBtn: 'Reject Report',
     waitingLabel: 'Report approved - Pending official invoice',
@@ -178,22 +178,15 @@ let currentInvoice = null;
 function extractDriveFileId(urlOrId) {
   if (!urlOrId) return null;
   
-  // Si ya es solo un ID (alfanumérico con guiones/underscores)
   if (/^[a-zA-Z0-9_-]+$/.test(urlOrId) && urlOrId.length > 20) {
     return urlOrId;
   }
   
-  // Extraer de URL completa: https://drive.google.com/file/d/FILE_ID/view
   const match = urlOrId.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (match) {
-    return match[1];
-  }
+  if (match) return match[1];
   
-  // Extraer de URL directa: https://drive.google.com/uc?export=view&id=FILE_ID
   const directMatch = urlOrId.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (directMatch) {
-    return directMatch[1];
-  }
+  if (directMatch) return directMatch[1];
   
   return null;
 }
@@ -326,28 +319,33 @@ function renderInvoices(snapshot, containerId, section) {
   const container = document.getElementById(containerId);
 
   if (snapshot.empty) {
-    const emptyMsg = section === 'pending' ? t('noPending') : 
+    const emptyMsg = section === 'pending' ? t('noPending') :
                      section === 'waiting' ? t('noWaiting') : t('noHistory');
     container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">${emptyMsg}</p>`;
     return;
   }
 
   const invoices = [];
-  snapshot.forEach(doc => invoices.push({ id: doc.id, ...doc.data() }));
+  snapshot.forEach(docSnap => invoices.push({ id: docSnap.id, ...docSnap.data() }));
 
   container.innerHTML = invoices.map(inv => {
     const [year, month] = inv.month.split('-');
-    const monthName = monthNames[lang][parseInt(month) - 1];
-    
+    const monthName = monthNames[lang][parseInt(month, 10) - 1];
+
     const statusConfig = {
-      'PENDING_GUIDE_APPROVAL': { class: 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200', text: t('statusPending') },
-      'WAITING_INVOICE_UPLOAD': { class: 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200', text: t('statusWaiting') },
-      'UPLOAD_OVERDUE': { class: 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200', text: t('statusOverdue') },
-      'APPROVED': { class: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200', text: t('statusApproved') },
-      'REJECTED': { class: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200', text: t('statusRejected') }
+      PENDING_GUIDE_APPROVAL: { class: 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200', text: t('statusPending') },
+      WAITING_INVOICE_UPLOAD: { class: 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200', text: t('statusWaiting') },
+      UPLOAD_OVERDUE: { class: 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200', text: t('statusOverdue') },
+      APPROVED: { class: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200', text: t('statusApproved') },
+      REJECTED: { class: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200', text: t('statusRejected') }
     };
 
-    const status = statusConfig[inv.status] || { class: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200', text: inv.status };
+    const status = statusConfig[inv.status] || {
+      class: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
+      text: inv.status
+    };
+
+    const total = inv.totalSalary || 0;
 
     return `
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 hover:shadow-md transition-shadow cursor-pointer"
@@ -356,7 +354,7 @@ function renderInvoices(snapshot, containerId, section) {
           <div>
             <h3 class="text-lg font-semibold dark:text-white">${monthName} ${year}</h3>
             <p class="text-sm text-gray-600 dark:text-gray-400">${inv.tours.length} tours</p>
-            <p class="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">${(inv.totalSalary || 0).toFixed(2)}€</p>
+            <p class="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">${total.toFixed(2)}€</p>
           </div>
           <div class="flex flex-col items-start sm:items-end gap-2">
             <span class="px-3 py-1 rounded-full text-xs font-semibold ${status.class}">${status.text}</span>
@@ -386,7 +384,7 @@ function openInvoiceModal(invoice) {
   document.getElementById('modal-guide-email').textContent = invoice.guideEmail;
 
   const [year, month] = invoice.month.split('-');
-  const monthName = monthNames[lang][parseInt(month) - 1];
+  const monthName = monthNames[lang][parseInt(month, 10) - 1];
   document.getElementById('modal-month').textContent = `${t('month')}: ${monthName} ${year}`;
 
   const tbody = document.getElementById('modal-tours-body');
@@ -409,14 +407,12 @@ function openInvoiceModal(invoice) {
     `;
   }).join('');
 
-  // Desglose
-  const baseImponible = invoice.baseImponible || (invoice.totalSalary / 1.21);
-  const iva = invoice.iva || (baseImponible * 0.21);
-  document.getElementById('modal-base').textContent = `${baseImponible.toFixed(2)}€`;
-  document.getElementById('modal-iva').textContent = `${iva.toFixed(2)}€`;
-  document.getElementById('modal-total').textContent = `${(invoice.totalSalary || 0).toFixed(2)}€`;
+  // Desglose en neto (ya viene neto de Firestore)
+  const total = invoice.totalSalary || 0;
+  document.getElementById('modal-base').textContent = `${total.toFixed(2)}€`;
+  document.getElementById('modal-iva').textContent = '';
+  document.getElementById('modal-total').textContent = `${total.toFixed(2)}€`;
 
-  // Secciones según estado
   const approvalSection = document.getElementById('approval-section');
   const waitingSection = document.getElementById('waiting-upload-section');
   const approvedInfo = document.getElementById('approved-info');
@@ -433,26 +429,24 @@ function openInvoiceModal(invoice) {
     waitingSection.classList.remove('hidden');
     if (invoice.uploadDeadline) {
       const deadline = invoice.uploadDeadline.toDate();
-      document.getElementById('upload-deadline-text').textContent = `${t('uploadDeadlineText')}: ${deadline.toLocaleString(locale)}`;
+      document.getElementById('upload-deadline-text').textContent =
+        `${t('uploadDeadlineText')}: ${deadline.toLocaleString(locale)}`;
     }
   } else if (invoice.status === 'APPROVED') {
     approvedInfo.classList.remove('hidden');
-    document.getElementById('approved-number').textContent = `${t('invoiceNumber')}: ${invoice.invoiceNumber || '-'}`;
-    
+    document.getElementById('approved-number').textContent =
+      `${t('invoiceNumber')}: ${invoice.invoiceNumber || '-'}`;
+
     if (invoice.uploadedAt) {
       const uploadedDate = invoice.uploadedAt.toDate();
-      document.getElementById('approved-date').textContent = `${t('approvedOn')}: ${uploadedDate.toLocaleDateString(locale)}`;
+      document.getElementById('approved-date').textContent =
+        `${t('approvedOn')}: ${uploadedDate.toLocaleDateString(locale)}`;
     }
 
-    // ============================================
-    // NUEVO: Manejo de PDF con validación Drive
-    // ============================================
     const driveLink = document.getElementById('download-pdf');
     const textSpan = document.getElementById('download-text');
     
-    // Verificar si PDF fue marcado como eliminado en Firestore
     if (invoice.pdfDeleted === true) {
-      // PDF eliminado (flag en Firestore)
       driveLink.href = '#';
       driveLink.classList.add('pointer-events-none', 'opacity-50', 'cursor-not-allowed');
       driveLink.classList.remove('hover:underline');
@@ -467,12 +461,10 @@ function openInvoiceModal(invoice) {
         return false;
       };
     } else {
-      // Intentar obtener fileId de múltiples campos posibles
       const rawUrl = invoice.invoiceFileUrl || invoice.officialInvoicePdfUrl || invoice.pdfDriveId;
       const fileId = extractDriveFileId(rawUrl);
       
       if (fileId) {
-        // PDF existe → Comportamiento normal
         const driveUrl = buildDriveViewUrl(fileId);
         driveLink.href = driveUrl;
         driveLink.classList.remove('pointer-events-none', 'opacity-50', 'cursor-not-allowed');
@@ -483,9 +475,7 @@ function openInvoiceModal(invoice) {
         textSpan.classList.add('text-blue-600', 'dark:text-blue-400');
         
         driveLink.onclick = null;
-        
       } else {
-        // Sin fileId válido → Factura eliminada
         driveLink.href = '#';
         driveLink.classList.add('pointer-events-none', 'opacity-50', 'cursor-not-allowed');
         driveLink.classList.remove('hover:underline');
@@ -501,10 +491,10 @@ function openInvoiceModal(invoice) {
         };
       }
     }
-    
   } else if (invoice.status === 'REJECTED') {
     rejectedInfo.classList.remove('hidden');
-    document.getElementById('rejection-comments').textContent = invoice.rejectionComments || '-';
+    document.getElementById('rejection-comments').textContent =
+      invoice.rejectionComments || '-';
   }
 
   modal.classList.remove('hidden');
@@ -526,15 +516,14 @@ document.getElementById('approve-btn').addEventListener('click', async () => {
   showToast(t('toastApproving'), 'info');
 
   try {
-    const functions = getFunctions(undefined, 'us-central1');
-    const guideApproveReport = httpsCallable(functions, 'guideApproveReport');
+    const functionsInstance = getFunctions(undefined, 'us-central1');
+    const guideApproveReport = httpsCallable(functionsInstance, 'guideApproveReport');
 
     await guideApproveReport({ invoiceId: currentInvoice.id });
 
     showToast(t('toastApproved'), 'success');
     document.getElementById('invoice-modal').classList.add('hidden');
     
-    // Recargar para ver en sección "Esperando"
     setTimeout(() => {
       const waitingInvoice = { ...currentInvoice, status: 'WAITING_INVOICE_UPLOAD' };
       currentInvoice = waitingInvoice;
@@ -573,12 +562,12 @@ document.getElementById('confirm-reject-btn').addEventListener('click', async ()
   confirmBtn.textContent = t('toastRejecting');
 
   try {
-    const functions = getFunctions(undefined, 'us-central1');
-    const guideRejectReport = httpsCallable(functions, 'guideRejectReport');
+    const functionsInstance = getFunctions(undefined, 'us-central1');
+    const guideRejectReport = httpsCallable(functionsInstance, 'guideRejectReport');
 
     await guideRejectReport({
       invoiceId: currentInvoice.id,
-      rejectionComments: comments
+      comments: comments
     });
 
     showToast(t('toastRejected'), 'success');
@@ -639,8 +628,8 @@ document.getElementById('confirm-upload-btn').addEventListener('click', async ()
       reader.readAsDataURL(pdfFile);
     });
 
-    const functions = getFunctions(undefined, 'us-central1');
-    const uploadOfficialInvoice = httpsCallable(functions, 'uploadOfficialInvoice');
+    const functionsInstance = getFunctions(undefined, 'us-central1');
+    const uploadOfficialInvoice = httpsCallable(functionsInstance, 'uploadOfficialInvoice');
 
     await uploadOfficialInvoice({
       invoiceId: currentInvoice.id,
