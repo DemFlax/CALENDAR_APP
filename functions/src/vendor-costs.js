@@ -1379,3 +1379,137 @@ async function deleteFromGoogleDrive(fileId) {
   }
 }
 
+
+// =========================================
+// SCHEDULED JOB: Check Missing Costs (48h delay)
+// =========================================
+// Runs daily at 09:00 Madrid time
+// Checks tours from 48 hours ago. If no costs registered, sends email.
+exports.checkMissingCosts = onSchedule({
+  schedule: '0 9 * * *',
+  timeZone: 'Europe/Madrid',
+  secrets: [sendgridKey, appsScriptUrl]
+}, async (event) => {
+  const DRY_RUN = false; // ENABLED REAL EMAILS
+  const db = getFirestore();
+  const logger = require('firebase-functions').logger;
+
+  logger.info('>>> START checkMissingCosts', { dryRun: DRY_RUN });
+
+  try {
+    // 1. Calculate Target Date (Today - 48h)
+    const today = new Date(); // UTC
+    // Restar 2 días (48h)
+    const targetDateObj = new Date(today);
+    targetDateObj.setDate(today.getDate() - 2);
+
+    // Format YYYY-MM-DD
+    const targetDate = targetDateObj.toISOString().split('T')[0];
+    logger.info(`Checking missing costs for date: ${targetDate}`);
+
+    // 2. Fetch Assigned Tours from Apps Script
+    const APPS_SCRIPT_URL = appsScriptUrl.value();
+    if (!APPS_SCRIPT_URL) throw new Error('APPS_SCRIPT_URL not configured');
+
+    const toursResponse = await fetch(`${APPS_SCRIPT_URL}?endpoint=getAssignedTours&startDate=${targetDate}&endDate=${targetDate}&apiKey=${process.env.API_KEY || 'sfs-calendar-2024-secure-key'}`);
+
+    if (!toursResponse.ok) {
+      throw new Error(`Apps Script Error: ${toursResponse.statusText}`);
+    }
+
+    const toursData = await toursResponse.json();
+    const tours = toursData.assignments || [];
+
+    logger.info(`Found ${tours.length} assigned tours for ${targetDate}`);
+
+    // 3. Check Firestore for each tour
+    const missingReports = [];
+
+    // Cache guide IDs to avoid repetitive queries
+    const guideEmailToIdMap = {};
+
+    for (const tour of tours) {
+      // Skip invalid emails/system users
+      if (!tour.guideEmail || tour.guideEmail.includes('tripadvisor') || tour.guideEmail.includes('viator')) {
+        continue;
+      }
+
+      // Get Guide ID
+      let guideId = guideEmailToIdMap[tour.guideEmail];
+      if (!guideId) {
+        const guideQuery = await db.collection('guides').where('email', '==', tour.guideEmail).limit(1).get();
+        if (!guideQuery.empty) {
+          guideId = guideQuery.docs[0].id;
+          guideEmailToIdMap[tour.guideEmail] = guideId;
+        } else {
+          logger.warn(`Guide not found in DB for email: ${tour.guideEmail}`);
+          continue;
+        }
+      }
+
+      // Check if costs exist for this specific tour (ShiftID usually Date + Slot)
+      const costsQuery = await db.collection('vendor_costs')
+        .where('fecha', '==', targetDate)
+        .where('slot', '==', tour.slot)
+        .where('guideId', '==', guideId)
+        .limit(1)
+        .get();
+
+      if (costsQuery.empty) {
+        logger.info(`MISSING COST: ${tour.guideName} - ${tour.tourName} (${tour.slot})`);
+        missingReports.push({
+          guideName: tour.guideName,
+          guideEmail: tour.guideEmail,
+          tourName: tour.tourName,
+          date: targetDate,
+          slot: tour.slot
+        });
+      }
+    }
+
+    logger.info(`Total missing reports: ${missingReports.length}`);
+
+    // 4. Send Emails (or Log)
+    if (missingReports.length > 0) {
+      sgMail.setApiKey(sendgridKey.value());
+
+      for (const report of missingReports) {
+        if (DRY_RUN) {
+          logger.info(`[DRY RUN] Would send email to ${report.guideEmail} for ${report.tourName}`);
+          continue;
+        }
+
+        try {
+          await sgMail.send({
+            to: report.guideEmail,
+            from: { email: FROM_EMAIL, name: FROM_NAME },
+            subject: `⚠️ Falta registro de costes: ${report.tourName} (${report.date})`,
+            html: getEmailTemplate(`
+                        <h2>Recordatorio de Costes Pendientes</h2>
+                        <p>Hola <strong>${report.guideName}</strong>,</p>
+                        <p>Hemos detectado que no has registrado los costes (tickets) del siguiente tour realizado hace 48 horas:</p>
+                        
+                        <div class="alert">
+                            <strong>📅 Fecha:</strong> ${report.date}<br>
+                            <strong>⏰ Slot:</strong> ${report.slot}<br>
+                            <strong>🚩 Tour:</strong> ${report.tourName}
+                        </div>
+
+                        <p>Por favor, accede a la aplicación y registra los costes lo antes posible para evitar retrasos en la facturación.</p>
+                        <p><a href="${APP_URL}" class="button">Ir a la App</a></p>
+                    `)
+          });
+          logger.info(`Email sent to ${report.guideEmail}`);
+        } catch (err) {
+          logger.error(`Failed to send email to ${report.guideEmail}`, { error: err.message });
+        }
+      }
+    }
+
+    logger.info('<<< END checkMissingCosts');
+
+  } catch (error) {
+    logger.error('Error in checkMissingCosts', { error: error.message });
+  }
+});
+
