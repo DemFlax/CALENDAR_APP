@@ -700,6 +700,10 @@ exports.guideRejectReport = vendorCosts.guideRejectReport;
 exports.uploadOfficialInvoice = vendorCosts.uploadOfficialInvoice;
 exports.checkUploadDeadlines = vendorCosts.checkUploadDeadlines;
 exports.manualGenerateGuideInvoices = vendorCosts.manualGenerateGuideInvoices;
+exports.migrateVendorCostsToNet  = vendorCosts.migrateVendorCostsToNet;
+exports.managerApproveInvoice = vendorCosts.managerApproveInvoice;
+exports.managerRejectInvoice = vendorCosts.managerRejectInvoice;
+
 
 
 // =========================================

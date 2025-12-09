@@ -99,7 +99,15 @@ service cloud.firestore {
             ])
         )
         ||
-        isManager();
+        (
+          isManager() &&
+          (
+            resource.data.status == 'MANAGER_REVIEW' ||
+            resource.data.status == 'REJECTED' ||
+            resource.data.status == 'PENDING_GUIDE_APPROVAL' ||
+            resource.data.status == 'PENDING_MANAGER_VERIFICATION'
+          )
+        );
     }
 
     

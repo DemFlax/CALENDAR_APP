@@ -34,7 +34,7 @@ const crypto = require("crypto");
 // =========================================
 const sendgridKey = defineSecret("SENDGRID_API_KEY");
 
-// URL Webhook Make (26/12/2025)
+// URL Webhook Make
 const MAKE_WEBHOOK_URL =
   "https://hook.eu1.make.com/5rnftpqpqymx3o5i3g99c4ql4h6w3vv1";
 
@@ -59,7 +59,7 @@ const MAX_REQUESTS_PER_SECOND = 1.5;
 const TARDE_SLOTS = ["T1", "T2"];
 
 // =========================================
- // WORKER FUNCTION
+// WORKER FUNCTION
 // =========================================
 exports.bookeoWebhookWorker = onTaskDispatched(
   {
@@ -115,7 +115,7 @@ exports.bookeoWebhookWorker = onTaskDispatched(
         let blockId =
           responseData.blockId || responseData.id || responseData.bookeoId;
 
-        // LÓGICA CORREGIDA: Filtrar "Accepted" / "OK" / "success"
+        // Filtrar respuestas genéricas tipo "Accepted"/"OK"/"success"
         if (!blockId && typeof responseData === "string" && responseData.length > 1) {
           const text = responseData.trim();
           if (
@@ -179,7 +179,9 @@ exports.bookeoWebhookWorker = onTaskDispatched(
           .collection("bookeo_blocks")
           .doc(shiftId)
           .update(updateData);
-        logger.info("✅ Desbloqueo solicitado (pendiente de confirmación)", { shiftId });
+        logger.info("✅ Desbloqueo solicitado (pendiente de confirmación)", {
+          shiftId,
+        });
       }
 
       // Log auditoría
@@ -221,7 +223,6 @@ function mapStartTimeToSlot(startTime) {
     return "T2";
   }
 
-  // Si en el futuro hay más horas raras, preferimos fallar explícito
   return null;
 }
 
@@ -255,13 +256,6 @@ function resolveShiftIdFromBody(body) {
 
 /**
  * Handler común para callbacks de Make/Bookeo.
- * Soporta:
- *  - Formato Pablo (actual):
- *      Bloqueo:
- *        {"blockId":"...","date":"YYYY/MM/DD","startTime":"HH:MM","fecha":"..."}
- *      Desbloqueo:
- *        {"desbloqueo":"success","date":"YYYY/MM/DD","startTime":"HH:MM","fecha":"...","blockId":"..."}
- *  - Formato futuro con shiftId: se le da prioridad si viene.
  */
 async function handleMakeCallback(req, res) {
   if (req.method !== "POST") {
@@ -272,6 +266,23 @@ async function handleMakeCallback(req, res) {
 
   const body = req.body || {};
   logger.info("Callback Make recibido", { body });
+
+  // Callbacks realmente vacíos → se ignoran pero responden 200
+  const hasShiftId = !!body.shiftId;
+  const hasDate = !!body.date;
+  const hasStartTime = !!body.startTime;
+
+  if (!hasShiftId && !hasDate && !hasStartTime) {
+    logger.warn(
+      "Callback Make vacío sin shiftId/date/startTime. Se ignora pero se responde 200.",
+      { body }
+    );
+    return res.status(200).json({
+      success: true,
+      ignored: true,
+      reason: "Empty callback without shiftId/date/startTime",
+    });
+  }
 
   const db = getFirestore();
 
@@ -345,8 +356,7 @@ async function handleMakeCallback(req, res) {
     // Auto-desbloqueo si el bloqueo llega tarde y ya hay guías libres
     if (!isDesbloqueo && blockId && existed) {
       const prevStatus = prev && prev.status ? String(prev.status) : "";
-      const isExternal =
-        prevStatus.startsWith("BLOCKED_EXTERNAL");
+      const isExternal = prevStatus.startsWith("BLOCKED_EXTERNAL");
 
       if (!isExternal) {
         const [fechaRaw, slot] = shiftId.split("_");

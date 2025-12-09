@@ -23,13 +23,13 @@ const fetch = require('node-fetch');
 
 // Secrets
 const sendgridKey = defineSecret('SENDGRID_API_KEY');
+const appsScriptUrl = defineSecret('APPS_SCRIPT_URL');
 
 // Config
 const MANAGER_EMAIL = process.env.MANAGER_EMAIL || 'madrid@spainfoodsherpas.com';
 const ACCOUNTING_EMAIL = process.env.ACCOUNTING_EMAIL || 'contabilidad@spainfoodsherpas.com';
 const FROM_EMAIL = 'madrid@spainfoodsherpas.com';
 const FROM_NAME = 'Spain Food Sherpas';
-const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
 const APP_URL = process.env.APP_URL || 'https://calendar-app-tours.web.app';
 
 // =========================================
@@ -67,6 +67,8 @@ async function calculateSalary(numPax) {
 // HELPER: Upload PDF to Drive via Apps Script
 // =========================================
 async function uploadToGoogleDrive(params) {
+  const APPS_SCRIPT_URL = appsScriptUrl.value();
+
   if (!APPS_SCRIPT_URL) {
     throw new Error('APPS_SCRIPT_URL not configured');
   }
@@ -339,24 +341,22 @@ async function generateGuideInvoicesForMonth(targetMonthDate, { notifyManager = 
       html: getEmailTemplate(`
         <h2>Resultados de la generación automática</h2>
         <p>Mes procesado: <strong>${invoiceMonth}</strong>.</p>
-        ${
-          generated > 0
-            ? `
+        ${generated > 0
+          ? `
           <p>Se crearon <strong>${generated}</strong> reporte(s):</p>
           <ul>${summaryList}</ul>
           <a href="${APP_URL}/manager-invoices.html" class="button">Abrir panel de manager</a>
         `
-            : '<p>No se generaron reportes nuevos.</p>'
+          : '<p>No se generaron reportes nuevos.</p>'
         }
-        ${
-          hasErrors
-            ? `
+        ${hasErrors
+          ? `
           <div class="alert">
             <strong>Incidencias:</strong>
             <ul>${errorList}</ul>
           </div>
         `
-            : ''
+          : ''
         }
       `)
     });
@@ -705,8 +705,7 @@ exports.guideRejectReport = onCall({
 // FUNCTION: uploadOfficialInvoice
 // =========================================
 exports.uploadOfficialInvoice = onCall({
-  cors: true,
-  secrets: [sendgridKey]
+  secrets: [sendgridKey, appsScriptUrl]
 }, async (request) => {
   const { data, auth } = request;
 
@@ -717,7 +716,7 @@ exports.uploadOfficialInvoice = onCall({
   const guideId = auth.token.guideId;
   const db = getFirestore();
 
-  if (!data.invoiceId || !data.invoiceNumber || !data.pdfBase64) {
+  if (!data.invoiceId || !data.pdfBase64) {
     throw new HttpsError('invalid-argument', 'Datos incompletos');
   }
 
@@ -745,9 +744,12 @@ exports.uploadOfficialInvoice = onCall({
       throw new HttpsError('invalid-argument', 'PDF mayor a 5MB');
     }
 
+    // Usar el número de factura si se proporciona, sino generar nombre basado en guía y mes
+    const invoiceNumber = data.invoiceNumber || `${invoice.guideName.replace(/\s+/g, '_')}_${invoice.month}`;
+
     logger.info('Subiendo factura a Drive', {
       invoiceId: data.invoiceId,
-      invoiceNumber: data.invoiceNumber,
+      invoiceNumber: invoiceNumber,
       pdfSize
     });
 
@@ -755,86 +757,63 @@ exports.uploadOfficialInvoice = onCall({
       guideId: invoice.guideId,
       guideName: invoice.guideName,
       month: invoice.month,
-      invoiceNumber: data.invoiceNumber.replace('/', '-'),
+      invoiceNumber: invoiceNumber.replace('/', '-'),
       pdfBase64: data.pdfBase64
     });
 
     logger.info('Factura subida a Drive', uploadResult);
 
-    await db.collection('guide_invoices').doc(data.invoiceId).update({
-      status: 'APPROVED',
+    const updateData = {
+      status: 'PENDING_MANAGER_VERIFICATION',
       officialInvoicePdfUrl: uploadResult.fileId,
-      officialInvoiceNumber: data.invoiceNumber,
       officialInvoiceUploadedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
-    });
+    };
+
+    // Solo guardar el número de factura si se proporcionó
+    if (data.invoiceNumber) {
+      updateData.officialInvoiceNumber = data.invoiceNumber;
+    }
+
+    await db.collection('guide_invoices').doc(data.invoiceId).update(updateData);
 
     sgMail.setApiKey(sendgridKey.value());
 
-    await Promise.all([
-      sgMail.send({
-        to: MANAGER_EMAIL,
-        from: { email: FROM_EMAIL, name: FROM_NAME },
-        subject: `Factura subida: ${invoice.guideName} - ${data.invoiceNumber}`,
-        html: getEmailTemplate(`
-          <h2>Nueva factura oficial</h2>
-          <p><strong>Guía:</strong> ${invoice.guideName}</p>
-          <p><strong>Factura:</strong> ${data.invoiceNumber}</p>
-          <p><strong>Mes:</strong> ${invoice.month}</p>
-          <p>Factura disponible en Drive y adjunta en este email.</p>
-        `),
-        attachments: [{
-          content: data.pdfBase64,
-          filename: `${invoice.guideName}_${invoice.month}_${data.invoiceNumber.replace('/', '-')}.pdf`,
-          type: 'application/pdf',
-          disposition: 'attachment'
-        }]
-      }),
+    // Solo enviar email al manager para revisión, NO a contabilidad todavía
+    await sgMail.send({
+      to: MANAGER_EMAIL,
+      from: { email: FROM_EMAIL, name: FROM_NAME },
+      subject: `Factura pendiente de revisión: ${invoice.guideName} - ${invoice.month}`,
+      html: getEmailTemplate(`
+        <h2>Nueva factura pendiente de revisión</h2>
+        <p><strong>Guía:</strong> ${invoice.guideName}</p>
+        ${data.invoiceNumber ? `<p><strong>Factura:</strong> ${data.invoiceNumber}</p>` : ''}
+        <p><strong>Mes:</strong> ${invoice.month}</p>
+        <p><strong>Total:</strong> ${invoice.totalSalary.toFixed(2)}€</p>
+        <p>Factura disponible en Drive y adjunta en este email.</p>
+        <div class="alert">
+          <p><strong>⚠️ Acción requerida:</strong> Revisa la factura y apruébala o recházala desde el panel de manager.</p>
+        </div>
+        <a href="${APP_URL}/manager-invoices.html" class="button">Ver Facturas Pendientes</a>
+      `),
+      attachments: [{
+        content: data.pdfBase64,
+        filename: `${invoice.guideName}_${invoice.month}_${invoiceNumber.replace('/', '-')}.pdf`,
+        type: 'application/pdf',
+        disposition: 'attachment'
+      }]
+    });
 
-      sgMail.send({
-        to: ACCOUNTING_EMAIL,
-        from: { email: FROM_EMAIL, name: FROM_NAME },
-        subject: `Factura guía ${data.invoiceNumber} - ${invoice.guideName}`,
-        html: getEmailTemplate(`
-          <h2>Nueva factura guía</h2>
-          <p><strong>Guía:</strong> ${invoice.guideName}</p>
-          <p><strong>DNI:</strong> ${invoice.guideDni}</p>
-          <p><strong>Factura:</strong> ${data.invoiceNumber}</p>
-          <p><strong>Mes:</strong> ${invoice.month}</p>
-          <p><strong>Total servicios:</strong> ${invoice.totalSalary.toFixed(2)}€</p>
-          <p>Revisa el PDF adjunto con la factura oficial VERIFACTU.</p>
-        `),
-        attachments: [{
-          content: data.pdfBase64,
-          filename: `${invoice.guideName}_${invoice.month}_${data.invoiceNumber.replace('/', '-')}.pdf`,
-          type: 'application/pdf',
-          disposition: 'attachment'
-        }]
-      }),
-
-      sgMail.send({
-        to: invoice.guideEmail,
-        from: { email: FROM_EMAIL, name: FROM_NAME },
-        subject: `Factura ${data.invoiceNumber} recibida correctamente`,
-        html: getEmailTemplate(`
-          <h2>Factura subida correctamente ✓</h2>
-          <p>Tu factura <strong>${data.invoiceNumber}</strong> del mes <strong>${invoice.month}</strong> 
-             ha sido recibida y procesada.</p>
-          <p>El equipo de contabilidad la procesará en breve.</p>
-        `)
-      })
-    ]);
-
-    logger.info('Factura oficial procesada', {
+    logger.info('Factura subida y pendiente de revisión del manager', {
       invoiceId: data.invoiceId,
       guideId,
-      invoiceNumber: data.invoiceNumber,
+      invoiceNumber: invoiceNumber,
       driveFileId: uploadResult.fileId
     });
 
     return {
       success: true,
-      driveUrl: `https://drive.google.com/file/d/${uploadResult.fileId}`
+      message: 'Factura subida correctamente. Está pendiente de revisión del manager.'
     };
 
   } catch (error) {
@@ -1089,3 +1068,314 @@ exports.calculateSalaryPreview = onCall(async (request) => {
     throw new HttpsError('internal', 'Failed to calculate salary');
   }
 });
+
+// =========================================
+// FUNCTION: managerApproveInvoice
+// =========================================
+exports.managerApproveInvoice = onCall({
+  secrets: [sendgridKey]
+}, async (request) => {
+  const { data, auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Solo managers');
+  }
+
+  if (!data.invoiceId) {
+    throw new HttpsError('invalid-argument', 'invoiceId requerido');
+  }
+
+  try {
+    const db = getFirestore();
+    const invoiceSnap = await db.collection('guide_invoices').doc(data.invoiceId).get();
+
+    if (!invoiceSnap.exists) {
+      throw new HttpsError('not-found', 'Factura no encontrada');
+    }
+
+    const invoice = invoiceSnap.data();
+
+    if (invoice.status !== 'PENDING_MANAGER_VERIFICATION') {
+      throw new HttpsError('failed-precondition', 'La factura no está pendiente de revisión');
+    }
+
+    // Actualizar estado a APPROVED
+    await db.collection('guide_invoices').doc(data.invoiceId).update({
+      status: 'APPROVED',
+      managerApprovedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    sgMail.setApiKey(sendgridKey.value());
+
+    // Obtener el PDF de Drive si existe
+    const driveUrl = invoice.officialInvoicePdfUrl
+      ? `https://drive.google.com/file/d/${invoice.officialInvoicePdfUrl}/view`
+      : null;
+
+    // Enviar emails a contabilidad y guía
+    await Promise.all([
+      sgMail.send({
+        to: ACCOUNTING_EMAIL,
+        from: { email: FROM_EMAIL, name: FROM_NAME },
+        subject: `Factura guía ${invoice.guideName} - ${invoice.month}`,
+        html: getEmailTemplate(`
+          <h2>Nueva factura guía aprobada</h2>
+          <p><strong>Guía:</strong> ${invoice.guideName}</p>
+          <p><strong>DNI:</strong> ${invoice.guideDni}</p>
+          ${invoice.officialInvoiceNumber ? `<p><strong>Número Factura:</strong> ${invoice.officialInvoiceNumber}</p>` : ''}
+          <p><strong>Mes:</strong> ${invoice.month}</p>
+          <p><strong>Total servicios:</strong> ${invoice.totalSalary.toFixed(2)}€</p>
+          <p>Revisa la factura en Drive:</p>
+          ${driveUrl ? `<a href="${driveUrl}" class="button">Ver Factura en Drive</a>` : '<p>PDF no disponible</p>'}
+        `)
+      }),
+
+      sgMail.send({
+        to: invoice.guideEmail,
+        from: { email: FROM_EMAIL, name: FROM_NAME },
+        subject: `Factura ${invoice.month} aprobada ✓`,
+        html: getEmailTemplate(`
+          <h2>✅ Tu factura ha sido aprobada</h2>
+          <p>Tu factura del mes <strong>${invoice.month}</strong> ha sido aprobada por el manager.</p>
+          <p>El equipo de contabilidad la procesará en breve.</p>
+        `)
+      })
+    ]);
+
+    logger.info('Factura aprobada por manager y enviada a contabilidad', {
+      invoiceId: data.invoiceId,
+      guideId: invoice.guideId,
+      month: invoice.month
+    });
+
+    return {
+      success: true,
+      message: 'Factura aprobada y enviada a contabilidad'
+    };
+
+  } catch (error) {
+    logger.error('Error aprobando factura', {
+      invoiceId: data.invoiceId,
+      error: error.message
+    });
+
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+
+    throw new HttpsError('internal', 'Error al aprobar factura');
+  }
+});
+
+// =========================================
+// FUNCTION: managerRejectInvoice
+// =========================================
+exports.managerRejectInvoice = onCall({
+  secrets: [sendgridKey, appsScriptUrl]
+}, async (request) => {
+  const { data, auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Solo managers');
+  }
+
+  if (!data.invoiceId || !data.comments) {
+    throw new HttpsError('invalid-argument', 'invoiceId y comments requeridos');
+  }
+
+  try {
+    const db = getFirestore();
+    const invoiceSnap = await db.collection('guide_invoices').doc(data.invoiceId).get();
+
+    if (!invoiceSnap.exists) {
+      throw new HttpsError('not-found', 'Factura no encontrada');
+    }
+
+    const invoice = invoiceSnap.data();
+
+    if (invoice.status !== 'PENDING_MANAGER_VERIFICATION') {
+      throw new HttpsError('failed-precondition', 'La factura no está pendiente de revisión');
+    }
+
+    // >>> DEBUG START: Log invoice state to Firestore
+    const debugId = `rej_${data.invoiceId}_${Date.now()}`;
+    // db is already declared above
+    await db.collection('system_debug_logs').doc(debugId).set({
+      function: 'managerRejectInvoice',
+      invoiceId: data.invoiceId,
+      invoiceDataRaw: invoice,
+      hasPdfUrl: !!invoice.officialInvoicePdfUrl,
+      pdfUrlValue: invoice.officialInvoicePdfUrl || 'UNDEFINED',
+      timestamp: FieldValue.serverTimestamp()
+    });
+    // >>> DEBUG END
+
+    // Eliminar el archivo de Drive si existe
+    if (invoice.officialInvoicePdfUrl) {
+      try {
+        logger.info('Eliminando factura rechazada de Drive', {
+          fileId: invoice.officialInvoicePdfUrl,
+          invoiceId: data.invoiceId
+        });
+
+        await deleteFromGoogleDrive(invoice.officialInvoicePdfUrl);
+
+        logger.info('Factura eliminada de Drive correctamente', {
+          fileId: invoice.officialInvoicePdfUrl
+        });
+      } catch (driveError) {
+        // Log el error pero continuar con el rechazo
+        logger.warn('No se pudo eliminar archivo de Drive, continuando con rechazo', {
+          fileId: invoice.officialInvoicePdfUrl,
+          error: driveError.message
+        });
+
+        await db.collection('system_debug_logs').doc(debugId).update({
+          errorInCatch: driveError.message
+        });
+      }
+    } else {
+      await db.collection('system_debug_logs').doc(debugId).update({
+        skippedDeletion: true,
+        reason: 'officialInvoicePdfUrl is falsy'
+      });
+    }
+
+    // Actualizar estado a WAITING_INVOICE_UPLOAD (para que el guía vuelva a subir)
+    await db.collection('guide_invoices').doc(data.invoiceId).update({
+      status: 'WAITING_INVOICE_UPLOAD',
+      officialInvoicePdfUrl: FieldValue.delete(),  // Eliminar referencia al PDF rechazado
+      officialInvoiceNumber: FieldValue.delete(),
+      officialInvoiceUploadedAt: FieldValue.delete(),
+      managerRejectionComments: data.comments,
+      managerRejectedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    sgMail.setApiKey(sendgridKey.value());
+
+    // Notificar al guía del rechazo
+    await sgMail.send({
+      to: invoice.guideEmail,
+      from: { email: FROM_EMAIL, name: FROM_NAME },
+      subject: `⚠️ Factura ${invoice.month} rechazada - Acción requerida`,
+      html: getEmailTemplate(`
+        <h2>⚠️ Tu factura ha sido rechazada</h2>
+        <p>Tu factura del mes <strong>${invoice.month}</strong> ha sido rechazada por el siguientemotivo:</p>
+        <div class="alert">
+          <p><strong>Motivo del rechazo:</strong></p>
+          <p>${data.comments}</p>
+        </div>
+        <p>Por favor, corrige el problema y sube una nueva factura.</p>
+        <a href="${APP_URL}/my-invoices.html" class="button">Subir Nueva Factura</a>
+      `)
+    });
+
+    logger.info('Factura rechazada por manager', {
+      invoiceId: data.invoiceId,
+      guideId: invoice.guideId,
+      month: invoice.month,
+      comments: data.comments
+    });
+
+    return {
+      success: true,
+      message: 'Factura rechazada. El guía ha sido notificado.'
+    };
+
+  } catch (error) {
+    logger.error('Error rechazando factura', {
+      invoiceId: data.invoiceId,
+      error: error.message
+    });
+
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+
+    throw new HttpsError('internal', 'Error al rechazar factura');
+  }
+});
+
+// =========================================
+// HELPER: Delete from Google Drive with Debug Logging
+// =========================================
+async function deleteFromGoogleDrive(fileId) {
+  const APPS_SCRIPT_URL = appsScriptUrl.value();
+  const db = getFirestore();
+  const debugLogId = `del_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  const logRef = db.collection('system_debug_logs').doc(debugLogId);
+
+  await logRef.set({
+    function: 'deleteFromGoogleDrive',
+    fileId: fileId,
+    startedAt: FieldValue.serverTimestamp(),
+    hasUrl: !!APPS_SCRIPT_URL,
+    urlLength: APPS_SCRIPT_URL ? APPS_SCRIPT_URL.length : 0
+  });
+
+  logger.info('>>> START deleteFromGoogleDrive', { debugLogId, fileId });
+
+  if (!APPS_SCRIPT_URL) {
+    await logRef.update({ error: 'APPS_SCRIPT_URL not configured (empty value)' });
+    throw new Error('APPS_SCRIPT_URL not configured (empty value)');
+  }
+
+  try {
+    const payload = {
+      action: 'deleteGuideInvoice',
+      fileId: fileId
+    };
+
+    await logRef.update({
+      step: 'preparing_request',
+      payload: payload,
+      targetUrl: APPS_SCRIPT_URL.trim() // Be careful logging full URL if secret
+    });
+
+    const response = await fetch(APPS_SCRIPT_URL.trim(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+
+    const successLog = {
+      step: 'response_received',
+      status: response.status,
+      headers: JSON.stringify([...response.headers.entries()])
+    };
+
+    await logRef.update(successLog);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      await logRef.update({ errorText, step: 'response_not_ok' });
+      throw new Error(`Apps Script error: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    await logRef.update({ result, step: 'response_parsed' });
+
+    if (!result.success) {
+      throw new Error(result.error || 'Delete failed');
+    }
+
+    await logRef.update({ step: 'completed_successfully' });
+    return result;
+
+  } catch (error) {
+    logger.error('>>> ERROR caused execution failure', {
+      debugLogId,
+      error: error.message
+    });
+    await logRef.update({
+      step: 'catch_block',
+      errorName: error.name,
+      errorMessage: error.message,
+      stack: error.stack
+    });
+    throw error;
+  }
+}
+

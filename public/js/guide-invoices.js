@@ -67,10 +67,8 @@ const i18n = {
     cancelBtn: 'Cancelar',
     confirmRejectBtn: 'Confirmar Rechazo',
     uploadModalTitle: 'Subir Factura Oficial',
-    invoiceNumberLabel: 'Número de Factura',
-    invoiceNumberPlaceholder: '2025/042',
     pdfFileLabel: 'Archivo PDF',
-    pdfHelpText: 'Solo archivos PDF. Máximo 10MB',
+    pdfHelpText: 'Solo archivos PDF. Máximo 5MB',
     confirmUploadBtn: 'Subir Factura',
     toastApproving: 'Aprobando reporte...',
     toastApproved: 'Reporte aprobado. Ahora sube tu factura oficial.',
@@ -80,9 +78,15 @@ const i18n = {
     toastUploaded: 'Factura subida correctamente',
     toastError: 'Error al procesar',
     toastCommentsRequired: 'Debes escribir el motivo del rechazo',
-    toastInvoiceNumberRequired: 'Debes introducir el número de factura',
     toastPdfRequired: 'Debes seleccionar un archivo PDF',
-    toastPdfTooLarge: 'El archivo es demasiado grande (máx 10MB)',
+    toastPdfTooLarge: 'El archivo es demasiado grande (máx 5MB)',
+    totalConfirmLabel: 'Confirma el total de tu factura',
+    expectedTotalLabel: 'Total del reporte aprobado:',
+    totalWarning: '⚠️ El PDF que subas DEBE tener este mismo importe',
+    pdfTotalLabel: 'Ingresa el total de tu PDF (en €)',
+    totalHelpText: 'Ingresa el total exacto que aparece en tu PDF',
+    toastTotalMismatch: 'El total ingresado no coincide con el reporte',
+    toastTotalRequired: 'Debes confirmar el total de la factura',
     morning: 'Mañana',
     afternoon: 'Tarde',
     calendar: 'Calendario',
@@ -133,10 +137,8 @@ const i18n = {
     cancelBtn: 'Cancel',
     confirmRejectBtn: 'Confirm Rejection',
     uploadModalTitle: 'Upload Official Invoice',
-    invoiceNumberLabel: 'Invoice Number',
-    invoiceNumberPlaceholder: '2025/042',
     pdfFileLabel: 'PDF File',
-    pdfHelpText: 'PDF files only. Max 10MB',
+    pdfHelpText: 'PDF files only. Max 5MB',
     confirmUploadBtn: 'Upload Invoice',
     toastApproving: 'Approving report...',
     toastApproved: 'Report approved. Now upload your official invoice.',
@@ -146,9 +148,15 @@ const i18n = {
     toastUploaded: 'Invoice uploaded successfully',
     toastError: 'Error processing',
     toastCommentsRequired: 'You must write the rejection reason',
-    toastInvoiceNumberRequired: 'You must enter the invoice number',
     toastPdfRequired: 'You must select a PDF file',
-    toastPdfTooLarge: 'File is too large (max 10MB)',
+    toastPdfTooLarge: 'File is too large (max 5MB)',
+    totalConfirmLabel: 'Confirm your invoice total',
+    expectedTotalLabel: 'Approved report total:',
+    totalWarning: '⚠️ The PDF you upload MUST have this exact amount',
+    pdfTotalLabel: 'Enter your PDF total (in €)',
+    totalHelpText: 'Enter the exact total shown in your PDF',
+    toastTotalMismatch: 'The entered total does not match the report',
+    toastTotalRequired: 'You must confirm the invoice total',
     morning: 'Morning',
     afternoon: 'Afternoon',
     calendar: 'Calendar',
@@ -177,17 +185,17 @@ let currentInvoice = null;
 // ============================================
 function extractDriveFileId(urlOrId) {
   if (!urlOrId) return null;
-  
+
   if (/^[a-zA-Z0-9_-]+$/.test(urlOrId) && urlOrId.length > 20) {
     return urlOrId;
   }
-  
+
   const match = urlOrId.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (match) return match[1];
-  
+
   const directMatch = urlOrId.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   if (directMatch) return directMatch[1];
-  
+
   return null;
 }
 
@@ -255,8 +263,6 @@ function updateUILanguage() {
   document.getElementById('cancel-reject-btn').textContent = t('cancelBtn');
   document.getElementById('confirm-reject-btn').textContent = t('confirmRejectBtn');
   document.getElementById('upload-modal-title').textContent = t('uploadModalTitle');
-  document.getElementById('invoice-number-label').textContent = t('invoiceNumberLabel');
-  document.getElementById('invoice-number-input').placeholder = t('invoiceNumberPlaceholder');
   document.getElementById('pdf-file-label').textContent = t('pdfFileLabel');
   document.getElementById('pdf-help-text').textContent = t('pdfHelpText');
   document.getElementById('cancel-upload-btn').textContent = t('cancelBtn');
@@ -320,7 +326,7 @@ function renderInvoices(snapshot, containerId, section) {
 
   if (snapshot.empty) {
     const emptyMsg = section === 'pending' ? t('noPending') :
-                     section === 'waiting' ? t('noWaiting') : t('noHistory');
+      section === 'waiting' ? t('noWaiting') : t('noHistory');
     container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-sm sm:text-base">${emptyMsg}</p>`;
     return;
   }
@@ -346,6 +352,7 @@ function renderInvoices(snapshot, containerId, section) {
     };
 
     const total = inv.totalSalary || 0;
+    const displayInvoiceNumber = inv.officialInvoiceNumber || inv.invoiceNumber;
 
     return `
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 hover:shadow-md transition-shadow cursor-pointer"
@@ -358,7 +365,7 @@ function renderInvoices(snapshot, containerId, section) {
           </div>
           <div class="flex flex-col items-start sm:items-end gap-2">
             <span class="px-3 py-1 rounded-full text-xs font-semibold ${status.class}">${status.text}</span>
-            ${inv.invoiceNumber ? `<span class="text-xs text-gray-600 dark:text-gray-400">${t('invoiceNumber')}: ${inv.invoiceNumber}</span>` : ''}
+            ${displayInvoiceNumber ? `<span class="text-xs text-gray-600 dark:text-gray-400">${t('invoiceNumber')}: ${displayInvoiceNumber}</span>` : ''}
             <button class="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium view-detail-btn">${t('viewDetail')}</button>
           </div>
         </div>
@@ -427,6 +434,13 @@ function openInvoiceModal(invoice) {
     approvalSection.classList.remove('hidden');
   } else if (invoice.status === 'WAITING_INVOICE_UPLOAD' || invoice.status === 'UPLOAD_OVERDUE') {
     waitingSection.classList.remove('hidden');
+
+    // Mostrar total esperado en el campo de confirmación
+    const expectedTotalDisplay = document.getElementById('expected-total-display');
+    if (expectedTotalDisplay) {
+      expectedTotalDisplay.textContent = `${invoice.totalSalary.toFixed(2)}€`;
+    }
+
     if (invoice.uploadDeadline) {
       const deadline = invoice.uploadDeadline.toDate();
       document.getElementById('upload-deadline-text').textContent =
@@ -434,27 +448,40 @@ function openInvoiceModal(invoice) {
     }
   } else if (invoice.status === 'APPROVED') {
     approvedInfo.classList.remove('hidden');
-    document.getElementById('approved-number').textContent =
-      `${t('invoiceNumber')}: ${invoice.invoiceNumber || '-'}`;
 
-    if (invoice.uploadedAt) {
-      const uploadedDate = invoice.uploadedAt.toDate();
+    const displayInvoiceNumber =
+      invoice.officialInvoiceNumber || invoice.invoiceNumber || null;
+    const approvedNumberEl = document.getElementById('approved-number');
+
+    if (displayInvoiceNumber) {
+      approvedNumberEl.textContent = `${t('invoiceNumber')}: ${displayInvoiceNumber}`;
+      approvedNumberEl.classList.remove('hidden');
+    } else {
+      approvedNumberEl.textContent = '';
+      approvedNumberEl.classList.add('hidden');
+    }
+
+    const uploadedAt = invoice.officialInvoiceUploadedAt || invoice.uploadedAt;
+    if (uploadedAt && typeof uploadedAt.toDate === 'function') {
+      const uploadedDate = uploadedAt.toDate();
       document.getElementById('approved-date').textContent =
         `${t('approvedOn')}: ${uploadedDate.toLocaleDateString(locale)}`;
+    } else {
+      document.getElementById('approved-date').textContent = '';
     }
 
     const driveLink = document.getElementById('download-pdf');
     const textSpan = document.getElementById('download-text');
-    
+
     if (invoice.pdfDeleted === true) {
       driveLink.href = '#';
       driveLink.classList.add('pointer-events-none', 'opacity-50', 'cursor-not-allowed');
       driveLink.classList.remove('hover:underline');
-      
+
       textSpan.textContent = t('pdfDeleted');
       textSpan.classList.remove('text-blue-600', 'dark:text-blue-400');
       textSpan.classList.add('text-red-600', 'dark:text-red-400');
-      
+
       driveLink.onclick = (e) => {
         e.preventDefault();
         showToast(t('pdfDeletedError'), 'error');
@@ -463,27 +490,27 @@ function openInvoiceModal(invoice) {
     } else {
       const rawUrl = invoice.invoiceFileUrl || invoice.officialInvoicePdfUrl || invoice.pdfDriveId;
       const fileId = extractDriveFileId(rawUrl);
-      
+
       if (fileId) {
         const driveUrl = buildDriveViewUrl(fileId);
         driveLink.href = driveUrl;
         driveLink.classList.remove('pointer-events-none', 'opacity-50', 'cursor-not-allowed');
         driveLink.classList.add('hover:underline');
-        
+
         textSpan.textContent = t('downloadPdf');
         textSpan.classList.remove('text-red-600', 'dark:text-red-400');
         textSpan.classList.add('text-blue-600', 'dark:text-blue-400');
-        
+
         driveLink.onclick = null;
       } else {
         driveLink.href = '#';
         driveLink.classList.add('pointer-events-none', 'opacity-50', 'cursor-not-allowed');
         driveLink.classList.remove('hover:underline');
-        
+
         textSpan.textContent = t('pdfDeleted');
         textSpan.classList.remove('text-blue-600', 'dark:text-blue-400');
         textSpan.classList.add('text-red-600', 'dark:text-red-400');
-        
+
         driveLink.onclick = (e) => {
           e.preventDefault();
           showToast(t('pdfDeletedError'), 'error');
@@ -523,12 +550,7 @@ document.getElementById('approve-btn').addEventListener('click', async () => {
 
     showToast(t('toastApproved'), 'success');
     document.getElementById('invoice-modal').classList.add('hidden');
-    
-    setTimeout(() => {
-      const waitingInvoice = { ...currentInvoice, status: 'WAITING_INVOICE_UPLOAD' };
-      currentInvoice = waitingInvoice;
-      openInvoiceModal(waitingInvoice);
-    }, 1000);
+    currentInvoice = null;
   } catch (error) {
     console.error('Error approving:', error);
     showToast(t('toastError') + ': ' + error.message, 'error');
@@ -551,7 +573,7 @@ document.getElementById('cancel-reject-btn').addEventListener('click', () => {
 
 document.getElementById('confirm-reject-btn').addEventListener('click', async () => {
   const comments = document.getElementById('reject-comments').value.trim();
-  
+
   if (!comments) {
     showToast(t('toastCommentsRequired'), 'error');
     return;
@@ -583,10 +605,9 @@ document.getElementById('confirm-reject-btn').addEventListener('click', async ()
   }
 });
 
-// Upload PDF
+// Upload PDF (solo PDF, sin nº de factura)
 document.getElementById('upload-invoice-btn').addEventListener('click', () => {
   if (!currentInvoice) return;
-  document.getElementById('invoice-number-input').value = '';
   document.getElementById('pdf-file-input').value = '';
   document.getElementById('upload-modal').classList.remove('hidden');
 });
@@ -596,20 +617,14 @@ document.getElementById('cancel-upload-btn').addEventListener('click', () => {
 });
 
 document.getElementById('confirm-upload-btn').addEventListener('click', async () => {
-  const invoiceNumber = document.getElementById('invoice-number-input').value.trim();
   const pdfFile = document.getElementById('pdf-file-input').files[0];
-
-  if (!invoiceNumber) {
-    showToast(t('toastInvoiceNumberRequired'), 'error');
-    return;
-  }
 
   if (!pdfFile) {
     showToast(t('toastPdfRequired'), 'error');
     return;
   }
 
-  if (pdfFile.size > 10 * 1024 * 1024) {
+  if (pdfFile.size > 5 * 1024 * 1024) {
     showToast(t('toastPdfTooLarge'), 'error');
     return;
   }
@@ -633,7 +648,6 @@ document.getElementById('confirm-upload-btn').addEventListener('click', async ()
 
     await uploadOfficialInvoice({
       invoiceId: currentInvoice.id,
-      invoiceNumber: invoiceNumber,
       pdfBase64: pdfBase64
     });
 
@@ -654,9 +668,8 @@ function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
   const toastMessage = document.getElementById('toast-message');
   toastMessage.textContent = message;
-  toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg ${
-    type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'
-  } text-white text-sm sm:text-base z-50`;
+  toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+    } text-white text-sm sm:text-base z-50`;
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3000);
 }

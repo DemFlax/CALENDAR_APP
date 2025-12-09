@@ -41,11 +41,11 @@ onAuthStateChanged(auth, (user) => {
 function loadGuides() {
   const guidesQuery = query(collection(db, 'guides'), where('estado', '==', 'activo'));
   if (guidesUnsubscribe) guidesUnsubscribe();
-  
+
   guidesUnsubscribe = onSnapshot(guidesQuery, (snapshot) => {
     const guidesList = document.getElementById('guides-list');
     guidesList.innerHTML = '';
-    
+
     if (snapshot.empty) {
       guidesList.innerHTML = `
         <div class="col-span-full text-center py-12">
@@ -61,12 +61,12 @@ function loadGuides() {
       updateGuidesCount();
       return;
     }
-    
+
     snapshot.forEach((docSnap) => {
       const guide = docSnap.data();
       guidesList.appendChild(createGuideCard(docSnap.id, guide));
     });
-    
+
     updateGuidesCount();
   });
 }
@@ -113,16 +113,16 @@ window.impersonateGuide = (guideId) => {
 window.showCreateGuideModal = () => {
   const modal = document.getElementById('guide-modal');
   const form = document.getElementById('guide-form');
-  
+
   modal.classList.remove('hidden');
   form.reset();
-  
+
   document.getElementById('modal-title').textContent = 'Crear Guía';
   document.getElementById('email').disabled = false;
   document.getElementById('dni').disabled = false;
   form.dataset.mode = 'create';
   delete form.dataset.guideId;
-  
+
   const submitBtn = form.querySelector('button[type="submit"]');
   submitBtn.textContent = 'Crear Guía';
 };
@@ -130,19 +130,19 @@ window.showCreateGuideModal = () => {
 window.editGuide = async (guideId) => {
   const modal = document.getElementById('guide-modal');
   modal.classList.remove('hidden');
-  
+
   await new Promise(resolve => setTimeout(resolve, 0));
-  
+
   try {
     const guideDoc = await getDoc(doc(db, 'guides', guideId));
     if (!guideDoc.exists()) {
       showToast('Guía no encontrado', 'error');
       return;
     }
-    
+
     const guide = guideDoc.data();
     const form = document.getElementById('guide-form');
-    
+
     document.getElementById('modal-title').textContent = 'Editar Guía';
     document.getElementById('nombre').value = guide.nombre || '';
     document.getElementById('email').value = guide.email || '';
@@ -150,13 +150,13 @@ window.editGuide = async (guideId) => {
     document.getElementById('direccion').value = guide.direccion || '';
     document.getElementById('dni').value = guide.dni || '';
     document.getElementById('cuenta_bancaria').value = guide.cuenta_bancaria || '';
-    
+
     document.getElementById('email').disabled = true;
     document.getElementById('dni').disabled = true;
-    
+
     form.dataset.mode = 'edit';
     form.dataset.guideId = guideId;
-    
+
     const submitBtn = form.querySelector('button[type="submit"]');
     submitBtn.textContent = 'Guardar Cambios';
   } catch (error) {
@@ -237,7 +237,7 @@ document.getElementById('guide-form').addEventListener('submit', async (e) => {
 });
 
 window.deleteGuide = async (guideId) => {
-  if (!confirm('¿Eliminar este guía? Se marcará como inactivo.')) return;
+  showToast('Eliminando guía...', 'info');
   try {
     await updateDoc(doc(db, 'guides', guideId), {
       estado: 'inactivo',
@@ -254,11 +254,10 @@ function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
   const toastMessage = document.getElementById('toast-message');
   toastMessage.textContent = message;
-  toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-xl shadow-lg ${
-    type === 'success' ? 'bg-emerald-500 dark:bg-emerald-600' :
-    type === 'error' ? 'bg-red-500 dark:bg-red-600' :
-    type === 'warning' ? 'bg-yellow-500 dark:bg-yellow-600' : 'bg-sky-500 dark:bg-sky-600'
-  } text-white max-w-xs sm:max-w-md z-50`;
+  toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-xl shadow-lg ${type === 'success' ? 'bg-emerald-500 dark:bg-emerald-600' :
+      type === 'error' ? 'bg-red-500 dark:bg-red-600' :
+        type === 'warning' ? 'bg-yellow-500 dark:bg-yellow-600' : 'bg-sky-500 dark:bg-sky-600'
+    } text-white max-w-xs sm:max-w-md z-50`;
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3000);
 }

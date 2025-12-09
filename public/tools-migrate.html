@@ -1,0 +1,30 @@
+<!-- public/tools-migrate.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Migration Tool - VendorCosts → NETO</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body style="font-family: system-ui; padding: 24px;">
+  <h1>Migration Tool (solo manager)</h1>
+  <p>
+    Recalcula <strong>salarioCalculado</strong> a NETO usando la tabla salarial
+    para todos los <code>vendor_costs</code> del mes indicado.
+  </p>
+
+  <label for="month-input">
+    Mes a migrar (YYYY-MM):
+  </label>
+  <input id="month-input" type="text" value="2025-11" />
+
+  <button id="run-btn" style="margin-left: 8px;">
+    Ejecutar migración
+  </button>
+
+  <pre id="output" style="margin-top: 16px; background:#f5f5f5; padding:12px;"></pre>
+
+  <!-- Carga lógica desde módulo -->
+  <script type="module" src="/js/tools-migrate.js"></script>
+</body>
+</html>

@@ -1,199 +1,277 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Facturas - Manager</title>
-  
-  <meta name="theme-color" content="#0ea5e9">
-  <link rel="manifest" href="/manifest.json">
-  
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = { darkMode: 'class' }
-  </script>
-  <link rel="stylesheet" href="/css/styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facturas - Manager</title>
+
+    <meta name="theme-color" content="#0ea5e9">
+    <link rel="manifest" href="/manifest.json">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+    <link rel="stylesheet" href="/css/styles.css">
 </head>
+
 <body class="bg-gray-50 dark:bg-gray-900">
-  
-  <!-- NAV -->
-  <nav class="bg-gray-800 dark:bg-gray-900 text-white shadow-lg">
-    <div class="container mx-auto px-4 py-4">
-      <div class="flex justify-between items-center mb-4">
-        <div>
-          <h1 class="text-2xl font-bold">Tours Calendar</h1>
-          <p class="text-sm text-gray-400">Manager Dashboard</p>
+
+    <!-- NAV -->
+    <nav class="bg-gray-800 dark:bg-gray-900 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h1 class="text-2xl font-bold">Tours Calendar</h1>
+                    <p class="text-sm text-gray-400">Manager Dashboard</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="dark-mode-toggle" class="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
+                    </button>
+                    <button id="logout-btn"
+                        class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-semibold transition">
+                        Salir
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex gap-2 overflow-x-auto">
+                <a href="/manager.html"
+                    class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition whitespace-nowrap">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Calendario
+                </a>
+                <a href="/manager-assignments.html"
+                    class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition whitespace-nowrap">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    Asignaciones
+                </a>
+                <a href="/manager-guides.html"
+                    class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition whitespace-nowrap">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                    Guías
+                </a>
+                <a href="/manager-vendors.html"
+                    class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition whitespace-nowrap">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                    Vendors
+                </a>
+                <a href="/manager-invoices.html"
+                    class="flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 text-white transition whitespace-nowrap">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Facturas
+                </a>
+            </div>
         </div>
-        <div class="flex items-center gap-3">
-          <button id="dark-mode-toggle" class="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-            </svg>
-          </button>
-          <button id="logout-btn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-semibold transition">
-            Salir
-          </button>
+    </nav>
+
+    <main class="container mx-auto p-3 sm:p-6 max-w-7xl">
+
+        <!-- Filtros -->
+        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Estado</label>
+                    <select id="status-filter"
+                        class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2">
+                        <option value="ALL">Todas</option>
+                        <option value="MANAGER_REVIEW">Pendientes Revisión</option>
+                        <option value="PENDING_GUIDE_APPROVAL">Enviadas a Guías</option>
+                        <option value="WAITING_INVOICE_UPLOAD">Esperando Factura</option>
+                        <option value="UPLOAD_OVERDUE">Plazo Vencido</option>
+                        <option value="APPROVED">Aprobadas</option>
+                        <option value="REJECTED">Rechazadas</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Guía</label>
+                    <select id="guide-filter"
+                        class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Mes</label>
+                    <input type="month" id="month-filter"
+                        class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2">
+                </div>
+            </div>
+
+            <!-- Botón generación manual -->
+            <div class="mt-4 flex justify-end">
+                <button id="generate-invoices-btn" type="button"
+                    class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                </button>
+            </div>
+        </section>
+
+        <!-- Lista Facturas -->
+        <section id="invoices-list" class="space-y-4">
+            <p class="text-gray-500 dark:text-gray-400">Cargando facturas...</p>
+        </section>
+    </main>
+
+    <!-- Modal Edición -->
+    <div id="edit-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
+
+            <div class="p-4 sm:p-6 border-b dark:border-gray-700 flex justify-between items-center">
+                <div>
+                    <h3 id="modal-title" class="text-xl font-bold dark:text-white">Revisar Reporte</h3>
+                    <p id="modal-subtitle" class="text-sm text-gray-600 dark:text-gray-400"></p>
+                </div>
+                <button id="close-modal" class="text-gray-500 hover:text-gray-700 dark:text-gray-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-4 sm:p-6 overflow-y-auto max-h-[70vh]">
+
+                <!-- Tours Tabla Editable -->
+                <div id="tours-table-container" class="mb-6">
+                    <h4 class="font-semibold mb-3 dark:text-white">Tours del Mes</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-100 dark:bg-gray-700">
+                                <tr>
+                                    <th class="px-3 py-2 text-left dark:text-white">Fecha</th>
+                                    <th class="px-3 py-2 text-left dark:text-white">Turno</th>
+                                    <th class="px-3 py-2 text-left dark:text-white">Tour</th>
+                                    <th class="px-3 py-2 text-center dark:text-white">PAX</th>
+                                    <th class="px-3 py-2 text-right dark:text-white">Salario</th>
+                                    <th class="px-3 py-2"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="tours-table-body" class="dark:text-gray-300">
+                                <!-- Dinámico -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <button id="add-extra-line"
+                        class="mt-3 text-sm text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 font-semibold flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Añadir línea extra
+                    </button>
+                </div>
+
+                <!-- Total -->
+                <div class="flex justify-between items-center p-4 bg-sky-50 dark:bg-sky-900 rounded-lg mb-6">
+                    <span class="text-lg font-bold dark:text-white">TOTAL</span>
+                    <span id="modal-total" class="text-2xl font-bold text-sky-600 dark:text-sky-300">0.00€</span>
+                </div>
+
+                <!-- Comentarios Guía (si REJECTED) -->
+                <div id="guide-comments-section"
+                    class="hidden mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <h4 class="font-semibold text-red-800 dark:text-red-300 mb-2">⚠️ Motivo del Rechazo</h4>
+                    <p id="guide-comments" class="text-sm text-gray-700 dark:text-gray-300"></p>
+                </div>
+
+                <!-- Sección Aprobación Manager (si PENDING_MANAGER_VERIFICATION) -->
+                <div id="manager-verification-section" class="hidden mb-6">
+                    <div
+                        class="p-6 bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700 rounded-lg">
+                        <h4 class="font-bold text-lg text-amber-900 dark:text-amber-300 mb-4 flex items-center gap-2">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Verificación de Factura Pendiente
+                        </h4>
+                        <div class="space-y-3 mb-4">
+                            <p class="text-sm text-gray-700 dark:text-gray-300">
+                                <strong>Total del reporte:</strong>
+                                <span id="verification-total"
+                                    class="text-lg font-bold text-sky-600 dark:text-sky-400"></span>
+                            </p>
+                            <p class="text-sm text-gray-700 dark:text-gray-300">
+                                <strong>Factura PDF:</strong>
+                                <a id="verification-pdf-link" href="#" target="_blank"
+                                    class="ml-2 text-blue-600 dark:text-blue-400 hover:underline font-semibold">
+                                    📄 Ver PDF en Google Drive
+                                </a>
+                            </p>
+                        </div>
+                        <!-- Campo de rechazo (oculto inicialmente) -->
+                        <div id="rejection-field" class="hidden mb-4">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                Motivo del rechazo (obligatorio)
+                            </label>
+                            <textarea id="rejection-comments" rows="3"
+                                placeholder="Ej: El total del PDF (325.00€) no coincide con el reporte (320.00€)"
+                                class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
+      </textarea>
+                        </div>
+                        <div class="flex gap-3">
+                            <button id="reject-invoice-btn"
+                                class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                Rechazar Factura
+                            </button>
+                            <button id="approve-invoice-btn"
+                                class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M5 13l4 4L19 7" />
+                                </svg>
+                                Aprobar y Enviar a Contabilidad
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Acciones -->
+                <div class="flex gap-3 mt-6 border-t dark:border-gray-700 pt-4">
+                    <button id="save-btn"
+                        class="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-3 rounded-lg font-semibold">
+                        Guardar Cambios
+                    </button>
+                    <button id="send-to-guide-btn"
+                        class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-lg font-semibold">
+                        ✓ Enviar a Guía para Aprobación
+                    </button>
+                </div>
+
+            </div>
         </div>
-      </div>
-      
-      <!-- Tabs -->
-      <div class="flex gap-2 overflow-x-auto">
-        <a href="/manager.html" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition whitespace-nowrap">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-          </svg>
-          Calendario
-        </a>
-        <a href="/manager-assignments.html" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition whitespace-nowrap">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-          </svg>
-          Asignaciones
-        </a>
-        <a href="/manager-guides.html" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition whitespace-nowrap">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-          </svg>
-          Guías
-        </a>
-        <a href="/manager-vendors.html" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition whitespace-nowrap">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-          </svg>
-          Vendors
-        </a>
-        <a href="/manager-invoices.html" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 text-white transition whitespace-nowrap">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-          </svg>
-          Facturas
-        </a>
-      </div>
     </div>
-  </nav>
 
-  <main class="container mx-auto p-3 sm:p-6 max-w-7xl">
-    
-    <!-- Filtros -->
-    <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Estado</label>
-          <select id="status-filter" class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2">
-            <option value="ALL">Todas</option>
-            <option value="MANAGER_REVIEW">Pendientes Revisión</option>
-            <option value="PENDING_GUIDE_APPROVAL">Enviadas a Guías</option>
-            <option value="WAITING_INVOICE_UPLOAD">Esperando Factura</option>
-            <option value="UPLOAD_OVERDUE">Plazo Vencido</option>
-            <option value="APPROVED">Aprobadas</option>
-            <option value="REJECTED">Rechazadas</option>
-          </select>
-        </div>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Guía</label>
-          <select id="guide-filter" class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2">
-            <option value="">Todos</option>
-          </select>
-        </div>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Mes</label>
-          <input type="month" id="month-filter" class="w-full border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2">
-        </div>
-      </div>
+    <!-- Toast -->
+    <div id="toast" class="hidden fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50"></div>
 
-      <!-- Botón generación manual -->
-      <div class="mt-4 flex justify-end">
-        <button
-          id="generate-invoices-btn"
-          type="button"
-          class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
-        </button>
-      </div>
-    </section>
-
-    <!-- Lista Facturas -->
-    <section id="invoices-list" class="space-y-4">
-      <p class="text-gray-500 dark:text-gray-400">Cargando facturas...</p>
-    </section>
-  </main>
-
-  <!-- Modal Edición -->
-  <div id="edit-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
-      
-      <div class="p-4 sm:p-6 border-b dark:border-gray-700 flex justify-between items-center">
-        <div>
-          <h3 id="modal-title" class="text-xl font-bold dark:text-white">Revisar Reporte</h3>
-          <p id="modal-subtitle" class="text-sm text-gray-600 dark:text-gray-400"></p>
-        </div>
-        <button id="close-modal" class="text-gray-500 hover:text-gray-700 dark:text-gray-400">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-
-      <div class="p-4 sm:p-6 overflow-y-auto max-h-[70vh]">
-        
-        <!-- Tours Tabla Editable -->
-        <div class="mb-6">
-          <h4 class="font-semibold mb-3 dark:text-white">Tours del Mes</h4>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-100 dark:bg-gray-700">
-                <tr>
-                  <th class="px-3 py-2 text-left dark:text-white">Fecha</th>
-                  <th class="px-3 py-2 text-left dark:text-white">Turno</th>
-                  <th class="px-3 py-2 text-left dark:text-white">Tour</th>
-                  <th class="px-3 py-2 text-center dark:text-white">PAX</th>
-                  <th class="px-3 py-2 text-right dark:text-white">Salario</th>
-                  <th class="px-3 py-2"></th>
-                </tr>
-              </thead>
-              <tbody id="tours-table-body" class="dark:text-gray-300">
-                <!-- Dinámico -->
-              </tbody>
-            </table>
-          </div>
-          
-          <button id="add-extra-line" class="mt-3 text-sm text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 font-semibold flex items-center gap-1">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            Añadir línea extra
-          </button>
-        </div>
-
-        <!-- Total -->
-        <div class="flex justify-between items-center p-4 bg-sky-50 dark:bg-sky-900 rounded-lg mb-6">
-          <span class="text-lg font-bold dark:text-white">TOTAL</span>
-          <span id="modal-total" class="text-2xl font-bold text-sky-600 dark:text-sky-300">0.00€</span>
-        </div>
-
-        <!-- Comentarios Guía (si REJECTED) -->
-        <div id="guide-comments-section" class="hidden mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <h4 class="font-semibold text-red-800 dark:text-red-300 mb-2">⚠️ Motivo del Rechazo</h4>
-          <p id="guide-comments" class="text-sm text-gray-700 dark:text-gray-300"></p>
-        </div>
-
-        <!-- Acciones -->
-        <div class="flex gap-3">
-          <button id="save-btn" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-3 rounded-lg font-semibold">
-            Guardar Cambios
-          </button>
-          <button id="send-to-guide-btn" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-lg font-semibold">
-            ✓ Enviar a Guía para Aprobación
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast -->
-  <div id="toast" class="hidden fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50"></div>
-
-  <script type="module" src="/js/manager-invoices.js"></script>
+    <script type="module" src="/js/manager-invoices.js?v=3"></script>
 </body>
+
 </html>

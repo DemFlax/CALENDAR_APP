@@ -180,7 +180,7 @@ function updateUILanguage() {
     <option value="APPROVED">${t('statusApproved')}</option>
     <option value="REJECTED">${t('statusRejected')}</option>
   `;
-  
+
   document.getElementById('logout-btn').textContent = t('logout');
 
   const generateBtn = document.getElementById('generate-invoices-btn');
@@ -192,7 +192,7 @@ function updateUILanguage() {
 function initLanguageToggle() {
   const langToggle = document.getElementById('lang-toggle');
   if (!langToggle) return;
-  
+
   langToggle.textContent = lang === 'es' ? 'EN' : 'ES';
   langToggle.addEventListener('click', () => {
     lang = lang === 'es' ? 'en' : 'es';
@@ -209,12 +209,12 @@ async function loadGuides() {
     where('estado', '==', 'activo')
   );
   const snapshot = await getDocs(guidesQuery);
-  
+
   allGuides = [];
   snapshot.forEach(docSnap => {
     allGuides.push({ id: docSnap.id, ...docSnap.data() });
   });
-  
+
   const guideFilter = document.getElementById('guide-filter');
   guideFilter.innerHTML = `<option value="">${t('allGuides')}</option>`;
   allGuides.forEach(guide => {
@@ -272,35 +272,35 @@ function renderInvoices() {
 
   container.innerHTML = filtered.map(inv => {
     const statusConfig = {
-      MANAGER_REVIEW: { 
-        class: 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200', 
+      MANAGER_REVIEW: {
+        class: 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
         text: t('statusManagerReview')
       },
-      PENDING_GUIDE_APPROVAL: { 
-        class: 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200', 
+      PENDING_GUIDE_APPROVAL: {
+        class: 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
         text: t('statusPendingGuideApproval')
       },
-      WAITING_INVOICE_UPLOAD: { 
-        class: 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200', 
+      WAITING_INVOICE_UPLOAD: {
+        class: 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200',
         text: t('statusWaitingUpload')
       },
-      UPLOAD_OVERDUE: { 
-        class: 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200', 
+      UPLOAD_OVERDUE: {
+        class: 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200',
         text: t('statusUploadOverdue')
       },
-      APPROVED: { 
-        class: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200', 
+      APPROVED: {
+        class: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200',
         text: t('statusApproved')
       },
-      REJECTED: { 
-        class: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200', 
+      REJECTED: {
+        class: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200',
         text: t('statusRejected')
       }
     };
 
-    const status = statusConfig[inv.status] || { 
-      class: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200', 
-      text: inv.status 
+    const status = statusConfig[inv.status] || {
+      class: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
+      text: inv.status
     };
 
     const totalNet = inv.totalSalary || 0;
@@ -330,7 +330,7 @@ function renderInvoices() {
   }).join('');
 }
 
-window.openEditModal = async function(invoiceId) {
+window.openEditModal = async function (invoiceId) {
   const invoice = allInvoices.find(i => i.id === invoiceId);
   if (!invoice) return;
 
@@ -348,7 +348,7 @@ window.openEditModal = async function(invoiceId) {
   if (commentsTitle) {
     commentsTitle.textContent = t('rejectionTitle');
   }
-  
+
   if (invoice.status === 'REJECTED' && invoice.rejectionComments) {
     commentsSection.classList.remove('hidden');
     document.getElementById('guide-comments').textContent = invoice.rejectionComments;
@@ -356,19 +356,69 @@ window.openEditModal = async function(invoiceId) {
     commentsSection.classList.add('hidden');
   }
 
+  // Sección de Verificación Manager si PENDING_MANAGER_VERIFICATION
+  const verificationSection = document.getElementById('manager-verification-section');
+  console.log('Invoice status:', invoice.status);
+
+  if (invoice.status === 'PENDING_MANAGER_VERIFICATION') {
+    console.log('Showing verification section');
+    verificationSection.classList.remove('hidden');
+    verificationSection.style.display = 'block'; // Force display
+
+    // Mostrar total
+    document.getElementById('verification-total').textContent = `${invoice.totalSalary.toFixed(2)}€`;
+
+    // Enlace al PDF en Drive
+    const pdfLink = document.getElementById('verification-pdf-link');
+    if (invoice.officialInvoicePdfUrl) {
+      const driveUrl = `https://drive.google.com/file/d/${invoice.officialInvoicePdfUrl}/view`;
+      pdfLink.href = driveUrl;
+      pdfLink.style.display = 'inline';
+    } else {
+      pdfLink.style.display = 'none';
+    }
+
+    // Ocultar tabla de tours y botones de edición
+    const toursContainer = document.getElementById('tours-table-container');
+    if (toursContainer) toursContainer.style.display = 'none';
+
+    document.getElementById('save-btn').style.display = 'none';
+    document.getElementById('send-to-guide-btn').style.display = 'none';
+  } else {
+    verificationSection.classList.add('hidden');
+
+    // Mostrar tabla de tours y botones de edición
+    const toursContainer = document.getElementById('tours-table-container');
+    if (toursContainer) toursContainer.style.display = 'block';
+
+    document.getElementById('save-btn').style.display = 'block';
+    document.getElementById('send-to-guide-btn').style.display = 'block';
+  }
+
   // Botones
   const saveBtn = document.getElementById('save-btn');
   saveBtn.textContent = t('saveBtn');
 
   const sendBtn = document.getElementById('send-to-guide-btn');
-  if (invoice.status !== 'MANAGER_REVIEW' && invoice.status !== 'REJECTED') {
+  // Permitir editar si está en MANAGER_REVIEW, REJECTED o PENDING_GUIDE_APPROVAL
+  if (
+    invoice.status !== 'MANAGER_REVIEW' &&
+    invoice.status !== 'REJECTED' &&
+    invoice.status !== 'PENDING_GUIDE_APPROVAL'
+  ) {
     sendBtn.disabled = true;
     sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
     sendBtn.textContent = t('alreadySent');
   } else {
     sendBtn.disabled = false;
     sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-    sendBtn.textContent = t('sendToGuideBtn');
+
+    // Si ya está enviada, cambiar texto a "Actualizar"
+    if (invoice.status === 'PENDING_GUIDE_APPROVAL') {
+      sendBtn.textContent = '↻ Actualizar Reporte Enviado';
+    } else {
+      sendBtn.textContent = t('sendToGuideBtn');
+    }
   }
 
   document.getElementById('edit-modal').classList.remove('hidden');
@@ -425,18 +475,18 @@ function renderToursTable() {
   }).join('');
 }
 
-window.updateTourField = function(index, field, value) {
+window.updateTourField = function (index, field, value) {
   currentInvoice.tours[index][field] = value;
   if (field === 'salario') {
     updateModalTotal();
   }
 };
 
-window.deleteTour = function(index) {
-  if (!confirm(t('confirmDelete'))) return;
+window.deleteTour = function (index) {
   currentInvoice.tours.splice(index, 1);
   updateModalTotal();
   renderToursTable();
+  showToast('Línea eliminada', 'success');
 };
 
 document.getElementById('add-extra-line').addEventListener('click', () => {
@@ -456,7 +506,7 @@ function updateModalTotal() {
   const total = currentInvoice.tours.reduce((sum, tour) => {
     return sum + (tour.salario || tour.salarioCalculado || 0);
   }, 0);
-  
+
   currentInvoice.totalSalary = total;
   document.getElementById('modal-total').textContent = total.toFixed(2) + '€';
 }
@@ -493,11 +543,11 @@ document.getElementById('save-btn').addEventListener('click', async () => {
 });
 
 document.getElementById('send-to-guide-btn').addEventListener('click', async () => {
-  if (!confirm(t('confirmSend'))) return;
-
   const sendBtn = document.getElementById('send-to-guide-btn');
   sendBtn.disabled = true;
   sendBtn.textContent = t('sending');
+
+  showToast(t('sending'), 'info');
 
   try {
     const managerSendToGuide = httpsCallable(functions, 'managerSendToGuide');
@@ -547,11 +597,11 @@ function initGenerateInvoicesButton() {
   if (!generateBtn) return;
 
   generateBtn.addEventListener('click', async () => {
-    if (!confirm(t('confirmGeneratePrevMonth'))) return;
-
     generateBtn.disabled = true;
     const originalText = generateBtn.textContent;
     generateBtn.textContent = t('generatingPrevMonth');
+
+    showToast(t('generatingPrevMonth'), 'info');
 
     try {
       const targetMonth = getPreviousMonthString();
@@ -587,6 +637,86 @@ function initGenerateInvoicesButton() {
   });
 }
 
+// ==========================================
+// Aprobar Factura (Manager Verification)
+// ==========================================
+document.getElementById('approve-invoice-btn').addEventListener('click', async () => {
+  if (!currentInvoice) return;
+
+  const approveBtn = document.getElementById('approve-invoice-btn');
+  approveBtn.disabled = true;
+  const originalText = approveBtn.textContent;
+  approveBtn.textContent = 'Aprobando...';
+
+  showToast('Aprobando factura...', 'info');
+
+  try {
+    const managerApproveInvoice = httpsCallable(functions, 'managerApproveInvoice');
+
+    await managerApproveInvoice({
+      invoiceId: currentInvoice.id
+    });
+
+    showToast('✓ Factura aprobada y enviada a contabilidad', 'success');
+    document.getElementById('edit-modal').classList.add('hidden');
+    currentInvoice = null;
+  } catch (error) {
+    console.error('Error approving invoice:', error);
+    showToast('Error al aprobar factura: ' + error.message, 'error');
+  } finally {
+    approveBtn.disabled = false;
+    approveBtn.textContent = originalText;
+  }
+});
+
+// ==========================================
+// Rechazar Factura (Manager Verification)
+// ==========================================
+document.getElementById('reject-invoice-btn').addEventListener('click', async () => {
+  if (!currentInvoice) return;
+
+  // Mostrar campo de comentarios si está oculto
+  const rejectionField = document.getElementById('rejection-field');
+  if (rejectionField.classList.contains('hidden')) {
+    rejectionField.classList.remove('hidden');
+    document.getElementById('rejection-comments').focus();
+    return;
+  }
+
+  // Validar comentarios
+  const comments = document.getElementById('rejection-comments').value.trim();
+  if (!comments || comments.length < 10) {
+    showToast('Debes proporcionar un motivo del rechazo (mínimo 10 caracteres)', 'error');
+    return;
+  }
+
+  const rejectBtn = document.getElementById('reject-invoice-btn');
+  rejectBtn.disabled = true;
+  const originalText = rejectBtn.textContent;
+  rejectBtn.textContent = 'Rechazando...';
+
+  showToast('Rechazando factura...', 'info');
+
+  try {
+    const managerRejectInvoice = httpsCallable(functions, 'managerRejectInvoice');
+
+    await managerRejectInvoice({
+      invoiceId: currentInvoice.id,
+      comments: comments
+    });
+
+    showToast('✓ Factura rechazada. El guía recibirá un email.', 'success');
+    document.getElementById('edit-modal').classList.add('hidden');
+    currentInvoice = null;
+  } catch (error) {
+    console.error('Error rejecting invoice:', error);
+    showToast('Error al rechazar factura: ' + error.message, 'error');
+  } finally {
+    rejectBtn.disabled = false;
+    rejectBtn.textContent = originalText;
+  }
+});
+
 function showToast(message, type) {
   const toast = document.getElementById('toast');
   toast.textContent = message;
@@ -594,8 +724,8 @@ function showToast(message, type) {
     type === 'success'
       ? 'bg-green-600'
       : type === 'error'
-      ? 'bg-red-600'
-      : 'bg-blue-600';
+        ? 'bg-red-600'
+        : 'bg-blue-600';
   toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 ${typeClass}`;
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3000);

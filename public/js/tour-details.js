@@ -173,37 +173,37 @@ async function init() {
       return;
     }
     currentUser = user;
-    
+
     const token = await user.getIdTokenResult();
     userRole = token.claims.role;
-    
+
     // ✅ DETECTAR IMPERSONACIÓN
     const urlParams = new URLSearchParams(window.location.search);
     const impersonateGuideId = urlParams.get('impersonate');
-    
+
     if (impersonateGuideId && token.claims.role === 'manager') {
       guideId = impersonateGuideId;
       console.log('✅ Impersonando guía:', guideId);
     } else {
       guideId = token.claims.guideId;
     }
-    
+
     if (!guideId) {
       showError(t('errorTitle'), 'No guideId disponible', false);
       return;
     }
-    
+
     // Verificar guía activo
     const guideDoc = await getDoc(doc(db, 'guides', guideId));
     if (!guideDoc.exists() || guideDoc.data().estado !== 'activo') {
       showError(t('errorTitle'), 'Guía inactivo o no existe', false);
       return;
     }
-    
+
     updateUILanguage();
-    
+
     await loadAllTours();
-    
+
     document.getElementById('prevTourBtn').addEventListener('click', () => navigateTour(-1));
     document.getElementById('nextTourBtn').addEventListener('click', () => navigateTour(1));
     document.getElementById('backButton').addEventListener('click', goBack);
@@ -214,7 +214,7 @@ async function init() {
 function updateUILanguage() {
   const backSpan = document.querySelector('#backButton span');
   const logoutSpan = document.querySelector('#logoutBtn span');
-  
+
   if (backSpan) backSpan.textContent = t('backBtn');
   if (logoutSpan) logoutSpan.textContent = t('logoutBtn');
 }
@@ -231,54 +231,54 @@ async function handleLogout() {
 
 async function loadAllTours() {
   showLoading();
-  
+
   try {
     // Obtener email del guía
     const guideDoc = await getDoc(doc(db, 'guides', guideId));
     const guideEmail = guideDoc.data().email;
     console.log('✅ Email del guía:', guideEmail);
-    
+
     const today = new Date();
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - 30);
     const endDate = new Date(today);
     endDate.setDate(today.getDate() + 30);
-    
+
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = endDate.toISOString().split('T')[0];
-    
+
     const url = `${appsScriptConfig.url}?endpoint=getAssignedTours&startDate=${startDateStr}&endDate=${endDateStr}&guideEmail=${encodeURIComponent(guideEmail)}&apiKey=${appsScriptConfig.apiKey}`;
-    
+
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    
+
     const data = await response.json();
     if (data.error) throw new Error(data.message || 'Error cargando tours');
-    
+
     allTours = data.assignments || [];
     allTours.sort((a, b) => {
       const dateCompare = a.fecha.localeCompare(b.fecha);
       if (dateCompare !== 0) return dateCompare;
       return (a.startTime || '').localeCompare(b.startTime || '');
     });
-    
+
     if (allTours.length === 0) {
       showError(t('errorNoAssignments'), t('errorNoAssignmentsMsg'), false);
       return;
     }
-    
+
     const params = new URLSearchParams(window.location.search);
     const urlEventId = params.get('eventId');
-    
+
     if (urlEventId) {
       const index = allTours.findIndex(t => t.eventId === urlEventId);
       currentTourIndex = index >= 0 ? index : 0;
     } else {
       currentTourIndex = 0;
     }
-    
+
     await loadCurrentTour();
-    
+
   } catch (error) {
     console.error('Error loading tours:', error);
     showError(t('errorConnection'), t('errorConnectionMsg'), true);
@@ -294,9 +294,9 @@ function navigateTour(direction) {
 
 async function loadCurrentTour() {
   if (allTours.length === 0) return;
-  
+
   const tour = allTours[currentTourIndex];
-  
+
   document.getElementById('currentTourIndex').textContent = currentTourIndex + 1;
   document.getElementById('totalTours').textContent = allTours.length;
   document.getElementById('prevTourBtn').disabled = currentTourIndex === 0;
@@ -304,29 +304,29 @@ async function loadCurrentTour() {
   document.getElementById('tourTitle').textContent = tour.tourName;
   document.getElementById('tourDate').textContent = formatDate(tour.fecha);
   document.getElementById('tourTime').textContent = tour.startTime;
-  
+
   showLoading();
-  
+
   try {
     console.log('Loading tour details for eventId:', tour.eventId);
     eventData = await getTourGuestDetails(tour.eventId);
     console.log('Event data received:', eventData);
-    
+
     if (!eventData) throw new Error('No data received from API');
-    
+
     const guests = eventData.guests || [];
-    
+
     if (guests.length === 0) {
       showEmptyState();
     } else {
       renderGuests(guests);
       hideLoading();
-      
+
       if (userRole === 'guide') {
         await renderVendorCostsForm(tour.fecha, tour.slot, guests);
       }
     }
-    
+
   } catch (error) {
     console.error('Error loading tour details:', error);
     handleError(error);
@@ -335,25 +335,25 @@ async function loadCurrentTour() {
 
 async function getTourGuestDetails(eventId) {
   const url = `${appsScriptConfig.url}?endpoint=getEventDetails&eventId=${eventId}&apiKey=${appsScriptConfig.apiKey}`;
-  
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
-  
+
   try {
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
-    
+
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    
+
     const data = await response.json();
     if (data.error) {
       const error = new Error(data.message || 'Error');
       error.code = data.code;
       throw error;
     }
-    
+
     return data;
-    
+
   } catch (error) {
     clearTimeout(timeout);
     if (error.name === 'AbortError') {
@@ -368,13 +368,13 @@ async function getTourGuestDetails(eventId) {
 function renderGuests(guests) {
   const container = document.getElementById('guestsContainer');
   container.innerHTML = '';
-  
+
   guests.forEach(guest => {
     const card = document.createElement('div');
     card.className = 'bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-lg p-4 sm:p-5 border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow';
-    
+
     const personsText = guest.pax === 1 ? t('person') : t('persons');
-    
+
     card.innerHTML = `
       <h3 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2 sm:mb-3">${guest.nombre || 'N/A'}</h3>
       
@@ -425,10 +425,10 @@ function renderGuests(guests) {
         ` : ''}
       </div>
     `;
-    
+
     container.appendChild(card);
   });
-  
+
   const guestListTitle = document.querySelector('#guestsList h3');
   if (guestListTitle) {
     guestListTitle.innerHTML = `${t('guestListTitle')} (<span id="guestCount">${guests.length}</span>)`;
@@ -444,54 +444,54 @@ function renderGuests(guests) {
 async function renderVendorCostsForm(fecha, slot, guests) {
   const section = document.getElementById('vendorCostsSection');
   section.classList.remove('hidden');
-  
+
   if (slot === 'DESCONOCIDO') {
     showVendorToast(t('slotUnknown'), 'warning');
   }
-  
+
   await loadVendorsList();
-  
+
   const totalPax = guests.reduce((sum, guest) => sum + (guest.pax || 0), 0);
   const paxInput = document.getElementById('numPaxInput');
   paxInput.value = totalPax;
   paxInput.placeholder = `${t('numPaxPlaceholder')} ${totalPax}`;
-  
+
   // Update labels
   const paxLabel = document.querySelector('label[for="numPaxInput"]');
   if (paxLabel) {
     paxLabel.innerHTML = `${t('numPaxLabel')} <span class="text-red-600">*</span>`;
   }
-  
+
   const totalGuestsLabel = document.getElementById('totalGuestsLabel');
   if (totalGuestsLabel) totalGuestsLabel.textContent = t('totalGuestsLabel');
-  
+
   const feedbackLabel = document.querySelector('label[for="postTourFeedback"]');
   if (feedbackLabel) feedbackLabel.textContent = t('feedbackLabel');
-  
+
   const feedbackTextarea = document.getElementById('postTourFeedback');
   if (feedbackTextarea) feedbackTextarea.placeholder = t('feedbackPlaceholder');
-  
+
   const submitBtn = document.querySelector('#vendorCostsForm button[type="submit"]');
   if (submitBtn) submitBtn.textContent = t('saveCostsBtn');
-  
+
   const header = document.getElementById('vendorCostsHeader');
   const body = document.getElementById('vendorCostsBody');
   const chevron = document.getElementById('vendorCostsChevron');
-  
+
   header.onclick = () => {
     const isHidden = body.classList.contains('hidden');
     body.classList.toggle('hidden');
     chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
-    
+
     if (isHidden) {
       setTimeout(() => {
         section.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 200);
     }
   };
-  
+
   renderVendorAccordion();
-  
+
   const form = document.getElementById('vendorCostsForm');
   form.onsubmit = (e) => handleVendorCostsSubmit(e, fecha, slot);
 }
@@ -503,7 +503,7 @@ async function loadVendorsList() {
       where('estado', '==', 'activo')
     );
     const snapshot = await getDocs(vendorsQuery);
-    
+
     vendorsList = [];
     snapshot.forEach(doc => {
       vendorsList.push({
@@ -511,9 +511,9 @@ async function loadVendorsList() {
         ...doc.data()
       });
     });
-    
+
     vendorsList.sort((a, b) => (a.orden || 0) - (b.orden || 0));
-    
+
   } catch (error) {
     console.error('Error loading vendors:', error);
     vendorsList = [];
@@ -523,7 +523,7 @@ async function loadVendorsList() {
 function renderVendorAccordion() {
   const container = document.getElementById('vendorsAccordion');
   container.innerHTML = '';
-  
+
   if (Object.keys(vendorCards).length === 0) {
     vendorsList.forEach(vendor => {
       vendorCards[vendor.id] = {
@@ -534,15 +534,15 @@ function renderVendorAccordion() {
       };
     });
   }
-  
+
   vendorsList.forEach(vendor => {
     const card = document.createElement('div');
     card.dataset.vendorId = vendor.id;
     card.className = 'border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden';
-    
+
     const isOpen = currentOpenCard === vendor.id;
     const cardData = vendorCards[vendor.id];
-    
+
     card.innerHTML = `
       <div 
         class="vendor-card-header flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
@@ -601,39 +601,24 @@ function renderVendorAccordion() {
         </div>
       </div>
     `;
-    
+
     container.appendChild(card);
   });
 }
 
-window.toggleVendorCard = function(vendorId) {
+window.toggleVendorCard = function (vendorId) {
   if (currentOpenCard === vendorId) {
     currentOpenCard = null;
     renderVendorAccordion();
     return;
   }
-  
-  if (currentOpenCard !== null) {
-    const prevData = vendorCards[currentOpenCard];
-    const hasAmount = prevData.amount && parseFloat(prevData.amount) > 0;
-    const hasPhoto = prevData.photo !== null;
-    
-    if ((hasAmount && !hasPhoto) || (!hasAmount && hasPhoto)) {
-      vendorCards[currentOpenCard] = {
-        amount: '',
-        photo: null,
-        photoPreview: '',
-        photoName: ''
-      };
-      if (prevData.photoName) {
-        uploadedFileNames.delete(prevData.photoName);
-      }
-    }
-  }
-  
+
+  // Se ha eliminado la lógica de limpieza automática.
+  // Ahora se mantienen los datos parciales para que el validador final avise si falta algo.
+
   currentOpenCard = vendorId;
   renderVendorAccordion();
-  
+
   setTimeout(() => {
     const card = document.querySelector(`[data-vendor-id="${vendorId}"]`);
     if (card) {
@@ -642,31 +627,31 @@ window.toggleVendorCard = function(vendorId) {
   }, 100);
 };
 
-window.updateVendorAmount = function(vendorId, value) {
+window.updateVendorAmount = function (vendorId, value) {
   vendorCards[vendorId].amount = value;
 };
 
-window.handleVendorPhotoChange = function(vendorId, input) {
+window.handleVendorPhotoChange = function (vendorId, input) {
   if (input.files.length === 0) return;
-  
+
   const file = input.files[0];
   const fileName = file.name;
-  
+
   if (uploadedFileNames.has(fileName)) {
     showVendorToast(t('errorDuplicateFile'), 'error');
     input.value = '';
     return;
   }
-  
+
   const prevName = vendorCards[vendorId].photoName;
   if (prevName) {
     uploadedFileNames.delete(prevName);
   }
-  
+
   vendorCards[vendorId].photo = file;
   vendorCards[vendorId].photoName = fileName;
   uploadedFileNames.add(fileName);
-  
+
   const reader = new FileReader();
   reader.onload = (e) => {
     vendorCards[vendorId].photoPreview = e.target.result;
@@ -675,16 +660,16 @@ window.handleVendorPhotoChange = function(vendorId, input) {
   reader.readAsDataURL(file);
 };
 
-window.removeVendorPhoto = function(vendorId) {
+window.removeVendorPhoto = function (vendorId) {
   const fileName = vendorCards[vendorId].photoName;
   if (fileName) {
     uploadedFileNames.delete(fileName);
   }
-  
+
   vendorCards[vendorId].photo = null;
   vendorCards[vendorId].photoPreview = '';
   vendorCards[vendorId].photoName = '';
-  
+
   renderVendorAccordion();
 };
 
@@ -694,9 +679,9 @@ window.removeVendorPhoto = function(vendorId) {
 
 async function handleVendorCostsSubmit(e, fecha, slot) {
   e.preventDefault();
-  
+
   const shiftId = `${fecha}_${slot}`;
-  
+
   // Validar 2.5 horas
   const tour = allTours[currentTourIndex];
   if (tour && tour.fecha && tour.startTime) {
@@ -704,56 +689,56 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     const eventDateTime = new Date(`${tour.fecha}T${hours}:${minutes}:00`);
     const now = new Date();
     const minTime = new Date(eventDateTime.getTime() + (2.5 * 60 * 60 * 1000));
-    
+
     if (now < minTime) {
       const hoursLeft = Math.ceil((minTime - now) / (1000 * 60 * 60));
       showVendorToast(`${t('errorTimeRestriction')} ${hoursLeft}${t('hoursLabel')}`, 'error');
       return;
     }
   }
-  
+
   // Validar PAX
   const numPax = parseInt(document.getElementById('numPaxInput').value);
   if (!numPax || numPax < 1 || numPax > 99) {
     showVendorToast(t('errorPaxRequired'), 'error');
     return;
   }
-  
+
   // Recolectar vendors válidos
   const validVendors = [];
   let hasError = false;
   let errorMsg = '';
-  
+
   for (const vendorId in vendorCards) {
     const cardData = vendorCards[vendorId];
     const amount = parseFloat(cardData.amount);
-    
+
     if (!amount || amount === 0) continue;
-    
+
     if (!cardData.photo) {
       const vendor = vendorsList.find(v => v.id === vendorId);
       errorMsg = `${vendor.nombre}: ${t('errorPhotoRequired')}`;
       hasError = true;
       break;
     }
-    
+
     validVendors.push({ vendorId, cardData });
   }
-  
+
   if (hasError) {
     showVendorToast(errorMsg, 'error');
     return;
   }
-  
+
   if (validVendors.length === 0) {
     showVendorToast(t('errorMinVendors'), 'error');
     return;
   }
-  
+
   const submitBtn = e.target.querySelector('[type="submit"]');
   submitBtn.disabled = true;
   submitBtn.textContent = t('compressingBtn');
-  
+
   try {
     // ============================================
     // FASE 1: COMPRESIÓN PARALELA (Se mantiene rápida)
@@ -767,14 +752,14 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
         ticketBase64: compressedBase64
       }));
     });
-    
+
     const vendorsDataForUpload = await Promise.all(compressionPromises);
-    
+
     // ============================================
     // FASE 2: UPLOAD HÍBRIDO (1 Secuencial + Resto Paralelo)
     // Evita duplicar carpetas sin perder velocidad
     // ============================================
-    
+
     const guideName = currentUser.displayName || currentUser.email;
     const monthFolder = getMonthFolderName(fecha);
     let uploadedCount = 0;
@@ -789,46 +774,46 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
         monthFolder,
         vendorData: JSON.stringify(vendor)
       };
-      
+
       const response = await fetch(appsScriptConfig.url, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
-      
+
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${vendor.vendorName}`);
-      
+
       const result = await response.json();
       if (result.error) throw new Error(`${vendor.vendorName}: ${result.message}`);
-      
+
       uploadedCount++;
       submitBtn.textContent = `${t('uploadingBtn')} (${uploadedCount}/${vendorsDataForUpload.length})`;
-      
+
       return result;
     };
 
     if (vendorsDataForUpload.length > 0) {
-        // 1. SUBIR EL PRIMERO (Secuencial para crear carpeta)
-        submitBtn.textContent = `${t('uploadingBtn')} (1/${vendorsDataForUpload.length})`;
-        const firstResult = await uploadVendorFn(vendorsDataForUpload[0]);
-        uploadResults.push(firstResult);
-        
-        // 2. SUBIR EL RESTO (Paralelo para velocidad)
-        if (vendorsDataForUpload.length > 1) {
-            const restVendors = vendorsDataForUpload.slice(1);
-            const restPromises = restVendors.map(v => uploadVendorFn(v));
-            const restResults = await Promise.all(restPromises);
-            uploadResults.push(...restResults);
-        }
+      // 1. SUBIR EL PRIMERO (Secuencial para crear carpeta)
+      submitBtn.textContent = `${t('uploadingBtn')} (1/${vendorsDataForUpload.length})`;
+      const firstResult = await uploadVendorFn(vendorsDataForUpload[0]);
+      uploadResults.push(firstResult);
+
+      // 2. SUBIR EL RESTO (Paralelo para velocidad)
+      if (vendorsDataForUpload.length > 1) {
+        const restVendors = vendorsDataForUpload.slice(1);
+        const restPromises = restVendors.map(v => uploadVendorFn(v));
+        const restResults = await Promise.all(restPromises);
+        uploadResults.push(...restResults);
+      }
     }
-    
+
     // ============================================
     // FASE 3: WRITE BATCH A SHEET
     // ============================================
     submitBtn.textContent = t('writingSheetBtn');
-    
+
     const feedback = document.getElementById('postTourFeedback').value.trim() || null;
-    
+
     const sheetPayload = {
       endpoint: 'writeVendorCostsToSheet',
       apiKey: appsScriptConfig.apiKey,
@@ -839,23 +824,23 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
       postTourFeedback: feedback,
       vendorsData: JSON.stringify(uploadResults)
     };
-    
+
     const sheetResponse = await fetch(appsScriptConfig.url, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(sheetPayload)
     });
-    
+
     if (!sheetResponse.ok) throw new Error(`Error escribiendo Sheet: HTTP ${sheetResponse.status}`);
-    
+
     const sheetResult = await sheetResponse.json();
     if (sheetResult.error) throw new Error(`Error Sheet: ${sheetResult.message}`);
-    
+
     // ============================================
     // FASE 4: SAVE A FIRESTORE
     // ============================================
     submitBtn.textContent = t('savingBtn');
-    
+
     const finalVendors = uploadResults.map(uploaded => ({
       vendorId: uploaded.vendorId,
       vendorName: uploaded.vendorName,
@@ -863,9 +848,9 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
       ticketUrl: uploaded.driveUrl,
       driveFileId: uploaded.driveFileId
     }));
-    
+
     const totalVendors = finalVendors.reduce((sum, v) => sum + v.importe, 0);
-    
+
     const vendorCostDoc = {
       shiftId,
       guideId,
@@ -883,11 +868,11 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
-    
+
     await addDoc(collection(db, 'vendor_costs'), vendorCostDoc);
-    
+
     showVendorToast(t('costsSaved'), 'success');
-    
+
     // Reset form
     vendorCards = {};
     uploadedFileNames.clear();
@@ -896,7 +881,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
     renderVendorAccordion();
     document.getElementById('vendorCostsBody').classList.add('hidden');
     document.getElementById('vendorCostsChevron').style.transform = 'rotate(0deg)';
-    
+
   } catch (error) {
     console.error('Error saving vendor costs:', error);
     showVendorToast(`${t('errorSavingCosts')}: ${error.message}`, 'error');
@@ -913,33 +898,33 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
 async function compressImage(file, maxWidth = 1280, quality = 0.65) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    
+
     reader.onload = (e) => {
       const img = new Image();
-      
+
       img.onload = () => {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        
+
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width);
           width = maxWidth;
         }
-        
+
         canvas.width = width;
         canvas.height = height;
-        
+
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        
+
         canvas.toBlob(
           (blob) => {
             if (!blob) {
               reject(new Error(t('errorCompressing')));
               return;
             }
-            
+
             const blobReader = new FileReader();
             blobReader.onload = () => resolve(blobReader.result);
             blobReader.onerror = reject;
@@ -949,11 +934,11 @@ async function compressImage(file, maxWidth = 1280, quality = 0.65) {
           quality
         );
       };
-      
+
       img.onerror = () => reject(new Error(t('errorLoadingImage')));
       img.src = e.target.result;
     };
-    
+
     reader.onerror = () => reject(new Error(t('errorReadingFile')));
     reader.readAsDataURL(file);
   });
@@ -973,12 +958,12 @@ function getMonthFolderName(fecha) {
 
 function handleError(error) {
   hideLoading();
-  
+
   const errorTitle = document.getElementById('errorTitle');
   const errorMessage = document.getElementById('errorMessage');
   const retryBtn = document.getElementById('retryButton');
-  
-  switch(error.code) {
+
+  switch (error.code) {
     case 'UNAUTHORIZED':
       errorTitle.textContent = t('errorSessionExpired');
       errorMessage.textContent = t('errorSessionExpiredMsg');
@@ -1000,7 +985,7 @@ function handleError(error) {
       errorMessage.textContent = t('errorLoadingDetailsMsg');
       retryBtn.classList.remove('hidden');
   }
-  
+
   retryBtn.textContent = t('retryBtn');
   retryBtn.onclick = () => loadCurrentTour();
   showErrorState();
@@ -1010,7 +995,7 @@ function showLoading() {
   document.getElementById('loadingState').classList.remove('hidden');
   document.getElementById('errorState').classList.add('hidden');
   document.getElementById('guestsList').classList.add('hidden');
-  
+
   const loadingSpan = document.querySelector('#loadingState span');
   if (loadingSpan) loadingSpan.textContent = t('loadingDetails');
 }
@@ -1039,7 +1024,7 @@ function showEmptyState() {
       <p class="text-gray-600 dark:text-gray-300 mb-4">${t('emptyStateMessage')}</p>
     </div>
   `;
-  
+
   const guestListTitle = document.querySelector('#guestsList h3');
   if (guestListTitle) {
     guestListTitle.innerHTML = `${t('guestListTitle')} (<span id="guestCount">0</span>)`;
@@ -1050,14 +1035,14 @@ function showEmptyState() {
 
 function showError(title, message, showRetry = true) {
   hideLoading();
-  
+
   const errorTitle = document.getElementById('errorTitle');
   const errorMessage = document.getElementById('errorMessage');
   const retryBtn = document.getElementById('retryButton');
-  
+
   errorTitle.textContent = title;
   errorMessage.textContent = message;
-  
+
   if (showRetry) {
     retryBtn.classList.remove('hidden');
     retryBtn.textContent = t('retryBtn');
@@ -1065,16 +1050,16 @@ function showError(title, message, showRetry = true) {
   } else {
     retryBtn.classList.add('hidden');
   }
-  
+
   showErrorState();
 }
 
 function formatDate(dateStr) {
   const date = new Date(dateStr + 'T12:00:00');
-  return date.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', { 
-    day: '2-digit', 
-    month: '2-digit', 
-    year: 'numeric' 
+  return date.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
   });
 }
 
@@ -1084,7 +1069,7 @@ function goBack() {
 
 function showVendorToast(message, type = 'info') {
   const toast = document.createElement('div');
-  
+
   let bgColor, icon;
   if (type === 'success') {
     bgColor = 'bg-emerald-600';
@@ -1099,13 +1084,13 @@ function showVendorToast(message, type = 'info') {
     bgColor = 'bg-blue-600';
     icon = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
   }
-  
+
   toast.className = `fixed bottom-6 right-6 ${bgColor} text-white px-5 py-4 rounded-xl shadow-2xl z-50 max-w-md flex items-center gap-3`;
   toast.style.animation = 'slideIn 0.3s ease-out';
   toast.innerHTML = `<div class="flex-shrink-0">${icon}</div><p class="font-semibold text-sm">${message}</p>`;
-  
+
   document.body.appendChild(toast);
-  
+
   setTimeout(() => {
     toast.style.opacity = '0';
     toast.style.transform = 'translateX(100%)';
@@ -1127,11 +1112,11 @@ window.copyPhoneNumber = (phone) => {
   const button = event.target.closest('button');
   const icon = button.querySelector('svg');
   const originalIcon = icon.innerHTML;
-  
+
   icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>`;
   icon.classList.add('text-green-600');
   button.classList.add('scale-110', 'bg-green-100');
-  
+
   navigator.clipboard.writeText(cleanPhone).then(() => {
     showVendorToast(t('phoneCopied'), 'success');
     setTimeout(() => {

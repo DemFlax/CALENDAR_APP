@@ -1,0 +1,45 @@
+# Node modules
+node_modules/**
+**/node_modules/**
+
+# Functions directory (Firebase Functions)
+functions/**
+
+# Scripts
+scripts/**
+
+# Public files
+public/**
+
+# Build and distribution
+dist/**
+build/**
+
+# Environment and config files
+.env*
+.firebase/**
+.git/**
+.vscode/**
+
+# Firebase files
+firebase.json
+firestore.rules
+firestore.indexes.json
+.firebaserc
+
+# Other files
+package.json
+package-lock.json
+*.log
+emulator-data/**
+*.backup
+tatus
+users.json
+vite.config.js
+configure-manager.cjs
+start-firebase.ps1
+*.html
+DOCUMENTACIÓN/**
+CALENDAR_APP/**
+.scripts/**
+src/**
